@@ -278,6 +278,7 @@
               });
 
               mapper.nodeId = node.id;
+              mapper.hadLocality = node.blocks.some(b => b.id === mapper.blockId);
               allocated = true;
               break;
             }
@@ -391,8 +392,8 @@
               clearInterval(shuffleInterval);
               updatedJob.shufflePhase.inProgress = false;
               updatedJob.shufflePhase.endedAt = Date.now();
-              // Start reduce phase after shuffle completes
-              setTimeout(() => startReducePhase(updatedJob), 500);
+              // Start reduce phase shortly after shuffle completes
+              setTimeout(() => startReducePhase(updatedJob), 100);
             }
 
             return { ...prev };
@@ -434,6 +435,9 @@
               });
 
               reducer.nodeId = node.id;
+              if (!reducer.startedAt) {
+                reducer.startedAt = Date.now();
+              }
               reducerAllocated = true;
               break;
             }
@@ -1506,71 +1510,119 @@
             /* GANTT STYLES */
             .gantt-container {
               margin-top: 15px;
-              padding: 10px;
-              background: #f7fafc;
-              border-radius: 8px;
-              border: 1px dashed #cbd5e0;
+              padding: 18px;
+              background: linear-gradient(145deg, #f8fafc 0%, #edf2f7 100%);
+              border-radius: 12px;
+              border: 1px solid #cbd5e0;
+              box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
             }
 
             .gantt-title {
               font-weight: bold;
-              font-size: 0.95em;
+              font-size: 1em;
               color: #2d3748;
-              margin-bottom: 8px;
+              margin-bottom: 12px;
+              display: flex;
+              align-items: center;
+              gap: 8px;
+            }
+
+            .gantt-title::before {
+              content: '📈';
+              font-size: 1.2em;
             }
 
             .gantt-body {
               display: flex;
               flex-direction: column;
-              gap: 6px;
+              gap: 12px;
             }
 
             .gantt-row {
               display: flex;
               align-items: flex-start;
-              gap: 8px;
+              gap: 12px;
             }
 
             .gantt-row-label {
-              width: 70px;
-              font-size: 0.8em;
+              width: 78px;
+              font-size: 0.85em;
               color: #4a5568;
               text-align: right;
-              padding-top: 2px;
+              padding-top: 6px;
+              font-weight: 600;
             }
 
             .gantt-row-track {
               position: relative;
               flex: 1;
-              background: #edf2f7;
-              border-radius: 10px;
+              background: repeating-linear-gradient(
+                90deg,
+                rgba(255,255,255,0.6),
+                rgba(255,255,255,0.6) 20px,
+                rgba(226,232,240,0.4) 20px,
+                rgba(226,232,240,0.4) 40px
+              );
+              border-radius: 12px;
+              border: 1px solid #e2e8f0;
               overflow: hidden;
+              padding: 6px 10px;
             }
 
             .gantt-bar {
               position: absolute;
-              height: 8px;
-              border-radius: 4px;
-              font-size: 0.65em;
+              height: 16px;
+              border-radius: 8px;
+              font-size: 0.7em;
               display: flex;
               align-items: center;
               justify-content: center;
               white-space: nowrap;
-              padding: 0 4px;
+              padding: 0 6px;
               color: white;
-              box-shadow: 0 0 4px rgba(0,0,0,0.2);
+              box-shadow: 0 2px 6px rgba(0,0,0,0.2);
             }
 
             .gantt-bar.map {
-              background: #667eea;
+              background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
             }
 
             .gantt-bar.reduce {
-              background: #48bb78;
+              background: linear-gradient(90deg, #38b2ac 0%, #319795 100%);
             }
 
             .gantt-bar.shuffle {
-              background: #f6ad55;
+              background: linear-gradient(90deg, #ed8936 0%, #dd6b20 100%);
+            }
+
+            .gantt-metrics {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 10px;
+              margin-bottom: 12px;
+            }
+
+            .gantt-metric {
+              background: rgba(255, 255, 255, 0.9);
+              border: 1px solid #e2e8f0;
+              border-radius: 8px;
+              padding: 6px 12px;
+              font-size: 0.8em;
+              color: #4a5568;
+              display: flex;
+              flex-direction: column;
+              gap: 2px;
+              min-width: 140px;
+            }
+
+            .gantt-metric span {
+              font-size: 0.75em;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+            }
+
+            .gantt-metric strong {
+              color: #2d3748;
             }
 
             .notification {
@@ -1972,26 +2024,51 @@
                           const shuffleTasks = [];
                           if (job.shufflePhase && job.shufflePhase.startedAt) {
                             const shuffleStart = job.shufflePhase.startedAt;
-                            const shuffleEnd = job.shufflePhase.endedAt || Date.now();
+                            const rawShuffleEnd = job.shufflePhase.endedAt || Date.now();
+                            const shuffleWindowEnd = Math.max(rawShuffleEnd, shuffleStart + 1000);
+                            const shuffleDuration = Math.max(shuffleWindowEnd - shuffleStart, 1);
 
                             const nodesInShuffle = new Set();
+                            const shuffleContribution = {};
+
+                            job.mappers
+                              .filter(m => m.nodeId !== null)
+                              .forEach(m => {
+                                shuffleContribution[m.nodeId] = (shuffleContribution[m.nodeId] || 0) + 1;
+                                nodesInShuffle.add(m.nodeId);
+                              });
+
+                            job.reducers
+                              .filter(r => r.nodeId !== null)
+                              .forEach(r => {
+                                shuffleContribution[r.nodeId] = (shuffleContribution[r.nodeId] || 0) + 2;
+                                nodesInShuffle.add(r.nodeId);
+                              });
 
                             if (Array.isArray(job.shufflePhase.sourceNodes)) {
                               job.shufflePhase.sourceNodes.forEach(id => nodesInShuffle.add(id));
                             }
 
-                            job.reducers
-                              .filter(r => r.nodeId !== null)
-                              .forEach(r => nodesInShuffle.add(r.nodeId));
+                            const nodeList = Array.from(nodesInShuffle);
+                            const maxContribution = Math.max(
+                              ...nodeList.map(id => shuffleContribution[id] || 1),
+                              1
+                            );
 
-                            nodesInShuffle.forEach(nodeId => {
+                            nodeList.forEach(nodeId => {
+                              const contribution = shuffleContribution[nodeId] || 1;
+                              const weight = contribution / maxContribution;
+                              const nodeDuration = shuffleDuration * (0.55 + weight * 0.45);
+                              const nodeStart = shuffleStart;
+                              const nodeEnd = Math.min(nodeStart + nodeDuration, shuffleWindowEnd);
+
                               shuffleTasks.push({
                                 kind: 'shuffle',
                                 task: {
-                                  name: 'Shuffle',
+                                  name: `Shuffle Node-${nodeId}`,
                                   nodeId,
-                                  startedAt: shuffleStart,
-                                  endedAt: shuffleEnd
+                                  startedAt: nodeStart,
+                                  endedAt: nodeEnd
                                 }
                               });
                             });
@@ -2020,6 +2097,69 @@
                             new Set(allTasks.map(t => t.task.nodeId))
                           ).sort((a, b) => a - b);
 
+                          const jobStart = job.timelineStart || minStart;
+                          const formatDuration = (ms) => {
+                            if (!Number.isFinite(ms) || ms < 0) return '…';
+                            if (ms < 1000) return `${Math.round(ms)} ms`;
+                            if (ms < 60000) return `${(ms / 1000).toFixed(1)} s`;
+                            return `${(ms / 60000).toFixed(1)} min`;
+                          };
+
+                          const avgDuration = (collection) => {
+                            if (!collection || collection.length === 0) return null;
+                            const sum = collection.reduce((acc, ms) => acc + ms, 0);
+                            return sum / collection.length;
+                          };
+
+                          const jobDurationMs =
+                            job.timelineEnd && jobStart ? job.timelineEnd - jobStart : null;
+
+                          const mapPhaseEndMs = (() => {
+                            const mapEnds = job.mappers
+                              .map(m => m.endedAt)
+                              .filter(Boolean);
+                            if (mapEnds.length === 0 || !jobStart) return null;
+                            return Math.max(...mapEnds) - jobStart;
+                          })();
+
+                          const shufflePhaseEndMs =
+                            job.shufflePhase?.endedAt && jobStart
+                              ? job.shufflePhase.endedAt - jobStart
+                              : null;
+
+                          const mapperDurations = job.mappers
+                            .filter(m => m.startedAt && m.endedAt)
+                            .map(m => m.endedAt - m.startedAt);
+                          const reducerDurations = job.reducers
+                            .filter(r => r.startedAt && r.endedAt)
+                            .map(r => r.endedAt - r.startedAt);
+
+                          const mapperAvgMs = avgDuration(mapperDurations);
+                          const reducerAvgMs = avgDuration(reducerDurations);
+
+                          const totalMappers = job.mappers.length;
+                          const dataLocalMappers = job.mappers.filter(m => m.hadLocality).length;
+                          const localityPercent =
+                            totalMappers > 0
+                              ? Math.round((dataLocalMappers / totalMappers) * 100)
+                              : 0;
+
+                          const totalReducers = job.reducers.length;
+                          const reducerNodeSet = new Set(
+                            job.reducers.map(r => r.nodeId).filter(Boolean)
+                          );
+                          const nodesTouched = nodeIds.length;
+
+                          const shuffleNodeSet = new Set(
+                            Array.isArray(job.shufflePhase?.sourceNodes)
+                              ? job.shufflePhase.sourceNodes
+                              : []
+                          );
+                          job.reducers
+                            .filter(r => r.nodeId !== null)
+                            .forEach(r => shuffleNodeSet.add(r.nodeId));
+                          const shuffleFanOut = shuffleNodeSet.size;
+
                           const getBarStyle = (task) => {
                             const s = task.startedAt || minStart;
                             const e = task.endedAt || Date.now();
@@ -2036,11 +2176,61 @@
                               <div className="gantt-title">
                                 ⏱ Execution Timeline (Node vs Time)
                               </div>
+                              <div className="gantt-metrics">
+                                <div className="gantt-metric">
+                                  <span>Job duration</span>
+                                  <strong>{formatDuration(jobDurationMs)}</strong>
+                                </div>
+                                <div className="gantt-metric">
+                                  <span>Map complete</span>
+                                  <strong>
+                                    {mapPhaseEndMs != null ? formatDuration(mapPhaseEndMs) : '…'}
+                                  </strong>
+                                </div>
+                                <div className="gantt-metric">
+                                  <span>Shuffle complete</span>
+                                  <strong>
+                                    {shufflePhaseEndMs != null ? formatDuration(shufflePhaseEndMs) : '…'}
+                                  </strong>
+                                </div>
+                                <div className="gantt-metric">
+                                  <span>Nodes touched</span>
+                                  <strong>{nodesTouched || '…'}</strong>
+                                </div>
+                                <div className="gantt-metric">
+                                  <span>Mappers / locality</span>
+                                  <strong>
+                                    {totalMappers
+                                      ? `${totalMappers} • ${localityPercent}% local`
+                                      : '…'}
+                                  </strong>
+                                </div>
+                                <div className="gantt-metric">
+                                  <span>Reducers / nodes</span>
+                                  <strong>
+                                    {totalReducers
+                                      ? `${totalReducers} • ${reducerNodeSet.size} nodes`
+                                      : '…'}
+                                  </strong>
+                                </div>
+                                <div className="gantt-metric">
+                                  <span>Mapper avg</span>
+                                  <strong>{formatDuration(mapperAvgMs)}</strong>
+                                </div>
+                                <div className="gantt-metric">
+                                  <span>Reducer avg</span>
+                                  <strong>{formatDuration(reducerAvgMs)}</strong>
+                                </div>
+                                <div className="gantt-metric">
+                                  <span>Shuffle fan-out</span>
+                                  <strong>{shuffleFanOut || '…'}</strong>
+                                </div>
+                              </div>
                               <div className="gantt-body">
                                 {nodeIds.map(nodeId => {
                                   const tasksForNode = allTasks.filter(t => t.task.nodeId === nodeId);
                                   const lanes = tasksForNode.length || 1;
-                                  const trackHeight = 4 + lanes * 10;
+                                  const trackHeight = Math.max(28, lanes * 22);
 
                                   return (
                                     <div className="gantt-row" key={nodeId}>
@@ -2052,16 +2242,28 @@
                                         {tasksForNode.map((t, laneIndex) => {
                                           const style = {
                                             ...getBarStyle(t.task),
-                                            top: `${2 + laneIndex * 10}px`
+                                            top: `${6 + laneIndex * 20}px`
                                           };
+                                          const label =
+                                            t.kind === 'map'
+                                              ? 'M'
+                                              : t.kind === 'reduce'
+                                              ? 'R'
+                                              : 'S';
+                                          const titleText =
+                                            t.kind === 'map'
+                                              ? 'Map'
+                                              : t.kind === 'reduce'
+                                              ? 'Reduce'
+                                              : 'Shuffle';
                                           return (
                                             <div
                                               key={`${t.kind}-${laneIndex}`}
                                               className={`gantt-bar ${t.kind === 'map' ? 'map' : t.kind === 'reduce' ? 'reduce' : 'shuffle'}`}
                                               style={style}
-                                              title={`${t.task.name} (${t.kind === 'map' ? 'Map' : 'Reduce'})`}
+                                              title={`${t.task.name} (${titleText})`}
                                             >
-                                              {t.kind === 'map' ? 'M' : 'R'}
+                                              {label}
                                             </div>
                                           );
                                         })}
