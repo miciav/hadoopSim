@@ -21,6 +21,8 @@
       const REPLICATION_FACTOR = 3;
       const BLOCK_SIZE = 128;
       const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
+      const MAX_TASK_RETRIES = 3;
+      const TASK_RETRY_DELAY_MS = 2000;
 
       // State
       const [colorIndex, setColorIndex] = useState(0);
@@ -159,7 +161,9 @@
           name: `Map-${cluster.mapReduceCounter}-${idx + 1}`,
           blockId: block.id,
           nodeId: null,
-          progress: 0
+          progress: 0,
+          retryCount: 0,
+          needsReschedule: false
         }));
 
         // Random number of reducers: 1, 2, or 3
@@ -167,7 +171,9 @@
         const reducers = Array.from({ length: numReducers }, (_, idx) => ({
           name: `Reduce-${cluster.mapReduceCounter}-${idx + 1}`,
           progress: 0,
-          nodeId: null
+          nodeId: null,
+          retryCount: 0,
+          needsReschedule: false
         }));
 
         const job = {
@@ -179,7 +185,8 @@
           status: 'pending',
           amNodeId: null,
           timelineStart: Date.now(),
-          timelineEnd: null
+          timelineEnd: null,
+          isCollapsed: false
         };
 
         setCluster(prev => ({
@@ -299,6 +306,189 @@
         runMappers(job);
       };
 
+      const allocateMapperTask = (mapper, nodes) => {
+        if (!mapper || !Array.isArray(nodes) || nodes.length === 0) return false;
+
+        const nodesWithBlock = nodes.filter(node =>
+          node.blocks.some(b => b.id === mapper.blockId)
+        );
+
+        const candidateNodes = nodesWithBlock.length > 0 ? nodesWithBlock : nodes;
+        const sortedNodes = [...candidateNodes].sort((a, b) => {
+          const aHasBlock = a.blocks.some(b => b.id === mapper.blockId);
+          const bHasBlock = b.blocks.some(b => b.id === mapper.blockId);
+          if (aHasBlock && !bHasBlock) return -1;
+          if (!aHasBlock && bHasBlock) return 1;
+          const aAvailCpu = a.cpuTotal - a.cpuUsed;
+          const bAvailCpu = b.cpuTotal - b.cpuUsed;
+          return bAvailCpu - aAvailCpu;
+        });
+
+        for (const node of sortedNodes) {
+          const cpuAvailable = node.cpuTotal - node.cpuUsed;
+          const memAvailable = node.memoryTotal - node.memoryUsed;
+
+          if (cpuAvailable >= 2 && memAvailable >= 4) {
+            node.cpuUsed += 2;
+            node.memoryUsed += 4;
+            node.containers.push({
+              name: mapper.name,
+              cpu: 2,
+              memory: 4,
+              isMapReduce: true,
+              isMapper: true,
+              blockIds: [mapper.blockId]
+            });
+
+            mapper.nodeId = node.id;
+            mapper.progress = 0;
+            mapper.startedAt = null;
+            mapper.endedAt = null;
+            mapper.needsReschedule = false;
+            mapper.hadLocality = node.blocks.some(b => b.id === mapper.blockId);
+            return true;
+          }
+        }
+
+        return false;
+      };
+
+      const allocateReducerTask = (reducer, jobName, nodes) => {
+        if (!reducer || !Array.isArray(nodes) || nodes.length === 0) return false;
+        const sortedNodes = [...nodes].sort((a, b) => {
+          const aAvailCpu = a.cpuTotal - a.cpuUsed;
+          const bAvailCpu = b.cpuTotal - b.cpuUsed;
+          return bAvailCpu - aAvailCpu;
+        });
+
+        for (const node of sortedNodes) {
+          const cpuAvailable = node.cpuTotal - node.cpuUsed;
+          const memAvailable = node.memoryTotal - node.memoryUsed;
+
+          if (cpuAvailable >= 2 && memAvailable >= 4) {
+            node.cpuUsed += 2;
+            node.memoryUsed += 4;
+            node.containers.push({
+              name: reducer.name,
+              cpu: 2,
+              memory: 4,
+              isMapReduce: true,
+              isReducer: true,
+              jobName
+            });
+
+            reducer.nodeId = node.id;
+            reducer.progress = 0;
+            reducer.startedAt = null;
+            reducer.endedAt = null;
+            reducer.needsReschedule = false;
+            return true;
+          }
+        }
+
+        return false;
+      };
+
+      const scheduleMapperRetry = (jobName, delay = TASK_RETRY_DELAY_MS) => {
+        setTimeout(() => {
+          let rescheduledAny = false;
+          let failedJob = null;
+
+          setCluster(prev => {
+            if (!prev) return prev;
+            const job = prev.mapReduceJobs.find(j => j.name === jobName);
+            if (!job || job.status !== 'running') return prev;
+
+            job.pendingMapperRetry = false;
+
+            const activeNodes = prev.nodes.filter(n => !n.failed);
+            job.mappers.forEach(mapper => {
+              if (mapper.nodeId === null && mapper.progress >= 0 && (mapper.retryCount || 0) < MAX_TASK_RETRIES) {
+                const allocated = allocateMapperTask(mapper, activeNodes);
+                if (allocated) {
+                  rescheduledAny = true;
+                }
+              }
+            });
+
+            const pendingMappers = job.mappers.filter(mapper => mapper.nodeId === null && mapper.progress >= 0);
+            const exhaustedAttempts = pendingMappers.some(mapper => (mapper.retryCount || 0) >= MAX_TASK_RETRIES);
+
+            if (exhaustedAttempts) {
+              job.status = 'failed';
+              failedJob = job.name;
+            } else if (pendingMappers.length > 0) {
+              job.pendingMapperRetry = true;
+              scheduleMapperRetry(job.name);
+            }
+
+            return { ...prev };
+          });
+
+          if (failedJob) {
+            showNotification(`❌ ${failedJob} failed: mapper retries exhausted`, 'error');
+          } else if (rescheduledAny) {
+            showNotification(`🔁 Rescheduled mapper tasks for ${jobName}`, 'info');
+          }
+        }, delay);
+      };
+
+      const scheduleReducerRetry = (jobName, delay = TASK_RETRY_DELAY_MS) => {
+        setTimeout(() => {
+          let rescheduledAny = false;
+          let failedJob = null;
+
+          setCluster(prev => {
+            if (!prev) return prev;
+            const job = prev.mapReduceJobs.find(j => j.name === jobName);
+            if (!job || job.status !== 'running') return prev;
+
+            job.pendingReducerRetry = false;
+
+            const activeNodes = prev.nodes.filter(n => !n.failed);
+            job.reducers.forEach(reducer => {
+              if (reducer.nodeId === null && reducer.progress >= 0 && (reducer.retryCount || 0) < MAX_TASK_RETRIES) {
+                const allocated = allocateReducerTask(reducer, job.name, activeNodes);
+                if (allocated) {
+                  rescheduledAny = true;
+                }
+              }
+            });
+
+            const pendingReducers = job.reducers.filter(reducer => reducer.nodeId === null && reducer.progress >= 0);
+            const exhaustedAttempts = pendingReducers.some(reducer => (reducer.retryCount || 0) >= MAX_TASK_RETRIES);
+
+            if (exhaustedAttempts) {
+              job.status = 'failed';
+              failedJob = job.name;
+            } else if (pendingReducers.length > 0) {
+              job.pendingReducerRetry = true;
+              scheduleReducerRetry(job.name);
+            }
+
+            return { ...prev };
+          });
+
+          if (failedJob) {
+            showNotification(`❌ ${failedJob} failed: reducer retries exhausted`, 'error');
+          } else if (rescheduledAny) {
+            showNotification(`🔁 Rescheduled reducer tasks for ${jobName}`, 'info');
+          }
+        }, delay);
+      };
+
+      // Toggle visibility of a MapReduce job card without breaking job references
+      const toggleJobVisibility = (jobName) => {
+        setCluster(prev => {
+          if (!prev) return prev;
+          const job = prev.mapReduceJobs.find(j => j.name === jobName);
+          if (job) {
+            job.isCollapsed = !job.isCollapsed;
+          }
+          return { ...prev };
+        });
+      };
+
       // Run mappers with progress simulation (slower + timestamps)
       const runMappers = (job) => {
         const interval = setInterval(() => {
@@ -411,38 +601,10 @@
         let allReducersAllocated = true;
 
         job.reducers.forEach(reducer => {
-          const sortedNodes = activeNodes.sort((a, b) => {
-            const aAvailCpu = a.cpuTotal - a.cpuUsed;
-            const bAvailCpu = b.cpuTotal - b.cpuUsed;
-            return bAvailCpu - aAvailCpu;
-          });
-
-          let reducerAllocated = false;
-          for (const node of sortedNodes) {
-            const cpuAvailable = node.cpuTotal - node.cpuUsed;
-            const memAvailable = node.memoryTotal - node.memoryUsed;
-
-            if (cpuAvailable >= 2 && memAvailable >= 4) {
-              node.cpuUsed += 2;
-              node.memoryUsed += 4;
-              node.containers.push({
-                name: reducer.name,
-                cpu: 2,
-                memory: 4,
-                isMapReduce: true,
-                isReducer: true,
-                jobName: job.name
-              });
-
-              reducer.nodeId = node.id;
-              if (!reducer.startedAt) {
-                reducer.startedAt = Date.now();
-              }
-              reducerAllocated = true;
-              break;
-            }
+          const reducerAllocated = allocateReducerTask(reducer, job.name, activeNodes);
+          if (reducerAllocated && !reducer.startedAt) {
+            reducer.startedAt = Date.now();
           }
-
           if (!reducerAllocated) {
             allReducersAllocated = false;
           }
@@ -472,7 +634,7 @@
 
             // Update all reducers progress (slower + timestamps)
             updatedJob.reducers.forEach(reducer => {
-              if (reducer.progress < 100) {
+              if (reducer.nodeId !== null && reducer.progress < 100) {
                 if (!reducer.startedAt) {
                   reducer.startedAt = Date.now();
                 }
@@ -564,80 +726,114 @@
         const affectedJobs = [];
 
         cluster.mapReduceJobs.forEach(job => {
-          if (job.status === 'running') {
-            const mappersOnFailedNode = job.mappers.filter(m => m.nodeId === randomNode.id);
+          if (job.status !== 'running') return;
 
-            if (mappersOnFailedNode.length > 0) {
-              let rescheduled = 0;
-              let notRescheduled = 0;
+          const mappersOnFailedNode = job.mappers.filter(m => m.nodeId === randomNode.id);
+          const reducersOnFailedNode = job.reducers.filter(r => r.nodeId === randomNode.id);
 
-              mappersOnFailedNode.forEach(mapper => {
-                const containerIndex = randomNode.containers.findIndex(c => c.name === mapper.name);
-                let cpu = 2;
-                let memory = 4;
+          if (mappersOnFailedNode.length === 0 && reducersOnFailedNode.length === 0) return;
 
-                if (containerIndex !== -1) {
-                  const container = randomNode.containers[containerIndex];
-                  cpu = container.cpu;
-                  memory = container.memory;
-                  randomNode.cpuUsed -= container.cpu;
-                  randomNode.memoryUsed -= container.memory;
-                  randomNode.containers.splice(containerIndex, 1);
-                }
+          let mapperRestarts = 0;
+          let mapperQueued = 0;
+          let reducerRestarts = 0;
+          let reducerQueued = 0;
+          let mapperRetryExceeded = false;
+          let reducerRetryExceeded = false;
 
-                const nodesWithBlock = remainingNodes.filter(node =>
-                  node.blocks.some(b => b.id === mapper.blockId)
-                );
+          mappersOnFailedNode.forEach(mapper => {
+            const containerIndex = randomNode.containers.findIndex(c => c.name === mapper.name);
+            if (containerIndex !== -1) {
+              const container = randomNode.containers[containerIndex];
+              randomNode.cpuUsed -= container.cpu;
+              randomNode.memoryUsed -= container.memory;
+              randomNode.containers.splice(containerIndex, 1);
+            }
 
-                const candidateNodes = nodesWithBlock.length > 0 ? nodesWithBlock : remainingNodes;
-                let allocated = false;
+            mapper.nodeId = null;
+            mapper.startedAt = null;
+            mapper.endedAt = null;
+            mapper.progress = 0;
+            mapper.retryCount = (mapper.retryCount || 0) + 1;
+            mapper.needsReschedule = true;
 
-                for (const node of candidateNodes) {
-                  const cpuAvailable = node.cpuTotal - node.cpuUsed;
-                  const memAvailable = node.memoryTotal - node.memoryUsed;
+            if ((mapper.retryCount || 0) >= MAX_TASK_RETRIES) {
+              mapperRetryExceeded = true;
+              return;
+            }
 
-                  if (cpuAvailable >= cpu && memAvailable >= memory) {
-                    node.cpuUsed += cpu;
-                    node.memoryUsed += memory;
-                    node.containers.push({
-                      name: mapper.name,
-                      cpu,
-                      memory,
-                      isMapReduce: true,
-                      blockIds: [mapper.blockId]
-                    });
+            const allocated = allocateMapperTask(mapper, remainingNodes);
+            if (allocated) {
+              mapperRestarts++;
+            } else {
+              mapperQueued++;
+            }
+          });
 
-                    mapper.nodeId = node.id;
-                    mapper.progress = 0;
-                    allocated = true;
-                    rescheduled++;
-                    break;
-                  }
-                }
+          reducersOnFailedNode.forEach(reducer => {
+            const containerIndex = randomNode.containers.findIndex(c => c.name === reducer.name);
+            if (containerIndex !== -1) {
+              const container = randomNode.containers[containerIndex];
+              randomNode.cpuUsed -= container.cpu;
+              randomNode.memoryUsed -= container.memory;
+              randomNode.containers.splice(containerIndex, 1);
+            }
 
-                if (!allocated) {
-                  mapper.progress = -1;
-                  notRescheduled++;
-                }
-              });
+            reducer.nodeId = null;
+            reducer.startedAt = null;
+            reducer.endedAt = null;
+            reducer.progress = 0;
+            reducer.retryCount = (reducer.retryCount || 0) + 1;
+            reducer.needsReschedule = true;
 
-              let summary = `${job.name}: ${mappersOnFailedNode.length} mapper(s) on failed node`;
-              if (rescheduled > 0) summary += `, ${rescheduled} restarted`;
-              if (notRescheduled > 0) summary += `, ${notRescheduled} failed`;
-              affectedJobs.push(summary);
+            if ((reducer.retryCount || 0) >= MAX_TASK_RETRIES) {
+              reducerRetryExceeded = true;
+              return;
+            }
 
-              const amIndex = randomNode.containers.findIndex(c => c.isApplicationMaster && c.jobName === job.name);
-              if (amIndex !== -1) {
-                const am = randomNode.containers[amIndex];
-                randomNode.cpuUsed -= am.cpu;
-                randomNode.memoryUsed -= am.memory;
-                randomNode.containers.splice(amIndex, 1);
+            const allocated = allocateReducerTask(reducer, job.name, remainingNodes);
+            if (allocated) {
+              reducerRestarts++;
+            } else {
+              reducerQueued++;
+            }
+          });
 
-                const reallocated = allocateApplicationMaster(job.name, job);
-                if (!reallocated) {
-                  job.status = 'failed';
-                }
-              }
+          let summary = `${job.name}:`;
+          if (mappersOnFailedNode.length > 0) {
+            summary += ` ${mappersOnFailedNode.length} mapper(s) lost`;
+            if (mapperRestarts > 0) summary += `, ${mapperRestarts} restarted`;
+            if (mapperQueued > 0) summary += `, ${mapperQueued} waiting`;
+          }
+          if (reducersOnFailedNode.length > 0) {
+            summary += `${mappersOnFailedNode.length > 0 ? ' |' : ''} ${reducersOnFailedNode.length} reducer(s) lost`;
+            if (reducerRestarts > 0) summary += `, ${reducerRestarts} restarted`;
+            if (reducerQueued > 0) summary += `, ${reducerQueued} waiting`;
+          }
+          affectedJobs.push(summary.trim());
+
+          if (mapperRetryExceeded || reducerRetryExceeded) {
+            job.status = 'failed';
+          } else {
+            if (mapperQueued > 0 && !job.pendingMapperRetry) {
+              job.pendingMapperRetry = true;
+              scheduleMapperRetry(job.name);
+            }
+            if (reducerQueued > 0 && !job.pendingReducerRetry) {
+              job.pendingReducerRetry = true;
+              scheduleReducerRetry(job.name);
+            }
+          }
+
+          const amIndex = randomNode.containers.findIndex(c => c.isApplicationMaster && c.jobName === job.name);
+          if (amIndex !== -1) {
+            const am = randomNode.containers[amIndex];
+            randomNode.cpuUsed -= am.cpu;
+            randomNode.memoryUsed -= am.memory;
+            randomNode.containers.splice(amIndex, 1);
+
+            const reallocated = allocateApplicationMaster(job.name, job);
+            if (!reallocated) {
+              job.status = 'failed';
             }
           }
         });
@@ -1423,9 +1619,45 @@
               margin-bottom: 10px;
             }
 
+            .job-actions {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+            }
+
+            .job-toggle {
+              background: white;
+              border: 1px solid #cbd5e0;
+              border-radius: 999px;
+              padding: 4px 12px;
+              font-size: 0.8em;
+              font-weight: 600;
+              color: #2d3748;
+              cursor: pointer;
+              transition: background 0.2s ease, color 0.2s ease;
+            }
+
+            .job-toggle:hover,
+            .job-toggle:focus-visible {
+              background: #edf2f7;
+            }
+
+            .job-toggle:focus-visible {
+              outline: 2px solid #667eea;
+              outline-offset: 2px;
+            }
+
             .job-name {
               font-weight: bold;
               font-size: 1.1em;
+            }
+
+            .job-body {
+              margin-top: 10px;
+            }
+
+            .job-body.collapsed {
+              display: none;
             }
 
             .job-status {
@@ -1909,14 +2141,29 @@
                     <h2>MapReduce Jobs</h2>
                   </div>
                   <div className="jobs-list">
-                    {cluster.mapReduceJobs.map((job, idx) => (
-                      <div key={idx} className="job-item" style={{ borderLeftColor: job.fileColor }}>
+                    {cluster.mapReduceJobs.map((job, idx) => {
+                      const isCollapsed = !!job.isCollapsed;
+
+                      return (
+                        <div key={idx} className="job-item" style={{ borderLeftColor: job.fileColor }}>
                         <div className="job-header">
                           <span className="job-name">{job.name}</span>
-                          <span className={`job-status status-${job.status}`}>
-                            {job.status.toUpperCase()}
-                          </span>
+                          <div className="job-actions">
+                            <button
+                              type="button"
+                              className="job-toggle"
+                              onClick={() => toggleJobVisibility(job.name)}
+                              aria-expanded={!isCollapsed}
+                              aria-label={`${isCollapsed ? 'Expand' : 'Minimize'} ${job.name}`}
+                            >
+                              {isCollapsed ? 'Expand' : 'Minimize'}
+                            </button>
+                            <span className={`job-status status-${job.status}`}>
+                              {job.status.toUpperCase()}
+                            </span>
+                          </div>
                         </div>
+                        <div className={`job-body ${isCollapsed ? 'collapsed' : ''}`}>
                         <div style={{ fontSize: '0.9em', color: '#718096', marginBottom: '10px' }}>
                           File: {job.fileName} | AM: Node-{job.amNodeId || 'N/A'}
                           {job.reducers.some(r => r.nodeId) && ` | Reducers: ${job.reducers.length}`}
@@ -2276,7 +2523,9 @@
                           );
                         })()}
                       </div>
-                    ))}
+                    </div>
+                  );
+                })}
                   </div>
                 </div>
               )}
