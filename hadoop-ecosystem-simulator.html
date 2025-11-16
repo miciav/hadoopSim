@@ -16,19 +16,558 @@
   <script type="text/babel">
     const { useState, useEffect, useCallback } = React;
 
-    const HadoopEcosystem = () => {
-      // Constants
-      const REPLICATION_FACTOR = 3;
-      const BLOCK_SIZE = 128;
-      const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
-      const MAX_TASK_RETRIES = 3;
-      const TASK_RETRY_DELAY_MS = 2000;
+    // Constants
+    const REPLICATION_FACTOR = 3;
+    const BLOCK_SIZE = 128;
+    const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
+    const MAX_TASK_RETRIES = 3;
+    const TASK_RETRY_DELAY_MS = 2000;
+    const STORAGE_KEY = 'hadoop-ecosystem-simulator/v1';
 
+    // Persistence helpers
+    const loadPersistedState = () => {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed?.cluster) return null;
+        return parsed;
+      } catch (err) {
+        console.warn('Failed to load persisted state', err);
+        return null;
+      }
+    };
+
+    const persistState = (state) => {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (err) {
+        console.warn('Failed to persist state', err);
+      }
+    };
+
+    // UI Components (pure/presentational)
+    const NotificationToaster = ({ notifications }) => (
+      <div>
+        {notifications.map(n => (
+          <div key={n.id} className={`notification ${n.type}`}>
+            {n.message}
+          </div>
+        ))}
+      </div>
+    );
+
+    const StatsPanel = ({ stats }) => (
+      <div className="stats-section">
+        <h2>📊 Statistics</h2>
+        <div className="stat-item">
+          <span className="stat-label">Nodes:</span>
+          <span className="stat-value">{stats.activeNodes}/{stats.totalNodes}</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-label">CPU:</span>
+          <span className="stat-value">{stats.cpuUsage}</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-label">Memory:</span>
+          <span className="stat-value">{stats.memoryUsage}</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-label">Storage:</span>
+          <span className="stat-value">{stats.storageUsage}</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-label">Files:</span>
+          <span className="stat-value">{stats.totalFiles}</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-label">Running Jobs:</span>
+          <span className="stat-value">{stats.runningJobs}</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-label">Completed:</span>
+          <span className="stat-value">{stats.completedJobs}</span>
+        </div>
+      </div>
+    );
+
+    const SidebarControls = ({ cluster, uploadFile, submitMapReduceJob, addNode, removeNode, rebalanceCluster, simulateNodeFailure, resetCluster, stats }) => (
+      <div className="sidebar">
+        <h2>🔧 Controls</h2>
+
+        <div>
+          <button className="btn btn-hdfs" onClick={() => uploadFile(256)}>
+            📤 Upload 256 MB
+          </button>
+          <button className="btn btn-hdfs" onClick={() => uploadFile(512)}>
+            📤 Upload 512 MB
+          </button>
+          <button className="btn btn-hdfs" onClick={() => uploadFile(1024)}>
+            📤 Upload 1 GB
+          </button>
+        </div>
+
+        <div style={{ marginTop: '15px' }}>
+          <h2>🎯 MapReduce</h2>
+          {cluster.files.map((file, idx) => (
+            <button
+              key={idx}
+              className="btn btn-mapreduce"
+              onClick={() => submitMapReduceJob(idx)}
+            >
+              🚀 Run on {file.name}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ marginTop: '15px' }}>
+          <h2>🖥️ Cluster</h2>
+          <button className="btn btn-yarn" onClick={addNode}>
+            ➕ Add Node
+          </button>
+          <button className="btn btn-yarn" onClick={removeNode}>
+            ➖ Remove Node
+          </button>
+          <button className="btn btn-hdfs" onClick={() => {
+            const activeNodes = cluster?.nodes.filter(n => !n.failed);
+            if (activeNodes && activeNodes.length > 0) {
+              rebalanceCluster(activeNodes[activeNodes.length - 1]);
+            }
+          }}>
+            ⚖️ Rebalance Storage
+          </button>
+        </div>
+
+        <div style={{ marginTop: '15px' }}>
+          <button className="btn btn-yarn" onClick={simulateNodeFailure}>
+            💥 Simulate Failure
+          </button>
+          <button className="btn btn-danger" onClick={resetCluster}>
+            🔄 Reset Cluster
+          </button>
+        </div>
+
+        <StatsPanel stats={stats} />
+      </div>
+    );
+
+    const NodeCard = ({ node, isShuffleSource, isShuffleTarget }) => {
+      const hasDataLocality = node.containers.some(c =>
+        c.isMapReduce && c.blockIds?.some(blockId =>
+          node.blocks.some(b => b.id === blockId)
+        )
+      );
+
+      return (
+        <div
+          className={`node ${node.failed ? 'failed' : ''} ${hasDataLocality ? 'data-locality' : ''} ${node.containers.length > 0 ? 'busy' : ''} ${isShuffleSource ? 'shuffle-source' : ''} ${isShuffleTarget ? 'shuffle-target' : ''}`}
+        >
+          <div className="node-header">
+            <span className="node-name">{node.name}</span>
+            <span className={`node-status ${node.failed ? 'status-failed' : 'status-active'}`}>
+              {node.failed ? 'FAILED' : 'ACTIVE'}
+            </span>
+          </div>
+
+          <div className="node-resources">
+            <div>
+              CPU: {node.cpuUsed}/{node.cpuTotal} cores
+              <div className="resource-bar">
+                <div
+                  className="resource-fill cpu-fill"
+                  style={{ width: `${(node.cpuUsed / node.cpuTotal) * 100}%` }}
+                />
+              </div>
+            </div>
+            <div>
+              Memory: {node.memoryUsed.toFixed(1)}/{node.memoryTotal} GB
+              <div className="resource-bar">
+                <div
+                  className="resource-fill memory-fill"
+                  style={{ width: `${(node.memoryUsed / node.memoryTotal) * 100}%` }}
+                />
+              </div>
+            </div>
+            <div>
+              Storage: {node.storageUsed.toFixed(1)}/{node.storageTotal} GB
+              <div className="resource-bar">
+                <div
+                  className="resource-fill storage-fill"
+                  style={{ width: `${(node.storageUsed / node.storageTotal) * 100}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {node.blocks.length > 0 && (
+            <div className="blocks-section">
+              <div className="section-title">📦 HDFS Blocks ({node.blocks.length})</div>
+              <div className="block-list">
+                {node.blocks.map((block, idx) => (
+                  <div
+                    key={idx}
+                    className={`block-item ${block.isReplica ? 'replica' : ''}`}
+                    style={{ backgroundColor: block.color }}
+                    title={`${block.id} - ${block.fileName}${block.isReplica ? ' (Replica)' : ' (Primary)'}`}
+                  >
+                    {block.id}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {node.containers.length > 0 && (
+            <div className="containers-section">
+              <div className="section-title">🎯 YARN Containers ({node.containers.length})</div>
+              <div className="container-list">
+                {node.containers.map((container, idx) => (
+                  <div
+                    key={idx}
+                    className={`container-item ${container.isApplicationMaster ? 'am' : ''} ${container.isReducer ? 'reducer' : ''}`}
+                    title={`${container.name} - CPU: ${container.cpu}, Mem: ${container.memory}GB`}
+                  >
+                    {container.isApplicationMaster ? '🎯 AM' : container.isReducer ? '🔄 Reducer' : container.name}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    const NodeGrid = ({ cluster }) => (
+      <div className="cluster-panel">
+        <div className="panel-header">
+          <span className="panel-icon">🖥️</span>
+          <h2>YARN Cluster Nodes</h2>
+        </div>
+        <div className="nodes-container">
+          {cluster.nodes.map(node => {
+            const isShuffleSource = cluster.mapReduceJobs.some(job =>
+              job.shufflePhase?.inProgress &&
+              job.shufflePhase.sourceNodes.includes(node.id)
+            );
+
+            const isShuffleTarget = cluster.mapReduceJobs.some(job =>
+              job.shufflePhase?.inProgress &&
+              job.reducers.some(r => r.nodeId === node.id)
+            );
+
+            return (
+              <NodeCard
+                key={node.id}
+                node={node}
+                isShuffleSource={isShuffleSource}
+                isShuffleTarget={isShuffleTarget}
+              />
+            );
+          })}
+        </div>
+      </div>
+    );
+
+    const FilesPanel = ({ files }) => {
+      if (files.length === 0) return null;
+
+      return (
+        <div className="cluster-panel">
+          <div className="panel-header">
+            <span className="panel-icon">📁</span>
+            <h2>HDFS Files</h2>
+          </div>
+          <div className="files-list">
+            {files.map((file, idx) => (
+              <div key={idx} className="file-item" style={{ borderLeftColor: file.color }}>
+                <div className="file-header">
+                  <span className="file-name">{file.name}</span>
+                  <span className="file-size">{file.size} MB</span>
+                </div>
+                <div className="file-blocks">
+                  {file.blocks.map((block, bidx) => (
+                    <div
+                      key={bidx}
+                      className="block-item"
+                      style={{ backgroundColor: file.color }}
+                    >
+                      {block.id}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    };
+
+    const GanttChart = ({ job }) => {
+      const startTime = job.timelineStart || Date.now();
+      const now = job.timelineEnd || Date.now();
+      const timelineDurationMs = (now - startTime) || 1;
+      const calcWidth = (duration) => `${Math.max(5, (duration / timelineDurationMs) * 100)}%`;
+      const calcLeft = (ts) => `${Math.max(0, ((ts - startTime) / timelineDurationMs) * 100)}%`;
+
+      const mapperBars = job.mappers.map(mapper => {
+        if (!mapper.startedAt || mapper.progress < 0) return null;
+        const endTs = mapper.endedAt || now;
+        return {
+          kind: 'map',
+          task: mapper,
+          left: calcLeft(mapper.startedAt),
+          width: calcWidth(endTs - mapper.startedAt)
+        };
+      }).filter(Boolean);
+
+      const shuffleBars = [];
+      if (job.shufflePhase?.startedAt) {
+        shuffleBars.push({
+          kind: 'shuffle',
+          task: { name: 'Shuffle' },
+          left: calcLeft(job.shufflePhase.startedAt),
+          width: calcWidth((job.shufflePhase.endedAt || now) - job.shufflePhase.startedAt)
+        });
+      }
+
+      const reducerBars = job.reducers.map(reducer => {
+        if (!reducer.startedAt || reducer.progress < 0) return null;
+        const endTs = reducer.endedAt || now;
+        return {
+          kind: 'reduce',
+          task: reducer,
+          left: calcLeft(reducer.startedAt),
+          width: calcWidth(endTs - reducer.startedAt)
+        };
+      }).filter(Boolean);
+
+      const rows = [
+        { label: 'Map', bars: mapperBars },
+        { label: 'Shuffle', bars: shuffleBars },
+        { label: 'Reduce', bars: reducerBars }
+      ];
+
+      return (
+        <div className="gantt-container">
+          <div className="gantt-metrics">
+            <div className="gantt-metric">
+              <span>Job Status</span>
+              <strong>{job.status}</strong>
+            </div>
+            <div className="gantt-metric">
+              <span>AM Node</span>
+              <strong>{job.amNodeId ? `Node-${job.amNodeId}` : 'Pending'}</strong>
+            </div>
+            <div className="gantt-metric">
+              <span>Mappers</span>
+              <strong>{job.mappers.length}</strong>
+            </div>
+            <div className="gantt-metric">
+              <span>Reducers</span>
+              <strong>{job.reducers.length}</strong>
+            </div>
+          </div>
+
+          <div className="gantt-chart">
+            <div className="gantt-grid">
+              {Array.from({ length: 10 }).map((_, idx) => (
+                <div key={idx} className="gantt-grid-line"></div>
+              ))}
+            </div>
+            <div className="gantt-rows">
+              {rows.map((row, idx) => (
+                <div key={idx} className="gantt-row">
+                  <div className="gantt-row-label">{row.label}</div>
+                  <div className="gantt-row-bars">
+                    {row.bars.map((t, tIdx) => {
+                      const style = { left: t.left, width: t.width };
+                      const titleText = t.kind === 'map' ? 'Mapper' : t.kind === 'reduce' ? 'Reducer' : 'Shuffle';
+                      const label = t.task.name;
+                      return (
+                        <div
+                          key={tIdx}
+                          className={`gantt-bar ${t.kind === 'map' ? 'map' : t.kind === 'reduce' ? 'reduce' : 'shuffle'}`}
+                          style={style}
+                          title={`${t.task.name} (${titleText})`}
+                        >
+                          {label}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const JobCard = ({ job, cluster, toggleJobVisibility }) => {
+      const isCollapsed = !!job.isCollapsed;
+      return (
+        <div className="job-item" style={{ borderLeftColor: job.fileColor }}>
+          <div className="job-header">
+            <span className="job-name">{job.name}</span>
+            <div className="job-actions">
+              <button
+                type="button"
+                className="job-toggle"
+                onClick={() => toggleJobVisibility(job.name)}
+                aria-expanded={!isCollapsed}
+                aria-label={`${isCollapsed ? 'Expand' : 'Minimize'} ${job.name}`}
+              >
+                {isCollapsed ? 'Expand' : 'Minimize'}
+              </button>
+              <span className={`job-status status-${job.status}`}>
+                {job.status.toUpperCase()}
+              </span>
+            </div>
+          </div>
+
+          <div className={`job-body ${isCollapsed ? 'collapsed' : ''}`}>
+            <div style={{ fontSize: '0.9em', color: '#718096', marginBottom: '10px' }}>
+              File: {job.fileName} | AM: Node-{job.amNodeId || 'N/A'}
+              {job.reducers.some(r => r.nodeId) && ` | Reducers: ${job.reducers.length}`}
+            </div>
+
+            {job.status !== 'completed' && (
+              <div className="mappers-container">
+                <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Map Phase:</div>
+                {job.mappers.map((mapper, midx) => {
+                  const node = cluster.nodes.find(n => n.id === mapper.nodeId);
+                  const hasLocality = node?.blocks.some(b => b.id === mapper.blockId);
+
+                  return (
+                    <div key={midx} className="mapper-item">
+                      <span className="mapper-name">
+                        {mapper.name}
+                        {hasLocality && ' ⚡'}
+                      </span>
+                      <span style={{ fontSize: '0.85em', color: '#718096' }}>
+                        Node-{mapper.nodeId || 'N/A'}
+                      </span>
+                      <div className="progress-bar">
+                        {mapper.progress >= 0 && (
+                          <div
+                            className="progress-fill"
+                            style={{ width: `${mapper.progress}%` }}
+                          >
+                            {mapper.progress.toFixed(0)}%
+                          </div>
+                        )}
+                        {mapper.progress < 0 && (
+                          <div style={{ padding: '0 10px', fontSize: '0.85em' }}>
+                            ❌ Failed
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {job.status === 'running' && job.mappers.every(m => m.progress >= 100 || m.progress < 0) && (
+              <>
+                {job.shufflePhase && job.shufflePhase.inProgress && (
+                  <div className="shuffle-phase">
+                    <div style={{ fontWeight: 'bold', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>🔀 Shuffle &amp; Sort Phase</span>
+                      <span style={{ fontSize: '0.85em', color: '#718096' }}>
+                        Source nodes: {job.shufflePhase.sourceNodes.join(', ')}
+                      </span>
+                    </div>
+                    <div className="progress-bar">
+                      <div
+                        className="progress-fill"
+                        style={{ width: `${job.shufflePhase.progress}%`, background: 'linear-gradient(90deg, #ed8936 0%, #dd6b20 100%)' }}
+                      >
+                        {job.shufflePhase.progress.toFixed(0)}%
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {job.reducers.length > 0 && (
+                  <div className="reducers-container">
+                    <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Reduce Phase:</div>
+                    {job.reducers.map((reducer, ridx) => (
+                      <div key={ridx} className="reducer-item">
+                        <span className="reducer-name">
+                          {reducer.name}
+                        </span>
+                        <span style={{ fontSize: '0.85em', color: '#718096' }}>
+                          Node-{reducer.nodeId || 'N/A'}
+                        </span>
+                        <div className="progress-bar">
+                          {reducer.progress >= 0 && (
+                            <div
+                              className="progress-fill reducer-fill"
+                              style={{ width: `${reducer.progress}%` }}
+                            >
+                              {reducer.progress.toFixed(0)}%
+                            </div>
+                          )}
+                          {reducer.progress < 0 && (
+                            <div style={{ padding: '0 10px', fontSize: '0.85em' }}>
+                              ❌ Failed
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {job.status === 'completed' && (
+              <div className="job-complete">
+                <div className="job-complete-title">✅ Job Completed</div>
+                <div className="job-complete-details">
+                  <div>AM: Node-{job.amNodeId || 'N/A'}</div>
+                  <div>Mappers: {job.mappers.length}</div>
+                  <div>Reducers: {job.reducers.length}</div>
+                </div>
+              </div>
+            )}
+
+            <GanttChart job={job} />
+          </div>
+        </div>
+      );
+    };
+
+    const JobsPanel = ({ cluster, toggleJobVisibility }) => {
+      if (cluster.mapReduceJobs.length === 0) return null;
+      return (
+        <div className="cluster-panel">
+          <div className="panel-header">
+            <span className="panel-icon">⚙️</span>
+            <h2>MapReduce Jobs</h2>
+          </div>
+          <div className="jobs-list">
+            {cluster.mapReduceJobs.map((job, idx) => (
+              <JobCard
+                key={idx}
+                job={job}
+                cluster={cluster}
+                toggleJobVisibility={toggleJobVisibility}
+              />
+            ))}
+          </div>
+        </div>
+      );
+    };
+
+    const HadoopEcosystem = () => {
       // State
       const [colorIndex, setColorIndex] = useState(0);
       const [cluster, setCluster] = useState(null);
       const [notifications, setNotifications] = useState([]);
       const [nextNodeId, setNextNodeId] = useState(7);
+      const [resumeNeeded, setResumeNeeded] = useState(false);
 
       // Initialize cluster
       const initializeCluster = useCallback(() => {
@@ -61,8 +600,28 @@
       }, []);
 
       useEffect(() => {
-        initializeCluster();
+        const persisted = loadPersistedState();
+        if (persisted?.cluster) {
+          setCluster(persisted.cluster);
+          setColorIndex(persisted.colorIndex ?? 0);
+          setNextNodeId(persisted.nextNodeId ?? 7);
+          setNotifications(persisted.notifications ?? []);
+          setResumeNeeded(true);
+        } else {
+          initializeCluster();
+          setResumeNeeded(false);
+        }
       }, [initializeCluster]);
+
+      useEffect(() => {
+        if (!cluster) return;
+        persistState({
+          cluster,
+          colorIndex,
+          nextNodeId,
+          notifications
+        });
+      }, [cluster, colorIndex, nextNodeId, notifications]);
 
       // Notification system
       const showNotification = (message, type) => {
@@ -658,6 +1217,26 @@
         }, 900);
       };
 
+      useEffect(() => {
+        if (!resumeNeeded || !cluster) return;
+        cluster.mapReduceJobs.forEach(job => {
+          if (job.status === 'running') {
+            const hasPendingMappers = job.mappers.some(m => m.progress < 100 && m.progress >= 0);
+            const shuffleInProgress = job.shufflePhase?.inProgress;
+            const reducersRunning = job.reducers.some(r => r.progress < 100 && r.progress >= 0 && r.nodeId);
+
+            if (hasPendingMappers) {
+              runMappers(job);
+            } else if (shuffleInProgress) {
+              setTimeout(() => startReducePhase(job), 100);
+            } else if (reducersRunning) {
+              startReducePhase(job);
+            }
+          }
+        });
+        setResumeNeeded(false);
+      }, [resumeNeeded, cluster]);
+
       // Complete job
       const completeJob = (job) => {
         job.status = 'completed';
@@ -1142,6 +1721,7 @@
         }
       };
 
+      // Calculate statistics
       // Calculate statistics
       const getStats = () => {
         if (!cluster) return {};
@@ -1710,11 +2290,20 @@
               font-weight: bold;
             }
 
-            .reduce-phase {
+            .reducers-container {
               margin-top: 10px;
               padding: 10px;
               background: white;
               border-radius: 8px;
+              border: 1px solid #e2e8f0;
+            }
+
+            .reducer-item {
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              margin: 6px 0;
+              font-size: 0.9em;
             }
 
             .shuffle-phase {
@@ -1909,634 +2498,26 @@
           </div>
 
           <div className="main-container">
-            <div className="sidebar">
-              <h2>🔧 Controls</h2>
-
-              <div>
-                <button className="btn btn-hdfs" onClick={() => uploadFile(256)}>
-                  📤 Upload 256 MB
-                </button>
-                <button className="btn btn-hdfs" onClick={() => uploadFile(512)}>
-                  📤 Upload 512 MB
-                </button>
-                <button className="btn btn-hdfs" onClick={() => uploadFile(1024)}>
-                  📤 Upload 1 GB
-                </button>
-              </div>
-
-              <div style={{ marginTop: '15px' }}>
-                <h2>🎯 MapReduce</h2>
-                {cluster.files.map((file, idx) => (
-                  <button
-                    key={idx}
-                    className="btn btn-mapreduce"
-                    onClick={() => submitMapReduceJob(idx)}
-                  >
-                    🚀 Run on {file.name}
-                  </button>
-                ))}
-              </div>
-
-              <div style={{ marginTop: '15px' }}>
-                <h2>🖥️ Cluster</h2>
-                <button className="btn btn-yarn" onClick={addNode}>
-                  ➕ Add Node
-                </button>
-                <button className="btn btn-yarn" onClick={removeNode}>
-                  ➖ Remove Node
-                </button>
-                <button className="btn btn-hdfs" onClick={() => {
-                  const activeNodes = cluster?.nodes.filter(n => !n.failed);
-                  if (activeNodes && activeNodes.length > 0) {
-                    rebalanceCluster(activeNodes[activeNodes.length - 1]);
-                  }
-                }}>
-                  ⚖️ Rebalance Storage
-                </button>
-              </div>
-
-              <div style={{ marginTop: '15px' }}>
-                <button className="btn btn-yarn" onClick={simulateNodeFailure}>
-                  💥 Simulate Failure
-                </button>
-                <button className="btn btn-danger" onClick={resetCluster}>
-                  🔄 Reset Cluster
-                </button>
-              </div>
-
-              <div className="stats-section">
-                <h2>📊 Statistics</h2>
-                <div className="stat-item">
-                  <span className="stat-label">Nodes:</span>
-                  <span className="stat-value">{stats.activeNodes}/{stats.totalNodes}</span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-label">CPU:</span>
-                  <span className="stat-value">{stats.cpuUsage}</span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-label">Memory:</span>
-                  <span className="stat-value">{stats.memoryUsage}</span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-label">Storage:</span>
-                  <span className="stat-value">{stats.storageUsage}</span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-label">Files:</span>
-                  <span className="stat-value">{stats.totalFiles}</span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-label">Running Jobs:</span>
-                  <span className="stat-value">{stats.runningJobs}</span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-label">Completed:</span>
-                  <span className="stat-value">{stats.completedJobs}</span>
-                </div>
-              </div>
-            </div>
+            <SidebarControls
+              cluster={cluster}
+              uploadFile={uploadFile}
+              submitMapReduceJob={submitMapReduceJob}
+              addNode={addNode}
+              removeNode={removeNode}
+              rebalanceCluster={rebalanceCluster}
+              simulateNodeFailure={simulateNodeFailure}
+              resetCluster={resetCluster}
+              stats={stats}
+            />
 
             <div className="content-area">
-              <div className="cluster-panel">
-                <div className="panel-header">
-                  <span className="panel-icon">🖥️</span>
-                  <h2>YARN Cluster Nodes</h2>
-                </div>
-                <div className="nodes-container">
-                  {cluster.nodes.map(node => {
-                    const hasDataLocality = node.containers.some(c => 
-                      c.isMapReduce && c.blockIds?.some(blockId => 
-                        node.blocks.some(b => b.id === blockId)
-                      )
-                    );
-
-                    // Check if this node is involved in shuffle
-                    const isShuffleSource = cluster.mapReduceJobs.some(job => 
-                      job.shufflePhase?.inProgress && 
-                      job.shufflePhase.sourceNodes.includes(node.id)
-                    );
-
-                    const isShuffleTarget = cluster.mapReduceJobs.some(job =>
-                      job.shufflePhase?.inProgress && 
-                      job.reducers.some(r => r.nodeId === node.id)
-                    );
-
-                    return (
-                      <div
-                        key={node.id}
-                        className={`node ${node.failed ? 'failed' : ''} ${hasDataLocality ? 'data-locality' : ''} ${node.containers.length > 0 ? 'busy' : ''} ${isShuffleSource ? 'shuffle-source' : ''} ${isShuffleTarget ? 'shuffle-target' : ''}`}
-                      >
-                        <div className="node-header">
-                          <span className="node-name">{node.name}</span>
-                          <span className={`node-status ${node.failed ? 'status-failed' : 'status-active'}`}>
-                            {node.failed ? '❌ FAILED' : '✅ ACTIVE'}
-                          </span>
-                        </div>
-
-                        <div className="node-resources">
-                          <div>
-                            CPU: {node.cpuUsed}/{node.cpuTotal} cores
-                            <div className="resource-bar">
-                              <div
-                                className="resource-fill cpu-fill"
-                                style={{ width: `${(node.cpuUsed / node.cpuTotal) * 100}%` }}
-                              />
-                            </div>
-                          </div>
-                          <div>
-                            Memory: {node.memoryUsed.toFixed(1)}/{node.memoryTotal} GB
-                            <div className="resource-bar">
-                              <div
-                                className="resource-fill memory-fill"
-                                style={{ width: `${(node.memoryUsed / node.memoryTotal) * 100}%` }}
-                              />
-                            </div>
-                          </div>
-                          <div>
-                            Storage: {node.storageUsed.toFixed(1)}/{node.storageTotal} GB
-                            <div className="resource-bar">
-                              <div
-                                className="resource-fill storage-fill"
-                                style={{ width: `${(node.storageUsed / node.storageTotal) * 100}%` }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        {node.blocks.length > 0 && (
-                          <div className="blocks-section">
-                            <div className="section-title">📦 HDFS Blocks ({node.blocks.length})</div>
-                            <div className="block-list">
-                              {node.blocks.map((block, idx) => (
-                                <div
-                                  key={idx}
-                                  className={`block-item ${block.isReplica ? 'replica' : ''}`}
-                                  style={{ backgroundColor: block.color }}
-                                  title={`${block.id} - ${block.fileName}${block.isReplica ? ' (Replica)' : ' (Primary)'}`}
-                                >
-                                  {block.id}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {node.containers.length > 0 && (
-                          <div className="containers-section">
-                            <div className="section-title">🎯 YARN Containers ({node.containers.length})</div>
-                            <div className="container-list">
-                              {node.containers.map((container, idx) => (
-                                <div
-                                  key={idx}
-                                  className={`container-item ${container.isApplicationMaster ? 'am' : ''} ${container.isReducer ? 'reducer' : ''}`}
-                                  title={`${container.name} - CPU: ${container.cpu}, Mem: ${container.memory}GB`}
-                                >
-                                  {container.isApplicationMaster ? '🎯 AM' : container.isReducer ? '🔄 Reducer' : container.name}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {cluster.files.length > 0 && (
-                <div className="cluster-panel">
-                  <div className="panel-header">
-                    <span className="panel-icon">📁</span>
-                    <h2>HDFS Files</h2>
-                  </div>
-                  <div className="files-list">
-                    {cluster.files.map((file, idx) => (
-                      <div key={idx} className="file-item" style={{ borderLeftColor: file.color }}>
-                        <div className="file-header">
-                          <span className="file-name">{file.name}</span>
-                          <span className="file-size">{file.size} MB</span>
-                        </div>
-                        <div className="file-blocks">
-                          {file.blocks.map((block, bidx) => (
-                            <div
-                              key={bidx}
-                              className="block-item"
-                              style={{ backgroundColor: file.color }}
-                            >
-                              {block.id}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {cluster.mapReduceJobs.length > 0 && (
-                <div className="cluster-panel">
-                  <div className="panel-header">
-                    <span className="panel-icon">⚙️</span>
-                    <h2>MapReduce Jobs</h2>
-                  </div>
-                  <div className="jobs-list">
-                    {cluster.mapReduceJobs.map((job, idx) => {
-                      const isCollapsed = !!job.isCollapsed;
-
-                      return (
-                        <div key={idx} className="job-item" style={{ borderLeftColor: job.fileColor }}>
-                        <div className="job-header">
-                          <span className="job-name">{job.name}</span>
-                          <div className="job-actions">
-                            <button
-                              type="button"
-                              className="job-toggle"
-                              onClick={() => toggleJobVisibility(job.name)}
-                              aria-expanded={!isCollapsed}
-                              aria-label={`${isCollapsed ? 'Expand' : 'Minimize'} ${job.name}`}
-                            >
-                              {isCollapsed ? 'Expand' : 'Minimize'}
-                            </button>
-                            <span className={`job-status status-${job.status}`}>
-                              {job.status.toUpperCase()}
-                            </span>
-                          </div>
-                        </div>
-                        <div className={`job-body ${isCollapsed ? 'collapsed' : ''}`}>
-                        <div style={{ fontSize: '0.9em', color: '#718096', marginBottom: '10px' }}>
-                          File: {job.fileName} | AM: Node-{job.amNodeId || 'N/A'}
-                          {job.reducers.some(r => r.nodeId) && ` | Reducers: ${job.reducers.length}`}
-                        </div>
-
-                        {job.status !== 'completed' && (
-                          <div className="mappers-container">
-                            <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Map Phase:</div>
-                            {job.mappers.map((mapper, midx) => {
-                              const node = cluster.nodes.find(n => n.id === mapper.nodeId);
-                              const hasLocality = node?.blocks.some(b => b.id === mapper.blockId);
-
-                              return (
-                                <div key={midx} className="mapper-item">
-                                  <span className="mapper-name">
-                                    {mapper.name}
-                                    {hasLocality && ' ⚡'}
-                                  </span>
-                                  <span style={{ fontSize: '0.85em', color: '#718096' }}>
-                                    Node-{mapper.nodeId || 'N/A'}
-                                  </span>
-                                  <div className="progress-bar">
-                                    {mapper.progress >= 0 && (
-                                      <div
-                                        className="progress-fill"
-                                        style={{ width: `${mapper.progress}%` }}
-                                      >
-                                        {mapper.progress.toFixed(0)}%
-                                      </div>
-                                    )}
-                                    {mapper.progress < 0 && (
-                                      <div style={{ padding: '0 10px', fontSize: '0.85em' }}>
-                                        ❌ Failed
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-
-                        {job.status === 'running' && job.mappers.every(m => m.progress >= 100 || m.progress < 0) && (
-                          <>
-                            {job.shufflePhase && job.shufflePhase.inProgress && (
-                              <div className="shuffle-phase">
-                                <div style={{ fontWeight: 'bold', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                  <span>🔀 Shuffle & Sort Phase</span>
-                                  <span style={{ fontSize: '0.85em', color: '#718096' }}>
-                                    (Data transfer from {job.shufflePhase.sourceNodes.length} node{job.shufflePhase.sourceNodes.length > 1 ? 's' : ''})
-                                  </span>
-                                </div>
-                                <div style={{ marginBottom: '8px', fontSize: '0.85em', color: '#718096' }}>
-                                  Transferring intermediate data: {job.shufflePhase.sourceNodes.map(nodeId => `Node-${nodeId}`).join(', ')}
-                                </div>
-                                <div className="progress-bar">
-                                  <div
-                                    className="progress-fill shuffle-fill"
-                                    style={{ width: `${job.shufflePhase.progress}%` }}
-                                  >
-                                    {job.shufflePhase.progress.toFixed(0)}%
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-
-                            {job.reducers.some(r => r.nodeId) && !job.shufflePhase?.inProgress && (
-                              <div className="reduce-phase">
-                                <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>
-                                  Reduce Phase ({job.reducers.length} reducer{job.reducers.length > 1 ? 's' : ''}):
-                                </div>
-                                {job.reducers.map((reducer, ridx) => (
-                                  <div key={ridx} className="mapper-item">
-                                    <span className="mapper-name">{reducer.name}</span>
-                                    <span style={{ fontSize: '0.85em', color: '#718096' }}>
-                                      Node-{reducer.nodeId}
-                                    </span>
-                                    <div className="progress-bar">
-                                      <div
-                                        className="progress-fill"
-                                        style={{ width: `${reducer.progress}%` }}
-                                      >
-                                        {reducer.progress.toFixed(0)}%
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </>
-                        )}
-
-                        {/* Gantt Timeline */}
-                        {(() => {
-                          if (job.status !== 'completed') return null;
-                          // Build a unified list of tasks with type info
-                          const mapperTasks = job.mappers
-                            .filter(m => m.nodeId !== null && m.startedAt)
-                            .map(m => ({ kind: 'map', task: m }));
-
-                          const reducerTasks = job.reducers
-                            .filter(r => r.nodeId !== null && r.startedAt)
-                            .map(r => ({ kind: 'reduce', task: r }));
-
-                          const shuffleTasks = [];
-                          if (job.shufflePhase && job.shufflePhase.startedAt) {
-                            const shuffleStart = job.shufflePhase.startedAt;
-                            const rawShuffleEnd = job.shufflePhase.endedAt || Date.now();
-                            const shuffleWindowEnd = Math.max(rawShuffleEnd, shuffleStart + 1000);
-                            const shuffleDuration = Math.max(shuffleWindowEnd - shuffleStart, 1);
-
-                            const nodesInShuffle = new Set();
-                            const shuffleContribution = {};
-
-                            job.mappers
-                              .filter(m => m.nodeId !== null)
-                              .forEach(m => {
-                                shuffleContribution[m.nodeId] = (shuffleContribution[m.nodeId] || 0) + 1;
-                                nodesInShuffle.add(m.nodeId);
-                              });
-
-                            job.reducers
-                              .filter(r => r.nodeId !== null)
-                              .forEach(r => {
-                                shuffleContribution[r.nodeId] = (shuffleContribution[r.nodeId] || 0) + 2;
-                                nodesInShuffle.add(r.nodeId);
-                              });
-
-                            if (Array.isArray(job.shufflePhase.sourceNodes)) {
-                              job.shufflePhase.sourceNodes.forEach(id => nodesInShuffle.add(id));
-                            }
-
-                            const nodeList = Array.from(nodesInShuffle);
-                            const maxContribution = Math.max(
-                              ...nodeList.map(id => shuffleContribution[id] || 1),
-                              1
-                            );
-
-                            nodeList.forEach(nodeId => {
-                              const contribution = shuffleContribution[nodeId] || 1;
-                              const weight = contribution / maxContribution;
-                              const nodeDuration = shuffleDuration * (0.55 + weight * 0.45);
-                              const nodeStart = shuffleStart;
-                              const nodeEnd = Math.min(nodeStart + nodeDuration, shuffleWindowEnd);
-
-                              shuffleTasks.push({
-                                kind: 'shuffle',
-                                task: {
-                                  name: `Shuffle Node-${nodeId}`,
-                                  nodeId,
-                                  startedAt: nodeStart,
-                                  endedAt: nodeEnd
-                                }
-                              });
-                            });
-                          }
-
-                          const allTasks = [...mapperTasks, ...reducerTasks, ...shuffleTasks];
-
-                          if (allTasks.length === 0) return null;
-
-                          const startTimes = allTasks
-                            .map(t => t.task.startedAt)
-                            .filter(Boolean);
-                          const endTimes = allTasks
-                            .map(t => t.task.endedAt || Date.now())
-                            .filter(Boolean);
-
-                          if (startTimes.length === 0 || endTimes.length === 0) return null;
-
-                          const minStart = job.timelineStart || Math.min(...startTimes);
-                          // Use a fixed window (e.g., 30s) if timelineEnd not yet known, so bars grow over time
-                          const defaultEnd = minStart + 30000;
-                          const maxEnd = job.timelineEnd || defaultEnd;
-                          const total = Math.max(maxEnd - minStart, 1);
-
-                          const nodeIds = Array.from(
-                            new Set(allTasks.map(t => t.task.nodeId))
-                          ).sort((a, b) => a - b);
-
-                          const jobStart = job.timelineStart || minStart;
-                          const formatDuration = (ms) => {
-                            if (!Number.isFinite(ms) || ms < 0) return '…';
-                            if (ms < 1000) return `${Math.round(ms)} ms`;
-                            if (ms < 60000) return `${(ms / 1000).toFixed(1)} s`;
-                            return `${(ms / 60000).toFixed(1)} min`;
-                          };
-
-                          const avgDuration = (collection) => {
-                            if (!collection || collection.length === 0) return null;
-                            const sum = collection.reduce((acc, ms) => acc + ms, 0);
-                            return sum / collection.length;
-                          };
-
-                          const jobDurationMs =
-                            job.timelineEnd && jobStart ? job.timelineEnd - jobStart : null;
-
-                          const mapPhaseEndMs = (() => {
-                            const mapEnds = job.mappers
-                              .map(m => m.endedAt)
-                              .filter(Boolean);
-                            if (mapEnds.length === 0 || !jobStart) return null;
-                            return Math.max(...mapEnds) - jobStart;
-                          })();
-
-                          const shufflePhaseEndMs =
-                            job.shufflePhase?.endedAt && jobStart
-                              ? job.shufflePhase.endedAt - jobStart
-                              : null;
-
-                          const mapperDurations = job.mappers
-                            .filter(m => m.startedAt && m.endedAt)
-                            .map(m => m.endedAt - m.startedAt);
-                          const reducerDurations = job.reducers
-                            .filter(r => r.startedAt && r.endedAt)
-                            .map(r => r.endedAt - r.startedAt);
-
-                          const mapperAvgMs = avgDuration(mapperDurations);
-                          const reducerAvgMs = avgDuration(reducerDurations);
-
-                          const totalMappers = job.mappers.length;
-                          const dataLocalMappers = job.mappers.filter(m => m.hadLocality).length;
-                          const localityPercent =
-                            totalMappers > 0
-                              ? Math.round((dataLocalMappers / totalMappers) * 100)
-                              : 0;
-
-                          const totalReducers = job.reducers.length;
-                          const reducerNodeSet = new Set(
-                            job.reducers.map(r => r.nodeId).filter(Boolean)
-                          );
-                          const nodesTouched = nodeIds.length;
-
-                          const shuffleNodeSet = new Set(
-                            Array.isArray(job.shufflePhase?.sourceNodes)
-                              ? job.shufflePhase.sourceNodes
-                              : []
-                          );
-                          job.reducers
-                            .filter(r => r.nodeId !== null)
-                            .forEach(r => shuffleNodeSet.add(r.nodeId));
-                          const shuffleFanOut = shuffleNodeSet.size;
-
-                          const getBarStyle = (task) => {
-                            const s = task.startedAt || minStart;
-                            const e = task.endedAt || Date.now();
-                            const left = ((s - minStart) / total) * 100;
-                            const width = Math.max(((e - s) / total) * 100, 5); // minimum width for visibility
-                            return {
-                              left: `${left}%`,
-                              width: `${Math.min(width, 100 - left)}%`
-                            };
-                          };
-
-                          return (
-                            <div className="gantt-container">
-                              <div className="gantt-title">
-                                ⏱ Execution Timeline (Node vs Time)
-                              </div>
-                              <div className="gantt-metrics">
-                                <div className="gantt-metric">
-                                  <span>Job duration</span>
-                                  <strong>{formatDuration(jobDurationMs)}</strong>
-                                </div>
-                                <div className="gantt-metric">
-                                  <span>Map complete</span>
-                                  <strong>
-                                    {mapPhaseEndMs != null ? formatDuration(mapPhaseEndMs) : '…'}
-                                  </strong>
-                                </div>
-                                <div className="gantt-metric">
-                                  <span>Shuffle complete</span>
-                                  <strong>
-                                    {shufflePhaseEndMs != null ? formatDuration(shufflePhaseEndMs) : '…'}
-                                  </strong>
-                                </div>
-                                <div className="gantt-metric">
-                                  <span>Nodes touched</span>
-                                  <strong>{nodesTouched || '…'}</strong>
-                                </div>
-                                <div className="gantt-metric">
-                                  <span>Mappers / locality</span>
-                                  <strong>
-                                    {totalMappers
-                                      ? `${totalMappers} • ${localityPercent}% local`
-                                      : '…'}
-                                  </strong>
-                                </div>
-                                <div className="gantt-metric">
-                                  <span>Reducers / nodes</span>
-                                  <strong>
-                                    {totalReducers
-                                      ? `${totalReducers} • ${reducerNodeSet.size} nodes`
-                                      : '…'}
-                                  </strong>
-                                </div>
-                                <div className="gantt-metric">
-                                  <span>Mapper avg</span>
-                                  <strong>{formatDuration(mapperAvgMs)}</strong>
-                                </div>
-                                <div className="gantt-metric">
-                                  <span>Reducer avg</span>
-                                  <strong>{formatDuration(reducerAvgMs)}</strong>
-                                </div>
-                                <div className="gantt-metric">
-                                  <span>Shuffle fan-out</span>
-                                  <strong>{shuffleFanOut || '…'}</strong>
-                                </div>
-                              </div>
-                              <div className="gantt-body">
-                                {nodeIds.map(nodeId => {
-                                  const tasksForNode = allTasks.filter(t => t.task.nodeId === nodeId);
-                                  const lanes = tasksForNode.length || 1;
-                                  const trackHeight = Math.max(28, lanes * 22);
-
-                                  return (
-                                    <div className="gantt-row" key={nodeId}>
-                                      <div className="gantt-row-label">Node-{nodeId}</div>
-                                      <div
-                                        className="gantt-row-track"
-                                        style={{ height: `${trackHeight}px` }}
-                                      >
-                                        {tasksForNode.map((t, laneIndex) => {
-                                          const style = {
-                                            ...getBarStyle(t.task),
-                                            top: `${6 + laneIndex * 20}px`
-                                          };
-                                          const label =
-                                            t.kind === 'map'
-                                              ? 'M'
-                                              : t.kind === 'reduce'
-                                              ? 'R'
-                                              : 'S';
-                                          const titleText =
-                                            t.kind === 'map'
-                                              ? 'Map'
-                                              : t.kind === 'reduce'
-                                              ? 'Reduce'
-                                              : 'Shuffle';
-                                          return (
-                                            <div
-                                              key={`${t.kind}-${laneIndex}`}
-                                              className={`gantt-bar ${t.kind === 'map' ? 'map' : t.kind === 'reduce' ? 'reduce' : 'shuffle'}`}
-                                              style={style}
-                                              title={`${t.task.name} (${titleText})`}
-                                            >
-                                              {label}
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  );
-                })}
-                  </div>
-                </div>
-              )}
+              <NodeGrid cluster={cluster} />
+              <FilesPanel files={cluster.files} />
+              <JobsPanel cluster={cluster} toggleJobVisibility={toggleJobVisibility} />
             </div>
           </div>
 
-          {notifications.map(notif => (
-            <div key={notif.id} className={`notification ${notif.type}`}>
-              {notif.message}
-            </div>
-          ))}
+          <NotificationToaster notifications={notifications} />
         </div>
       );
     };
