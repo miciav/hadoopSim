@@ -9,12 +9,15 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
   <!-- Babel for on-the-fly JSX compilation -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- vis-timeline for richer Gantt rendering -->
+  <link rel="stylesheet" href="https://unpkg.com/vis-timeline@7.7.4/styles/vis-timeline-graph2d.min.css">
+  <script src="https://unpkg.com/vis-timeline@7.7.4/standalone/umd/vis-timeline-graph2d.min.js"></script>
 </head>
 <body>
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect, useCallback } = React;
+    const { useState, useEffect, useCallback, useRef } = React;
 
     // Constants
     const REPLICATION_FACTOR = 3;
@@ -303,49 +306,135 @@
     };
 
     const GanttChart = ({ job }) => {
-      const startTime = job.timelineStart || Date.now();
-      const now = job.timelineEnd || Date.now();
-      const timelineDurationMs = (now - startTime) || 1;
-      const calcWidth = (duration) => `${Math.max(5, (duration / timelineDurationMs) * 100)}%`;
-      const calcLeft = (ts) => `${Math.max(0, ((ts - startTime) / timelineDurationMs) * 100)}%`;
+      const containerRef = useRef(null);
+      const timelineRef = useRef(null);
+      const timelineKey = `${job.timelineStart || 0}-${job.timelineEnd || 0}-${job.mappers.map(m => `${m.nodeId || 'x'}:${m.startedAt || 0}:${m.endedAt || 0}`).join('|')}-${job.reducers.map(r => `${r.nodeId || 'x'}:${r.startedAt || 0}:${r.endedAt || 0}`).join('|')}-${job.shufflePhase?.startedAt || 0}-${job.shufflePhase?.endedAt || 0}`;
 
-      const mapperBars = job.mappers.map(mapper => {
-        if (!mapper.startedAt || mapper.progress < 0) return null;
-        const endTs = mapper.endedAt || now;
-        return {
-          kind: 'map',
-          task: mapper,
-          left: calcLeft(mapper.startedAt),
-          width: calcWidth(endTs - mapper.startedAt)
+      useEffect(() => {
+        if (!containerRef.current) return;
+        if (!window.vis || !window.vis.DataSet || !window.vis.Timeline) {
+          console.warn('vis-timeline not available');
+          return;
+        }
+
+        const { DataSet, Timeline } = window.vis;
+
+        const now = job.timelineEnd || Date.now();
+        const startTime = job.timelineStart || now;
+        const items = new DataSet();
+        const groups = new DataSet();
+        const seenNodes = new Set();
+
+        // Clear any placeholder content before vis takes over
+        if (containerRef.current) {
+          containerRef.current.innerHTML = '';
+        }
+
+        const ensureGroup = (nodeId) => {
+          if (!nodeId || seenNodes.has(nodeId)) return;
+          seenNodes.add(nodeId);
+          groups.add({ id: nodeId, content: `Node-${nodeId}` });
         };
-      }).filter(Boolean);
 
-      const shuffleBars = [];
-      if (job.shufflePhase?.startedAt) {
-        shuffleBars.push({
-          kind: 'shuffle',
-          task: { name: 'Shuffle' },
-          left: calcLeft(job.shufflePhase.startedAt),
-          width: calcWidth((job.shufflePhase.endedAt || now) - job.shufflePhase.startedAt)
+        job.mappers.forEach(mapper => {
+          if (!mapper.startedAt || mapper.nodeId == null) return;
+          ensureGroup(mapper.nodeId);
+          items.add({
+            id: `map-${mapper.name}`,
+            group: mapper.nodeId,
+            content: `🗺️ ${mapper.name}`,
+            start: new Date(mapper.startedAt),
+            end: new Date(mapper.endedAt || now),
+            className: 'gantt-map'
+          });
         });
-      }
 
-      const reducerBars = job.reducers.map(reducer => {
-        if (!reducer.startedAt || reducer.progress < 0) return null;
-        const endTs = reducer.endedAt || now;
-        return {
-          kind: 'reduce',
-          task: reducer,
-          left: calcLeft(reducer.startedAt),
-          width: calcWidth(endTs - reducer.startedAt)
+        job.reducers.forEach(reducer => {
+          if (!reducer.startedAt || reducer.nodeId == null) return;
+          ensureGroup(reducer.nodeId);
+          items.add({
+            id: `reduce-${reducer.name}`,
+            group: reducer.nodeId,
+            content: `🧮 ${reducer.name}`,
+            start: new Date(reducer.startedAt),
+            end: new Date(reducer.endedAt || now),
+            className: 'gantt-reduce'
+          });
+        });
+
+        const shuffleNodes = new Set();
+        job.shufflePhase?.sourceNodes?.forEach(n => shuffleNodes.add(n));
+        job.reducers.forEach(r => r.nodeId && shuffleNodes.add(r.nodeId));
+        if (job.shufflePhase?.startedAt) {
+          shuffleNodes.forEach(nodeId => {
+            ensureGroup(nodeId);
+            items.add({
+              id: `shuffle-${nodeId}`,
+              group: nodeId,
+              content: '🔀 Shuffle',
+              start: new Date(job.shufflePhase.startedAt),
+              end: new Date(job.shufflePhase.endedAt || now),
+              className: 'gantt-shuffle'
+            });
+          });
+        }
+
+        if (timelineRef.current) {
+          timelineRef.current.destroy();
+          timelineRef.current = null;
+        }
+
+        if (items.get().length === 0) {
+          return;
+        }
+
+        const groupCount = groups.length || groups.get().length || seenNodes.size;
+        const heightPx = Math.max(220, Math.min(700, 140 + groupCount * 34));
+
+        const options = {
+          stack: true,
+          horizontalScroll: true,
+          zoomKey: 'ctrlKey',
+          min: new Date(startTime),
+          max: new Date(now + 2000),
+          zoomMin: 1000,
+          zoomMax: 1000 * 60 * 60,
+          height: `${heightPx}px`,
+          width: '100%',
+          orientation: 'top',
+          groupOrder: (a, b) => (Number(a.id) || 0) - (Number(b.id) || 0),
+          margin: { item: 8, axis: 6 },
+          groupHeightMode: 'fitItems',
+          format: {
+            minorLabels: {
+              millisecond: 'SSS',
+              second: 's',
+              minute: 'HH:mm',
+              hour: 'HH:mm'
+            },
+            majorLabels: {
+              minute: 'ddd D MMM',
+              hour: 'ddd D MMM'
+            }
+          }
         };
-      }).filter(Boolean);
 
-      const rows = [
-        { label: 'Map', bars: mapperBars },
-        { label: 'Shuffle', bars: shuffleBars },
-        { label: 'Reduce', bars: reducerBars }
-      ];
+        timelineRef.current = new Timeline(
+          containerRef.current,
+          items,
+          groups,
+          options
+        );
+        timelineRef.current.fit();
+        timelineRef.current.on('doubleClick', () => timelineRef.current && timelineRef.current.fit());
+
+        return () => {
+          if (timelineRef.current) {
+            timelineRef.current.destroy();
+            timelineRef.current = null;
+          }
+        };
+      }, [timelineKey, job.mappers.length, job.reducers.length]);
 
       return (
         <div className="gantt-container">
@@ -368,36 +457,18 @@
             </div>
           </div>
 
-          <div className="gantt-chart">
-            <div className="gantt-grid">
-              {Array.from({ length: 10 }).map((_, idx) => (
-                <div key={idx} className="gantt-grid-line"></div>
-              ))}
+          <div className="gantt-body">
+            <div className="gantt-legend">
+              <span className="legend-swatch map"></span> Map
+              <span className="legend-swatch shuffle"></span> Shuffle (per node)
+              <span className="legend-swatch reduce"></span> Reduce
             </div>
-            <div className="gantt-rows">
-              {rows.map((row, idx) => (
-                <div key={idx} className="gantt-row">
-                  <div className="gantt-row-label">{row.label}</div>
-                  <div className="gantt-row-bars">
-                    {row.bars.map((t, tIdx) => {
-                      const style = { left: t.left, width: t.width };
-                      const titleText = t.kind === 'map' ? 'Mapper' : t.kind === 'reduce' ? 'Reducer' : 'Shuffle';
-                      const label = t.task.name;
-                      return (
-                        <div
-                          key={tIdx}
-                          className={`gantt-bar ${t.kind === 'map' ? 'map' : t.kind === 'reduce' ? 'reduce' : 'shuffle'}`}
-                          style={style}
-                          title={`${t.task.name} (${titleText})`}
-                        >
-                          {label}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+            <div ref={containerRef} className="gantt-vis-wrapper">
+              <div className="gantt-empty">Loading timeline…</div>
             </div>
+            {job.mappers.length === 0 && job.reducers.length === 0 && (
+              <div className="gantt-empty">No timeline data yet.</div>
+            )}
           </div>
         </div>
       );
@@ -605,7 +676,7 @@
           setCluster(persisted.cluster);
           setColorIndex(persisted.colorIndex ?? 0);
           setNextNodeId(persisted.nextNodeId ?? 7);
-          setNotifications(persisted.notifications ?? []);
+          setNotifications([]);
           setResumeNeeded(true);
         } else {
           initializeCluster();
@@ -618,10 +689,9 @@
         persistState({
           cluster,
           colorIndex,
-          nextNodeId,
-          notifications
+          nextNodeId
         });
-      }, [cluster, colorIndex, nextNodeId, notifications]);
+      }, [cluster, colorIndex, nextNodeId]);
 
       // Notification system
       const showNotification = (message, type) => {
@@ -2330,90 +2400,84 @@
 
             /* GANTT STYLES */
             .gantt-container {
-              margin-top: 15px;
-              padding: 18px;
+              margin-top: 12px;
+              padding: 14px;
               background: linear-gradient(145deg, #f8fafc 0%, #edf2f7 100%);
               border-radius: 12px;
               border: 1px solid #cbd5e0;
               box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
             }
 
-            .gantt-title {
-              font-weight: bold;
-              font-size: 1em;
-              color: #2d3748;
-              margin-bottom: 12px;
-              display: flex;
-              align-items: center;
-              gap: 8px;
-            }
-
-            .gantt-title::before {
-              content: '📈';
-              font-size: 1.2em;
-            }
-
             .gantt-body {
               display: flex;
               flex-direction: column;
-              gap: 12px;
+              gap: 8px;
             }
 
-            .gantt-row {
-              display: flex;
-              align-items: flex-start;
-              gap: 12px;
-            }
-
-            .gantt-row-label {
-              width: 78px;
-              font-size: 0.85em;
-              color: #4a5568;
-              text-align: right;
-              padding-top: 6px;
-              font-weight: 600;
-            }
-
-            .gantt-row-track {
-              position: relative;
-              flex: 1;
-              background: repeating-linear-gradient(
-                90deg,
-                rgba(255,255,255,0.6),
-                rgba(255,255,255,0.6) 20px,
-                rgba(226,232,240,0.4) 20px,
-                rgba(226,232,240,0.4) 40px
-              );
-              border-radius: 12px;
-              border: 1px solid #e2e8f0;
-              overflow: hidden;
-              padding: 6px 10px;
-            }
-
-            .gantt-bar {
-              position: absolute;
-              height: 16px;
-              border-radius: 8px;
-              font-size: 0.7em;
+            .gantt-legend {
               display: flex;
               align-items: center;
-              justify-content: center;
-              white-space: nowrap;
-              padding: 0 6px;
-              color: white;
-              box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+              flex-wrap: wrap;
+              gap: 12px;
+              font-size: 0.85em;
+              color: #4a5568;
             }
 
-            .gantt-bar.map {
+            .legend-swatch {
+              width: 14px;
+              height: 14px;
+              border-radius: 4px;
+              display: inline-block;
+              margin-right: 6px;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            }
+
+            .legend-swatch.map { background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); }
+            .legend-swatch.reduce { background: linear-gradient(90deg, #38b2ac 0%, #319795 100%); }
+            .legend-swatch.shuffle { background: linear-gradient(90deg, #ed8936 0%, #dd6b20 100%); }
+
+            .gantt-vis-wrapper {
+              min-height: 220px;
+              max-height: none;
+              background: white;
+              border-radius: 10px;
+              border: 1px solid #e2e8f0;
+              padding: 6px;
+              overflow: visible;
+            }
+
+            .vis-item.gantt-map {
               background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+              border-color: #667eea;
+              color: white;
             }
 
-            .gantt-bar.reduce {
+            .vis-item.gantt-reduce {
               background: linear-gradient(90deg, #38b2ac 0%, #319795 100%);
+              border-color: #319795;
+              color: white;
             }
 
-            .gantt-bar.shuffle {
+            .vis-item.gantt-shuffle {
               background: linear-gradient(90deg, #ed8936 0%, #dd6b20 100%);
+              border-color: #dd6b20;
+              color: white;
+            }
+
+            .vis-item {
+              border-radius: 8px;
+              box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+              font-size: 0.8em;
+            }
+
+            .vis-time-axis .vis-text {
+              color: #4a5568;
+            }
+
+            .gantt-empty {
+              font-size: 0.9em;
+              color: #718096;
+              padding: 8px 0;
             }
 
             .gantt-metrics {
