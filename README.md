@@ -24,6 +24,29 @@ An interactive, browser-based playground that visualizes how Hadoop HDFS, YARN, 
 - Formatting: two-space indentation, `const`/`let`, `camelCase` for functions/state, `PascalCase` for components, and `UPPER_SNAKE_CASE` for shared constants.
 - Run `npx prettier --write hadoop-ecosystem-simulator.html` after large edits to keep JSX tidy.
 
+## How It Works (Babel + React in One File)
+- The HTML pulls React 18 UMD bundles and Babel Standalone from CDNs; Babel compiles the inline `<script type="text/babel">` at load time directly in the browser, so JSX and modern JS features work without a build step.
+- JSX/logic live in the same script: helper constants, pure utility functions, and React components (NotificationToaster, StatsPanel, SidebarControls, NodeGrid/NodeCard, FilesPanel, JobsPanel/JobCard, GanttChart) are defined once and mounted via `ReactDOM.createRoot`.
+- State is fully client-side: `useState` drives cluster/files/jobs, `useEffect` handles persistence (localStorage) and async job simulation loops, and `useCallback` memoizes repeated handlers.
+- Because Babel runs in-browser, syntax errors show in DevTools immediately; no bundler or CLI is needed to iterate locally.
+
+## Internal Architecture (single-page)
+```
+index.html
+├─ Head: React UMD, ReactDOM UMD, Babel Standalone, vis-timeline CSS/JS
+├─ <div id="root"></div>
+└─ <script type="text/babel">
+   ├─ Constants + persistence helpers
+   ├─ UI components (pure):
+   │   NotificationToaster, StatsPanel, SidebarControls, NodeGrid/NodeCard,
+   │   FilesPanel, JobsPanel/JobCard, GanttChart (vis-timeline)
+   ├─ Cluster / job logic:
+   │   bootstrap nodes, upload files (replication/blocks), node failure/recovery,
+   │   mapper/reducer allocation, shuffle timing, progress simulation, notifications
+   └─ Root component (HadoopEcosystem):
+       initializes state, wires handlers, renders layout
+```
+
 ## Testing & Validation
 There is no automated harness yet. After changes, manually verify:
 1. Cluster initialization, file uploads across sizes, and proper replica distribution.
