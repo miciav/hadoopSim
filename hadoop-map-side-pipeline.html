@@ -244,6 +244,11 @@
       transition: border-color 0.3s ease;
     }
 
+    /* Give the circular buffer extra headroom for more rows of records */
+    #bufferBox {
+      min-height: 160px;
+    }
+
     .row-box.active {
       border-color: #16a34a;
       border-style: solid;
@@ -457,6 +462,33 @@
       font-weight: 600;
     }
 
+    .hdfs-inner {
+      position: absolute;
+      inset: 20px 6px 6px 6px;
+      display: flex;
+      gap: 8px;
+    }
+
+    .hdfs-box {
+      flex: 1;
+      border-radius: 8px;
+      border: 1px dashed #cbd5e1;
+      background: linear-gradient(135deg, rgba(16,185,129,0.1) 0%, #ffffff 70%);
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      align-content: flex-start;
+    }
+
+    .hdfs-box.active {
+      border-color: #16a34a;
+      box-shadow: 0 0 20px rgba(22,163,74,0.2);
+    }
+
     /* Log Panel */
     .log {
       background: #f8fafc;
@@ -628,6 +660,7 @@
           <div class="timeline-step" title="Second spill to disk">Spill 1</div>
           <div class="timeline-step" title="Merge all spill files into single sorted output">Merge</div>
           <div class="timeline-step" title="Reducers fetch their partitions">Shuffle</div>
+          <div class="timeline-step" title="Final outputs are written to HDFS">Write to HDFS</div>
         </div>
 
         <!-- Pipeline -->
@@ -694,6 +727,25 @@
               </div>
             </div>
           </div>
+
+          <!-- HDFS -->
+          <div class="row">
+            <div class="row-label">HDFS</div>
+            <div class="row-box" id="hdfsBox">
+              <div class="row-title">Write reducer outputs to HDFS (replicated blocks)</div>
+              <div class="hdfs-inner">
+                <div class="hdfs-box" id="hdfs0">
+                  <div class="reducer-label">R0 ➜ HDFS</div>
+                </div>
+                <div class="hdfs-box" id="hdfs1">
+                  <div class="reducer-label">R1 ➜ HDFS</div>
+                </div>
+                <div class="hdfs-box" id="hdfs2">
+                  <div class="reducer-label">R2 ➜ HDFS</div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Legend -->
@@ -745,6 +797,128 @@
   </div>
 
 <script>
+  // Grab UI elements
+  const startBtn = document.getElementById("startBtn");
+  const pauseBtn = document.getElementById("pauseBtn");
+  const resetBtn = document.getElementById("resetBtn");
+  const speedSlider = document.getElementById("speedSlider");
+  const speedLabel = document.getElementById("speedLabel");
+  const timeline = document.getElementById("timeline");
+  const bufferBox = document.getElementById("bufferBox");
+  const bufferInner = document.getElementById("bufferInner");
+  const bufferFill = document.getElementById("bufferFill");
+  const bufferPercentage = document.getElementById("bufferPercentage");
+  const spillBox = document.getElementById("spillBox");
+  const spill0Slot = document.getElementById("spill0Slot");
+  const spill1Slot = document.getElementById("spill1Slot");
+  const spill0Highlight = document.getElementById("spill0Highlight");
+  const spill1Highlight = document.getElementById("spill1Highlight");
+  const finalBox = document.getElementById("finalBox");
+  const finalOutput = document.getElementById("finalOutput");
+  const reducersBox = document.getElementById("reducersBox");
+  const reducer0 = document.getElementById("reducer0");
+  const reducer1 = document.getElementById("reducer1");
+  const reducer2 = document.getElementById("reducer2");
+  const hdfsBox = document.getElementById("hdfsBox");
+  const hdfs0 = document.getElementById("hdfs0");
+  const hdfs1 = document.getElementById("hdfs1");
+  const hdfs2 = document.getElementById("hdfs2");
+  const progressFill = document.getElementById("progressFill");
+  const logCurrent = document.getElementById("logCurrent");
+  const logNext = document.getElementById("logNext");
+  const logHint = document.getElementById("logHint");
+  const recordsProcessed = document.getElementById("recordsProcessed");
+  const bufferUsage = document.getElementById("bufferUsage");
+  const spillCount = document.getElementById("spillCount");
+  const currentPhase = document.getElementById("currentPhase");
+
+  // Simulation steps and timing
+  const steps = [
+    {
+      id: "map1",
+      label: "Map Phase 1",
+      duration: 2200,
+      narrative: [
+        "Mapper writes key-value pairs into the circular buffer until it nears the spill threshold.",
+        "Mapper continues emitting records; buffer approaches spill trigger.",
+        "In Hadoop, a background thread monitors the buffer usage to start spilling when thresholds are reached."
+      ]
+    },
+    {
+      id: "spill0",
+      label: "Spill 0",
+      duration: 1600,
+      narrative: [
+        "Buffer is flushed to disk: records are partitioned by reducer, sorted, and optionally combined.",
+        "Spill file is written per partition; combiner reduces duplicate keys locally.",
+        "Real spill threads sort by partition and key before writing to disk."
+      ]
+    },
+    {
+      id: "map2",
+      label: "Map Phase 2",
+      duration: 2000,
+      narrative: [
+        "Mapper resumes filling the buffer with remaining input split records.",
+        "Buffer fills again; another spill will occur when safe thresholds are exceeded.",
+        "Map outputs are still partitioned in-memory so the next spill produces sorted runs."
+      ]
+    },
+    {
+      id: "spill1",
+      label: "Spill 1",
+      duration: 1600,
+      narrative: [
+        "Second spill writes another sorted run per partition, applying combiner on-the-fly.",
+        "Spill threads ensure each partition is sorted by key to speed up the merge.",
+        "Multiple spills are merged later into a single map output file per task."
+      ]
+    },
+    {
+      id: "merge",
+      label: "Merge",
+      duration: 1800,
+      narrative: [
+        "Spill files are merged into a single partitioned map output, recombining identical keys.",
+        "Merge manager produces one final sorted segment per partition.",
+        "The final map output file exposes index information reducers will use to fetch their ranges."
+      ]
+    },
+    {
+      id: "shuffle",
+      label: "Shuffle",
+      duration: 1800,
+      narrative: [
+        "Reducers fetch their partitions from the mapper via HTTP, staging data locally.",
+        "Data transfer is partition-aware so each reducer only pulls its slice.",
+        "Shuffle overlaps with map completion in real clusters to hide latency."
+      ]
+    },
+    {
+      id: "hdfs",
+      label: "Write to HDFS",
+      duration: 1500,
+      narrative: [
+        "Reducer outputs are committed to HDFS as final task segments.",
+        "Each reducer writes its partition to durable replicated blocks on HDFS.",
+        "Persistent storage completes the map task lifecycle; reducers can proceed to reduce."
+      ]
+    }
+  ];
+
+  // Runtime state
+  let keySequence = [];
+  let keyIndex = 0;
+  let allRecords = { buffer: [], spill0: [], spill1: [], final: [], reducer: [], hdfs: [] };
+  let metrics = { totalRecords: 0, currentBuffer: 0, spillsCreated: 0 };
+  let speedFactor = 1;
+  let started = false;
+  let paused = false;
+  let currentStepIndex = 0;
+  let stepStartTime = null;
+  let pausedTime = 0;
+  let animationId = null;
+
   // ============================================================================
   // KEY GENERATION AND PARTITIONING
   // ============================================================================
@@ -789,7 +963,7 @@
       // Repeat pattern to ensure 2nd spill has >=3 items
       WORD_KEYS[0], WORD_KEYS[2], WORD_KEYS[4], // cat, dog, ant
       WORD_KEYS[1], WORD_KEYS[3], WORD_KEYS[5], // car, data, art
-      WORD_KEYS[0], WORD_KEYS[2]                // cat, dog
+      WORD_KEYS[0], WORD_KEYS[2], WORD_KEYS[4]  // cat, dog, ant
     ];
 
     const sequence = [];
@@ -804,14 +978,14 @@
     });
     return sequence;
   }
-}
 
   /**
    * Update metrics display
    */
   function updateMetrics() {
     recordsProcessed.textContent = metrics.totalRecords;
-    bufferUsage.textContent = Math.round((metrics.currentBuffer / 22) * 100) + "%";
+    const bufferCapacity = Math.max(1, keySequence.length || 1);
+    bufferUsage.textContent = Math.round((metrics.currentBuffer / bufferCapacity) * 100) + "%";
     spillCount.textContent = metrics.spillsCreated;
     
     const step = steps[currentStepIndex];
@@ -842,7 +1016,7 @@
     };
 
     // Regenerate key sequence
-    keySequence = generateKeySequence(22);
+    keySequence = generateKeySequence();
     keyIndex = 0;
 
     // Clear visual state
@@ -851,9 +1025,10 @@
     allRecords.spill1 = [];
     allRecords.final = [];
     allRecords.reducer = [];
+    allRecords.hdfs = [];
 
     // Remove all record DOM elements
-    [bufferInner, spill0Slot, spill1Slot, finalOutput, reducer0, reducer1, reducer2].forEach(container => {
+    [bufferInner, spill0Slot, spill1Slot, finalOutput, reducer0, reducer1, reducer2, hdfs0, hdfs1, hdfs2].forEach(container => {
       [...container.querySelectorAll(".kv-record")].forEach(n => n.remove());
     });
 
@@ -865,8 +1040,8 @@
     progressFill.style.width = "0%";
 
     // Remove active classes
-    [bufferBox, spillBox, finalBox, reducersBox].forEach(box => box.classList.remove("active"));
-    [reducer0, reducer1, reducer2].forEach(r => r.classList.remove("active"));
+    [bufferBox, spillBox, finalBox, reducersBox, hdfsBox].forEach(box => box.classList.remove("active"));
+    [reducer0, reducer1, reducer2, hdfs0, hdfs1, hdfs2].forEach(r => r.classList.remove("active"));
 
     updateTimelineHighlight();
     updateLogTexts();
@@ -947,10 +1122,10 @@
     const rect = container.getBoundingClientRect();
     const padding = 8;
     const cols = 5;
-    const rows = 3;
     const idx = container.querySelectorAll(".kv-record").length;
     const col = idx % cols;
-    const row = Math.floor(idx / cols) % rows;
+    const rows = Math.max(3, Math.ceil((idx + 1) / cols));
+    const row = Math.floor(idx / cols);
 
     const cellW = (rect.width - padding * 2 - 24) / (cols || 1);
     const cellH = (rect.height - padding * 2 - 24) / (rows || 1);
@@ -1011,9 +1186,9 @@
       const rectTo = toContainer.getBoundingClientRect();
       const padding = 8;
       const cols = 5;
-      const rows = 3;
+      const rows = Math.max(3, Math.ceil((newIdx + 1) / cols));
       const col = newIdx % cols;
-      const row = Math.floor(newIdx / cols) % rows;
+      const row = Math.floor(newIdx / cols);
 
       const cellW = (rectTo.width - padding * 2 - 24) / (cols || 1);
       const cellH = (rectTo.height - padding * 2 - 24) / (rows || 1);
@@ -1041,6 +1216,18 @@
 
     
     fromArray.length = 0;
+  }
+
+  /**
+   * Sort records by partition then key to mimic Hadoop spill ordering.
+   */
+  function sortRecords(records) {
+    return [...records].sort((a, b) => {
+      if (a.partition !== b.partition) {
+        return a.partition - b.partition;
+      }
+      return String(a.key).localeCompare(String(b.key));
+    });
   }
 
   /**
@@ -1100,6 +1287,15 @@
     return reducer2;
   }
 
+  /**
+   * Get HDFS container by index
+   */
+  function getHdfsContainer(idx) {
+    if (idx === 0) return hdfs0;
+    if (idx === 1) return hdfs1;
+    return hdfs2;
+  }
+
   // ============================================================================
   // ANIMATION LOOP
   // ============================================================================
@@ -1150,8 +1346,8 @@
    */
   function updateStepVisuals(step, progress) {
     // Remove all active states first
-    [bufferBox, spillBox, finalBox, reducersBox].forEach(box => box.classList.remove("active"));
-    [reducer0, reducer1, reducer2].forEach(r => r.classList.remove("active"));
+    [bufferBox, spillBox, finalBox, reducersBox, hdfsBox].forEach(box => box.classList.remove("active"));
+    [reducer0, reducer1, reducer2, hdfs0, hdfs1, hdfs2].forEach(r => r.classList.remove("active"));
 
     switch (step.id) {
       case "map1":
@@ -1309,7 +1505,8 @@
             const keyData = {
               key: record.key,
               partition: record.partition,
-              id: record.id
+              id: record.id,
+              count: record.count
             };
             
             const el = createRecordElement("reducer", target, keyData);
@@ -1319,8 +1516,41 @@
             if (wordData) {
               el.style.background = wordData.color;
             }
-            
-            allRecords.reducer.push({ el, key: keyData.key, partition: keyData.partition });
+
+            allRecords.reducer.push({ el, key: keyData.key, partition: keyData.partition, count: keyData.count || 1 });
+          });
+        }
+        break;
+
+      case "hdfs":
+        hdfsBox.classList.add("active");
+        [hdfs0, hdfs1, hdfs2].forEach(r => r.classList.add("active"));
+        
+        if (progress > 0.25 && allRecords.hdfs.length === 0) {
+          // Persist reducer outputs into HDFS blocks (visual copy)
+          allRecords.reducer.forEach((record, idx) => {
+            if (!record.el || !record.el.parentElement) return;
+            record.el.style.opacity = "0.08";
+
+            const partition = record.partition;
+            const target = getHdfsContainer(partition);
+
+            const keyData = {
+              key: record.key,
+              partition: record.partition,
+              id: record.id,
+              count: record.count || 1
+            };
+
+            const el = createRecordElement("final", target, keyData);
+            el.textContent = "(" + keyData.key + ", " + keyData.count + ")";
+
+            const wordData = WORD_KEYS.find(w => w.key === keyData.key);
+            if (wordData) {
+              el.style.background = wordData.color;
+            }
+
+            allRecords.hdfs.push({ el, key: keyData.key, partition: keyData.partition, count: keyData.count });
           });
         }
         break;
