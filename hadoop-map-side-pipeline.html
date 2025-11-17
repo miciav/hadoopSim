@@ -256,6 +256,85 @@
       background: rgba(240,253,244,0.9);
     }
 
+    /* InputFormat / Splits / RecordReaders */
+    .input-flow {
+      position: absolute;
+      inset: 22px 10px 10px 10px;
+      display: grid;
+      grid-template-columns: auto 24px 1fr 24px 1fr;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .input-format,
+    .split-box,
+    .reader-box {
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: linear-gradient(135deg, #e0f2fe, #f8fafc);
+      border: 1px solid #bfdbfe;
+      color: #0f172a;
+      font-weight: 700;
+      font-size: 12px;
+      text-align: center;
+      box-shadow: 0 2px 10px rgba(59,130,246,0.2);
+    }
+
+    .split-group,
+    .reader-group {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+      gap: 8px;
+    }
+
+    .reader-box {
+      background: linear-gradient(135deg, #dcfce7, #f0fdf4);
+      border-color: #bbf7d0;
+      box-shadow: 0 2px 10px rgba(34,197,94,0.2);
+      font-size: 11px;
+    }
+
+    .split-box.active,
+    .reader-box.active,
+    .input-format.active {
+      border-color: #16a34a;
+      box-shadow: 0 0 14px rgba(22,163,74,0.35);
+      transform: translateY(-1px);
+    }
+
+    .split-box.inactive,
+    .reader-box.inactive {
+      opacity: 0.35;
+    }
+
+    .flow-arrow {
+      text-align: center;
+      color: #475569;
+      font-weight: 800;
+      font-size: 16px;
+    }
+
+    .input-note {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #475569;
+    }
+
+    .input-layout {
+      display: grid;
+      grid-template-columns: 140px 24px 1fr;
+      gap: 10px;
+      align-items: center;
+      margin-top: 10px;
+    }
+
+    .reader-layout {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
     .row-title {
       position: absolute;
       top: 4px;
@@ -639,6 +718,14 @@
         <span class="metric-label">Spills Created</span>
       </div>
       <div class="metric">
+        <span class="metric-value" id="recordsRead">0</span>
+        <span class="metric-label">Records Read</span>
+      </div>
+      <div class="metric">
+        <span class="metric-value" id="splitCount">3</span>
+        <span class="metric-label">Input Splits</span>
+      </div>
+      <div class="metric">
         <span class="metric-value" id="currentPhase">Idle</span>
         <span class="metric-label">Current Phase</span>
       </div>
@@ -654,6 +741,8 @@
       <div>
         <!-- Timeline -->
         <div class="timeline" id="timeline">
+          <div class="timeline-step" title="InputFormat splits the input into logical segments">InputFormat</div>
+          <div class="timeline-step" title="RecordReaders pull from splits and emit key/value pairs">RecordReaders</div>
           <div class="timeline-step" title="Map function processes input records">Map Phase 1</div>
           <div class="timeline-step" title="First spill to disk when buffer threshold reached">Spill 0</div>
           <div class="timeline-step" title="Continue processing remaining input">Map Phase 2</div>
@@ -665,6 +754,39 @@
 
         <!-- Pipeline -->
         <div class="pipeline">
+          <!-- Input chain -->
+          <div class="row">
+            <div class="row-label">Input</div>
+            <div class="row-box" id="inputBox">
+              <div class="row-title">InputFormat &amp; Splits</div>
+              <div class="input-layout">
+                <div class="input-format" id="inputFormatBox">InputFormat</div>
+                <div class="flow-arrow">➜</div>
+                <div class="split-group" id="splitGroup">
+                  <div class="split-box" id="split0">Split 0</div>
+                  <div class="split-box" id="split1">Split 1</div>
+                  <div class="split-box" id="split2">Split 2</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RecordReaders -->
+          <div class="row">
+            <div class="row-label">RecordReaders</div>
+            <div class="row-box" id="readerRowBox">
+              <div class="row-title">RecordReaders by split (only RR0 feeds this map)</div>
+              <div class="reader-layout">
+                <div class="reader-group" id="readerGroup">
+                  <div class="reader-box" id="reader0">RecordReader 0</div>
+                  <div class="reader-box" id="reader1">RecordReader 1</div>
+                  <div class="reader-box" id="reader2">RecordReader 2</div>
+                </div>
+                <div class="input-note">Only Split 0 → RR0 feeds <em>this</em> map task; other splits/RRs belong to different maps but light up before shuffle to show parallelism.</div>
+              </div>
+            </div>
+          </div>
+
           <!-- Circular Buffer -->
           <div class="row">
             <div class="row-label">
@@ -815,6 +937,11 @@
   const spill1Highlight = document.getElementById("spill1Highlight");
   const finalBox = document.getElementById("finalBox");
   const finalOutput = document.getElementById("finalOutput");
+  const inputBox = document.getElementById("inputBox");
+  const inputFormatBox = document.getElementById("inputFormatBox");
+  const splitGroup = document.getElementById("splitGroup");
+  const readerGroup = document.getElementById("readerGroup");
+  const readerRowBox = document.getElementById("readerRowBox");
   const reducersBox = document.getElementById("reducersBox");
   const reducer0 = document.getElementById("reducer0");
   const reducer1 = document.getElementById("reducer1");
@@ -830,10 +957,36 @@
   const recordsProcessed = document.getElementById("recordsProcessed");
   const bufferUsage = document.getElementById("bufferUsage");
   const spillCount = document.getElementById("spillCount");
+  const recordsRead = document.getElementById("recordsRead");
+  const splitCount = document.getElementById("splitCount");
   const currentPhase = document.getElementById("currentPhase");
+
+  const TOTAL_SPLITS = 3;
+  const splitBoxes = [...splitGroup.querySelectorAll(".split-box")];
+  const readerBoxes = [...readerGroup.querySelectorAll(".reader-box")];
 
   // Simulation steps and timing
   const steps = [
+    {
+      id: "inputfmt",
+      label: "InputFormat",
+      duration: 1200,
+      narrative: [
+        "InputFormat inspects the source file and produces logical input splits.",
+        "Splits define byte ranges the RecordReaders will scan.",
+        "Custom InputFormats control how data is chunked and filtered before mapping."
+      ]
+    },
+    {
+      id: "readers",
+      label: "RecordReaders",
+      duration: 1400,
+      narrative: [
+        "RecordReaders iterate each split, decoding key/value pairs for the mapper.",
+        "Multiple RecordReaders can run in parallel, feeding the circular buffer.",
+        "They handle parsing (e.g., lines, sequence files) while respecting split boundaries."
+      ]
+    },
     {
       id: "map1",
       label: "Map Phase 1",
@@ -910,7 +1063,7 @@
   let keySequence = [];
   let keyIndex = 0;
   let allRecords = { buffer: [], spill0: [], spill1: [], final: [], reducer: [], hdfs: [] };
-  let metrics = { totalRecords: 0, currentBuffer: 0, spillsCreated: 0 };
+  let metrics = { totalRecords: 0, currentBuffer: 0, spillsCreated: 0, recordsRead: 0 };
   let speedFactor = 1;
   let started = false;
   let paused = false;
@@ -987,6 +1140,8 @@
     const bufferCapacity = Math.max(1, keySequence.length || 1);
     bufferUsage.textContent = Math.round((metrics.currentBuffer / bufferCapacity) * 100) + "%";
     spillCount.textContent = metrics.spillsCreated;
+    recordsRead.textContent = metrics.recordsRead;
+    splitCount.textContent = TOTAL_SPLITS;
     
     const step = steps[currentStepIndex];
     if (step) {
@@ -1012,7 +1167,8 @@
     metrics = {
       totalRecords: 0,
       currentBuffer: 0,
-      spillsCreated: 0
+      spillsCreated: 0,
+      recordsRead: 0
     };
 
     // Regenerate key sequence
@@ -1040,8 +1196,8 @@
     progressFill.style.width = "0%";
 
     // Remove active classes
-    [bufferBox, spillBox, finalBox, reducersBox, hdfsBox].forEach(box => box.classList.remove("active"));
-    [reducer0, reducer1, reducer2, hdfs0, hdfs1, hdfs2].forEach(r => r.classList.remove("active"));
+    [inputBox, readerRowBox, bufferBox, spillBox, finalBox, reducersBox, hdfsBox].forEach(box => box.classList.remove("active"));
+    [reducer0, reducer1, reducer2, hdfs0, hdfs1, hdfs2, inputFormatBox, ...splitBoxes, ...readerBoxes].forEach(r => r.classList.remove("active"));
 
     updateTimelineHighlight();
     updateLogTexts();
@@ -1296,6 +1452,40 @@
     return hdfs2;
   }
 
+  /**
+   * Highlight split/reader pairing: either only the primary (Split0/RR0) or all.
+   */
+  function setSplitReaderState({ showAll = false, readerActive = true } = {}) {
+    inputBox.classList.add("active");
+    readerRowBox.classList.add("active");
+
+    splitBoxes.forEach((s, idx) => {
+      s.classList.remove("active", "inactive");
+      if (showAll) {
+        s.classList.add("active");
+      } else if (idx === 0) {
+        s.classList.add("active");
+      } else {
+        s.classList.add("inactive");
+      }
+    });
+
+    readerBoxes.forEach((r, idx) => {
+      r.classList.remove("active", "inactive");
+      if (!readerActive) {
+        r.classList.add("inactive");
+        return;
+      }
+      if (showAll) {
+        r.classList.add("active");
+      } else if (idx === 0) {
+        r.classList.add("active");
+      } else {
+        r.classList.add("inactive");
+      }
+    });
+  }
+
   // ============================================================================
   // ANIMATION LOOP
   // ============================================================================
@@ -1346,12 +1536,27 @@
    */
   function updateStepVisuals(step, progress) {
     // Remove all active states first
-    [bufferBox, spillBox, finalBox, reducersBox, hdfsBox].forEach(box => box.classList.remove("active"));
-    [reducer0, reducer1, reducer2, hdfs0, hdfs1, hdfs2].forEach(r => r.classList.remove("active"));
+    [inputBox, readerRowBox, bufferBox, spillBox, finalBox, reducersBox, hdfsBox].forEach(box => box.classList.remove("active"));
+    [inputFormatBox, reducer0, reducer1, reducer2, hdfs0, hdfs1, hdfs2, ...splitBoxes, ...readerBoxes].forEach(r => {
+      r.classList.remove("active");
+      r.classList.remove("inactive");
+    });
 
     switch (step.id) {
+      case "inputfmt":
+        inputBox.classList.add("active");
+        inputFormatBox.classList.add("active");
+        setSplitReaderState({ showAll: false, readerActive: false });
+        break;
+
+      case "readers":
+        inputFormatBox.classList.add("active");
+        setSplitReaderState({ showAll: false, readerActive: true });
+        break;
+
       case "map1":
       case "map2":
+        setSplitReaderState({ showAll: false, readerActive: true });
         bufferBox.classList.add("active");
         
         // Fill buffer gradually with actual keys
@@ -1375,6 +1580,7 @@
               count: 1
             });
             metrics.totalRecords++;
+            metrics.recordsRead++;
             metrics.currentBuffer++;
             keyIndex++;
           }
@@ -1384,6 +1590,7 @@
         break;
 
       case "spill0":
+        setSplitReaderState({ showAll: false, readerActive: true });
         spillBox.classList.add("active");
         spill0Highlight.style.opacity = progress > 0.15 ? 1 : 0;
         
@@ -1403,6 +1610,7 @@
         break;
 
       case "spill1":
+        setSplitReaderState({ showAll: false, readerActive: true });
         spillBox.classList.add("active");
         spill1Highlight.style.opacity = progress > 0.15 ? 1 : 0;
         
@@ -1422,6 +1630,7 @@
         break;
 
       case "merge":
+        setSplitReaderState({ showAll: false, readerActive: true });
         finalBox.classList.add("active");
         spill0Highlight.style.opacity = 0;
         spill1Highlight.style.opacity = 0;
@@ -1490,6 +1699,8 @@
         break;
 
       case "shuffle":
+        // Before shuffle, show other splits/RR lighting up to hint parallel maps elsewhere
+        setSplitReaderState({ showAll: true, readerActive: true });
         reducersBox.classList.add("active");
         [reducer0, reducer1, reducer2].forEach(r => r.classList.add("active"));
         
