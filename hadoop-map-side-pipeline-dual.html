@@ -1898,6 +1898,24 @@
     speedLabel.textContent = simulationState.speedFactor.toFixed(2).replace(/\.00$/, "") + "×";
   });
 
+  function runTests() {
+    console.log("--- Running Simulation State Tests ---");
+    const step = steps[simulationState.currentStepIndex];
+    console.log(`Current Step: ${step ? step.label : 'Complete'}`);
+
+    simulationState.mapperStates.forEach((mapper, idx) => {
+      console.log(`--- Mapper ${CONFIG.MAPPERS[idx].label} ---`);
+      console.log(`Buffer records: ${mapper.buffer.length}`);
+      mapper.spills.forEach((spill, spillIdx) => {
+        const spillSlot = spillSlots[idx][spillIdx];
+        const hasVisibleRecords = spillSlot.querySelectorAll(".kv-record").length > 0;
+        console.log(`Spill ${spillIdx} records (logical): ${spill.length}`);
+        console.log(`Spill ${spillIdx} has visible records (DOM): ${hasVisibleRecords}`);
+      });
+    });
+    console.log("--- End of Test Report ---");
+  }
+
   resetState();
 </script>
 
