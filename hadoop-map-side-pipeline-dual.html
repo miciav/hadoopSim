@@ -1644,7 +1644,9 @@
       const count = typeof rec.count === "number" ? rec.count : 1;
       if (!mergeGroups.has(key)) mergeGroups.set(key, { key: rec.key, partition: rec.partition, count: 0, color: rec.color });
       mergeGroups.get(key).count += count;
-      if (rec.el && rec.el.parentElement) rec.el.style.opacity = "0.12";
+      if (rec.el && rec.el.parentElement) {
+        rec.el.remove();
+      }
     });
 
     const groupedArray = Array.from(mergeGroups.values());
@@ -1664,8 +1666,6 @@
 
     // After merge, clear spill visuals for this mapper to avoid leftovers
     state.spills.forEach((_, spillIdx) => {
-      const slot = spillSlots[mapperIndex][spillIdx];
-      slot.querySelectorAll(".kv-record").forEach(el => el.remove());
       spillHighlights[mapperIndex][spillIdx].style.opacity = 0;
     });
     state.spills = [[], []];
