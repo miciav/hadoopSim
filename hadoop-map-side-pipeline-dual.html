@@ -1233,25 +1233,28 @@
     }
   ];
 
-  const TOTAL_SPLITS = 2;
-  const MAPPERS = [
-    { id: 0, label: "Mapper A", delay: 0, speed: 1.05, thresholds: [0.42, 0.8] },
-    { id: 1, label: "Mapper B", delay: 0.12, speed: 1.3, thresholds: [0.3, 0.65] }
-  ];
-  const BUFFER_CAPACITY = 16;
-  const BUFFER_TRIGGER_RATIO = 0.8;
-
-  const WORD_KEYS = [
-    { key: "cat", partition: 0, color: "#8b5cf6" },
-    { key: "car", partition: 0, color: "#8b5cf6" },
-    { key: "cup", partition: 0, color: "#8b5cf6" },
-    { key: "dog", partition: 1, color: "#ec4899" },
-    { key: "data", partition: 1, color: "#ec4899" },
-    { key: "door", partition: 1, color: "#ec4899" },
-    { key: "ant", partition: 2, color: "#f59e0b" },
-    { key: "art", partition: 2, color: "#f59e0b" },
-    { key: "ask", partition: 2, color: "#f59e0b" }
-  ];
+  const CONFIG = {
+    TOTAL_SPLITS: 2,
+    MAPPERS: [
+      { id: 0, label: "Mapper A", delay: 0, speed: 1.05, thresholds: [0.42, 0.8] },
+      { id: 1, label: "Mapper B", delay: 0.12, speed: 1.3, thresholds: [0.3, 0.65] }
+    ],
+    BUFFER_CAPACITY: 16,
+    BUFFER_TRIGGER_RATIO: 0.8,
+    WORD_KEYS: [
+      { key: "cat", partition: 0, color: "#8b5cf6" },
+      { key: "car", partition: 0, color: "#8b5cf6" },
+      { key: "cup", partition: 0, color: "#8b5cf6" },
+      { key: "dog", partition: 1, color: "#ec4899" },
+      { key: "data", partition: 1, color: "#ec4899" },
+      { key: "door", partition: 1, color: "#ec4899" },
+      { key: "ant", partition: 2, color: "#f59e0b" },
+      { key: "art", partition: 2, color: "#f59e0b" },
+      { key: "ask", partition: 2, color: "#f59e0b" }
+    ],
+    COMBINE_DELAY: 1200,
+    COMBINE_FLASH_DELAY: 220,
+  };
 
   function buildSequence(pattern) {
     return pattern.map((wordData, idx) => ({
@@ -1265,25 +1268,40 @@
 
   const mapperSequences = [
     buildSequence([
-      WORD_KEYS[0], WORD_KEYS[3], WORD_KEYS[6], WORD_KEYS[1],
-      WORD_KEYS[4], WORD_KEYS[0], WORD_KEYS[5], WORD_KEYS[7],
-      WORD_KEYS[2], WORD_KEYS[6], WORD_KEYS[3], WORD_KEYS[0],
-      WORD_KEYS[8], WORD_KEYS[1], WORD_KEYS[7], WORD_KEYS[3]
+      CONFIG.WORD_KEYS[0], CONFIG.WORD_KEYS[3], CONFIG.WORD_KEYS[6], CONFIG.WORD_KEYS[1],
+      CONFIG.WORD_KEYS[4], CONFIG.WORD_KEYS[0], CONFIG.WORD_KEYS[5], CONFIG.WORD_KEYS[7],
+      CONFIG.WORD_KEYS[2], CONFIG.WORD_KEYS[6], CONFIG.WORD_KEYS[3], CONFIG.WORD_KEYS[0],
+      CONFIG.WORD_KEYS[8], CONFIG.WORD_KEYS[1], CONFIG.WORD_KEYS[7], CONFIG.WORD_KEYS[3]
     ]),
     buildSequence([
-      WORD_KEYS[4], WORD_KEYS[1], WORD_KEYS[6], WORD_KEYS[7],
-      WORD_KEYS[5], WORD_KEYS[2], WORD_KEYS[3], WORD_KEYS[8],
-      WORD_KEYS[0], WORD_KEYS[4], WORD_KEYS[6], WORD_KEYS[5],
-      WORD_KEYS[7], WORD_KEYS[3], WORD_KEYS[1]
+      CONFIG.WORD_KEYS[4], CONFIG.WORD_KEYS[1], CONFIG.WORD_KEYS[6], CONFIG.WORD_KEYS[7],
+      CONFIG.WORD_KEYS[5], CONFIG.WORD_KEYS[2], CONFIG.WORD_KEYS[3], CONFIG.WORD_KEYS[8],
+      CONFIG.WORD_KEYS[0], CONFIG.WORD_KEYS[4], CONFIG.WORD_KEYS[6], CONFIG.WORD_KEYS[5],
+      CONFIG.WORD_KEYS[7], CONFIG.WORD_KEYS[3], CONFIG.WORD_KEYS[1]
     ])
   ];
 
-  let mapperStates = [];
-  let reducerRecords = [];
-  let reducerOutputs = [[], [], []];
-  let reducersHydrated = false;
-  let hdfsRecords = [];
-  const stageOnceLog = new Set();
+  let simulationState = {};
+
+  function getInitialState() {
+    return {
+      mapperStates: [],
+      reducerRecords: [],
+      reducerOutputs: [[], [], []],
+      reducersHydrated: false,
+      hdfsRecords: [],
+      stageOnceLog: new Set(),
+      metrics: { totalRecords: 0, spillsCreated: 0, recordsRead: 0 },
+      speedFactor: 1,
+      started: false,
+      paused: false,
+      currentStepIndex: 0,
+      stepStartTime: null,
+      pausedTime: 0,
+      animationId: null,
+    };
+  }
+
 
   function formatRecordForLog(record) {
     if (!record) return "";
@@ -1304,44 +1322,31 @@
   }
 
   function logStageOnce(key, callback) {
-    if (stageOnceLog.has(key)) return;
-    stageOnceLog.add(key);
+    if (simulationState.stageOnceLog.has(key)) return;
+    simulationState.stageOnceLog.add(key);
     callback();
   }
 
-  let metrics = { totalRecords: 0, spillsCreated: 0, recordsRead: 0 };
-  let speedFactor = 1;
-  let started = false;
-  let paused = false;
-  let currentStepIndex = 0;
-  let stepStartTime = null;
-  let pausedTime = 0;
-  let animationId = null;
-
   function updateMetrics() {
-    recordsProcessed.textContent = metrics.totalRecords;
+    recordsProcessed.textContent = simulationState.metrics.totalRecords;
     const bufferCapacity = mapperSequences.reduce((sum, seq) => sum + seq.length, 0) || 1;
-    const bufferNow = mapperStates.reduce((sum, m) => sum + m.buffer.length, 0);
+    const bufferNow = simulationState.mapperStates.reduce((sum, m) => sum + m.buffer.length, 0);
     bufferUsage.textContent = Math.round((bufferNow / bufferCapacity) * 100) + "%";
-    spillCount.textContent = metrics.spillsCreated;
-    recordsRead.textContent = metrics.recordsRead;
-    splitCount.textContent = TOTAL_SPLITS;
+    spillCount.textContent = simulationState.metrics.spillsCreated;
+    recordsRead.textContent = simulationState.metrics.recordsRead;
+    splitCount.textContent = CONFIG.TOTAL_SPLITS;
 
-    const step = steps[currentStepIndex];
+    const step = steps[simulationState.currentStepIndex];
     currentPhase.textContent = step ? step.label : "Complete";
   }
 
   function resetState() {
-    cancelAnimationFrame(animationId);
-    animationId = null;
-    started = false;
-    paused = false;
-    currentStepIndex = 0;
-    stepStartTime = null;
-    pausedTime = 0;
-    metrics = { totalRecords: 0, spillsCreated: 0, recordsRead: 0 };
-
-    mapperStates = MAPPERS.map(() => ({
+    if (simulationState.animationId) {
+      cancelAnimationFrame(simulationState.animationId);
+    }
+    simulationState = getInitialState();
+    
+    simulationState.mapperStates = CONFIG.MAPPERS.map(() => ({
       buffer: [],
       spills: [[], []],
       spilled: [false, false],
@@ -1349,11 +1354,7 @@
       final: [],
       finished: false
     }));
-    reducerRecords = [];
-    reducerOutputs = [[], [], []];
-    reducersHydrated = false;
-    hdfsRecords = [];
-    stageOnceLog.clear();
+
     logStageEvent("Reset", "Simulation state reset.");
 
     [bufferInners[0], bufferInners[1],
@@ -1389,19 +1390,19 @@
     const nodes = timeline.querySelectorAll(".timeline-step");
     nodes.forEach((node, idx) => {
       node.classList.remove("active", "completed");
-      if (idx === currentStepIndex && started && !paused) {
+      if (idx === simulationState.currentStepIndex && simulationState.started && !simulationState.paused) {
         node.classList.add("active");
-      } else if (idx < currentStepIndex) {
+      } else if (idx < simulationState.currentStepIndex) {
         node.classList.add("completed");
       }
     });
-    const progress = (currentStepIndex / steps.length) * 100;
+    const progress = (simulationState.currentStepIndex / steps.length) * 100;
     progressFill.style.width = progress + "%";
   }
 
   function updateLogTexts() {
-    const step = steps[currentStepIndex];
-    const nextStep = steps[currentStepIndex + 1];
+    const step = steps[simulationState.currentStepIndex];
+    const nextStep = steps[simulationState.currentStepIndex + 1];
 
     if (!step) {
       logCurrent.innerHTML = "<strong>Simulation Complete</strong><br>Both mappers drained their splits, spilled independently, merged outputs, shuffled to reducers, and wrote to HDFS.";
@@ -1418,14 +1419,14 @@
   function setSplitReaderState({ showAll = false, readerActive = false }) {
     splitBoxes.forEach((box, idx) => {
       box.classList.remove("active", "inactive");
-      if (showAll || idx < TOTAL_SPLITS) {
+      if (showAll || idx < CONFIG.TOTAL_SPLITS) {
         box.classList.add("active");
       }
     });
 
     readerBoxes.forEach((box, idx) => {
       box.classList.remove("active", "inactive");
-      if (readerActive && idx < TOTAL_SPLITS) {
+      if (readerActive && idx < CONFIG.TOTAL_SPLITS) {
         box.classList.add("active");
       }
     });
@@ -1476,7 +1477,7 @@
 
       const el = createRecordElement(newType, toContainer, keyData);
       if (newType === "reducer" || newType === "final") {
-        const wordData = WORD_KEYS.find(w => w.key === keyData.key);
+        const wordData = CONFIG.WORD_KEYS.find(w => w.key === keyData.key);
         if (wordData) {
           el.style.background = wordData.color;
         }
@@ -1490,9 +1491,6 @@
       }
     });
   }
-
-  const COMBINE_DELAY = 1200;
-  const COMBINE_FLASH_DELAY = 220;
 
   function cloneRecord(rec) {
     return { key: rec.key, partition: rec.partition, count: rec.count || 1, color: rec.color };
@@ -1539,9 +1537,9 @@
 
     fadeOutExisting();
     if (animate) {
-      setTimeout(performCombine, COMBINE_DELAY);
+      setTimeout(performCombine, CONFIG.COMBINE_DELAY);
     } else {
-      setTimeout(performCombine, COMBINE_FLASH_DELAY);
+      setTimeout(performCombine, CONFIG.COMBINE_FLASH_DELAY);
     }
   }
 
@@ -1558,41 +1556,41 @@
   }
 
   function spillBuffer(mapperIndex, spillIndex) {
-    const state = mapperStates[mapperIndex];
+    const state = simulationState.mapperStates[mapperIndex];
     if (!state || state.buffer.length === 0 || state.spilled[spillIndex]) return;
 
     const targetSlot = spillSlots[mapperIndex][spillIndex];
     const targetHighlight = spillHighlights[mapperIndex][spillIndex];
     targetHighlight.style.opacity = 1;
     const snapshot = state.buffer.map(cloneRecord);
-    logStageEvent("Spill", MAPPERS[mapperIndex].label + " started spill " + spillIndex, snapshot);
+    logStageEvent("Spill", CONFIG.MAPPERS[mapperIndex].label + " started spill " + spillIndex, snapshot);
     moveRecords(state.buffer, state.spills[spillIndex], bufferInners[mapperIndex], targetSlot, "spill", true);
     combineSpillToContainer(state.spills[spillIndex], targetSlot, true, combined => {
-      logStageEvent("Combiner", MAPPERS[mapperIndex].label + " combined spill " + spillIndex, combined);
+      logStageEvent("Combiner", CONFIG.MAPPERS[mapperIndex].label + " combined spill " + spillIndex, combined);
     });
     state.spilled[spillIndex] = true;
     state.finished = state.spilled[0] && state.spilled[1];
     bufferFills[mapperIndex].style.height = "0%";
     bufferPercentages[mapperIndex].textContent = "0%";
-    metrics.spillsCreated++;
+    simulationState.metrics.spillsCreated++;
 
     // Clear any lingering buffer visuals to avoid confusion after spill
     bufferInners[mapperIndex].querySelectorAll(".kv-record").forEach(el => el.remove());
   }
 
   function updateBufferIndicators(mapperIndex) {
-    const state = mapperStates[mapperIndex];
+    const state = simulationState.mapperStates[mapperIndex];
     if (!state) return;
-    const thresholdCapacity = Math.max(1, Math.floor(BUFFER_CAPACITY * BUFFER_TRIGGER_RATIO));
-    const occupancy = state.buffer.length / BUFFER_CAPACITY;
-    const percent = Math.min(100, Math.max(0, Math.round((occupancy / BUFFER_TRIGGER_RATIO) * 100)));
+    const thresholdCapacity = Math.max(1, Math.floor(CONFIG.BUFFER_CAPACITY * CONFIG.BUFFER_TRIGGER_RATIO));
+    const occupancy = state.buffer.length / CONFIG.BUFFER_CAPACITY;
+    const percent = Math.min(100, Math.max(0, Math.round((occupancy / CONFIG.BUFFER_TRIGGER_RATIO) * 100)));
     bufferFills[mapperIndex].style.height = percent + "%";
     bufferPercentages[mapperIndex].textContent = percent + "%";
   }
 
   function fillMapperBuffer(mapperIndex, progress) {
-    const cfg = MAPPERS[mapperIndex];
-    const state = mapperStates[mapperIndex];
+    const cfg = CONFIG.MAPPERS[mapperIndex];
+    const state = simulationState.mapperStates[mapperIndex];
     const seq = mapperSequences[mapperIndex];
     if (state.finished) {
       return;
@@ -1605,9 +1603,9 @@
       const el = createRecordElement("buffer", bufferInners[mapperIndex], keyData);
       state.buffer.push({ el, key: keyData.key, partition: keyData.partition, id: keyData.id, count: 1, color: keyData.color });
       state.recordsRead++;
-      metrics.recordsRead++;
-      metrics.totalRecords++;
-      logStageEvent("Mapper", MAPPERS[mapperIndex].label + " processed tuple", [keyData]);
+      simulationState.metrics.recordsRead++;
+      simulationState.metrics.totalRecords++;
+      logStageEvent("Mapper", CONFIG.MAPPERS[mapperIndex].label + " processed tuple", [keyData]);
     }
 
     updateBufferIndicators(mapperIndex);
@@ -1620,7 +1618,7 @@
   }
 
   function flushRemainingBuffer(mapperIndex) {
-    const state = mapperStates[mapperIndex];
+    const state = simulationState.mapperStates[mapperIndex];
     if (!state || state.buffer.length === 0) return;
 
     const targetIdx = state.spilled[0] ? 1 : 0;
@@ -1630,21 +1628,21 @@
 
     const wasSpilled = state.spilled[targetIdx];
     const snapshot = state.buffer.map(cloneRecord);
-    logStageEvent("Spill", MAPPERS[mapperIndex].label + " flushed remaining buffer into spill " + targetIdx, snapshot);
+    logStageEvent("Spill", CONFIG.MAPPERS[mapperIndex].label + " flushed remaining buffer into spill " + targetIdx, snapshot);
     moveRecords(state.buffer, state.spills[targetIdx], bufferInners[mapperIndex], targetSlot, "spill", true);
     combineSpillToContainer(state.spills[targetIdx], targetSlot, false, combined => {
-      logStageEvent("Combiner", MAPPERS[mapperIndex].label + " spill " + targetIdx + " after aggregation", combined);
+      logStageEvent("Combiner", CONFIG.MAPPERS[mapperIndex].label + " spill " + targetIdx + " after aggregation", combined);
     });
     state.spilled[targetIdx] = true;
     if (!wasSpilled) {
-      metrics.spillsCreated++;
+      simulationState.metrics.spillsCreated++;
     }
     bufferFills[mapperIndex].style.height = "0%";
     bufferPercentages[mapperIndex].textContent = "0%";
   }
 
   function mergeMapperOutputs(mapperIndex) {
-    const state = mapperStates[mapperIndex];
+    const state = simulationState.mapperStates[mapperIndex];
     if (!state || state.final.length > 0) return;
 
     flushRemainingBuffer(mapperIndex);
@@ -1666,7 +1664,7 @@
 
     const target = finalOutputs[mapperIndex];
     groupedArray.forEach((g, idx) => {
-      const wordData = WORD_KEYS.find(w => w.key === g.key && w.partition === g.partition) || WORD_KEYS.find(w => w.key === g.key);
+      const wordData = CONFIG.WORD_KEYS.find(w => w.key === g.key && w.partition === g.partition) || CONFIG.WORD_KEYS.find(w => w.key === g.key);
       const keyData = { key: g.key, partition: g.partition, id: idx, count: g.count, color: wordData ? wordData.color : g.color };
       const el = createRecordElement("final", target, keyData);
       el.textContent = "(" + g.key + ", " + g.count + ")";
@@ -1681,22 +1679,22 @@
     });
     state.spills = [[], []];
 
-    logStageEvent("Merge", MAPPERS[mapperIndex].label + " completed map output", state.final.map(cloneRecord));
+    logStageEvent("Merge", CONFIG.MAPPERS[mapperIndex].label + " completed map output", state.final.map(cloneRecord));
   }
 
   function mergeAllMapperOutputs() {
-    mapperStates.forEach((_, idx) => mergeMapperOutputs(idx));
+    simulationState.mapperStates.forEach((_, idx) => mergeMapperOutputs(idx));
   }
 
   function runReducerCombine() {
-    if (reducerRecords.length === 0 || reducerOutputs.some(arr => arr.length > 0)) {
+    if (simulationState.reducerRecords.length === 0 || simulationState.reducerOutputs.some(arr => arr.length > 0)) {
       return;
     }
 
     reducers.forEach(box => box.classList.add("reducing"));
 
     const partitionGroups = new Map();
-    reducerRecords.forEach(record => {
+    simulationState.reducerRecords.forEach(record => {
       if (!record) return;
       const part = typeof record.partition === "number" ? record.partition : 0;
       if (!partitionGroups.has(part)) {
@@ -1714,20 +1712,20 @@
       }
     });
 
-    reducerRecords = [];
-    reducerOutputs = [[], [], []];
+    simulationState.reducerRecords = [];
+    simulationState.reducerOutputs = [[], [], []];
     [0, 1, 2].forEach(partition => {
       const target = getReducerContainer(partition);
       target.querySelectorAll(".kv-record").forEach(el => el.remove());
       const bucket = partitionGroups.get(partition);
       if (!bucket) {
-        reducerOutputs[partition] = [];
+        simulationState.reducerOutputs[partition] = [];
         return;
       }
       const combined = [];
       const sorted = Array.from(bucket.values()).sort((a, b) => a.key.localeCompare(b.key));
       sorted.forEach((g, idx) => {
-        const wordData = WORD_KEYS.find(w => w.key === g.key && w.partition === g.partition) || WORD_KEYS.find(w => w.key === g.key);
+        const wordData = CONFIG.WORD_KEYS.find(w => w.key === g.key && w.partition === g.partition) || CONFIG.WORD_KEYS.find(w => w.key === g.key);
         const keyData = { key: g.key, partition: g.partition, id: idx, count: g.count, color: wordData ? wordData.color : g.color };
         const el = createRecordElement("reducer", target, keyData);
         el.textContent = "(" + g.key + ", " + g.count + ")";
@@ -1738,7 +1736,7 @@
         el.classList.remove("processed-blur");
         combined.push({ el, ...keyData });
       });
-      reducerOutputs[partition] = combined;
+      simulationState.reducerOutputs[partition] = combined;
       if (combined.length) {
         logStageEvent("Reduce", "Reducer " + partition + " combined tuples", combined.map(cloneRecord));
       }
@@ -1749,37 +1747,34 @@
     [inputBox, readerRowBox, bufferBox, spillBox, finalBox, reducersBox, hdfsBox].forEach(box => box.classList.remove("active"));
     [...splitBoxes, ...readerBoxes, ...mapperCards, ...reducers, ...hdfsTargets, inputFormatBox].forEach(el => el.classList.remove("active"));
 
-    switch (step.id) {
-      case "inputfmt":
+    const stepHandlers = {
+      inputfmt: () => {
         inputBox.classList.add("active");
         inputFormatBox.classList.add("active");
         setSplitReaderState({ showAll: true, readerActive: false });
         logStageOnce("inputfmt", () => {
           mapperSequences.forEach((seq, idx) => {
-            logStageEvent("InputFormat", "Split " + idx + " assigned to " + (MAPPERS[idx] ? MAPPERS[idx].label : "Mapper " + idx), seq);
+            logStageEvent("InputFormat", "Split " + idx + " assigned to " + (CONFIG.MAPPERS[idx] ? CONFIG.MAPPERS[idx].label : "Mapper " + idx), seq);
           });
         });
-        break;
-
-      case "readers":
+      },
+      readers: () => {
         readerRowBox.classList.add("active");
         setSplitReaderState({ showAll: true, readerActive: true });
         logStageOnce("readers", () => {
           mapperSequences.forEach((seq, idx) => {
-            logStageEvent("RecordReader", "RR" + idx + " feeds " + (MAPPERS[idx] ? MAPPERS[idx].label : "Mapper " + idx), seq);
+            logStageEvent("RecordReader", "RR" + idx + " feeds " + (CONFIG.MAPPERS[idx] ? CONFIG.MAPPERS[idx].label : "Mapper " + idx), seq);
           });
         });
-        break;
-
-      case "parallel":
+      },
+      parallel: () => {
         bufferBox.classList.add("active");
         mapperCards.forEach(card => card.classList.add("active"));
         setSplitReaderState({ showAll: true, readerActive: true });
         fillMapperBuffer(0, progress);
         fillMapperBuffer(1, progress);
-        break;
-
-      case "spills":
+      },
+      spills: () => {
         spillBox.classList.add("active");
         mapperCards.forEach(card => card.classList.add("active"));
         if (progress > 0.25) {
@@ -1794,121 +1789,123 @@
         if (progress > 0.9) {
           spillBuffer(1, 1);
         }
-        break;
-
-      case "merge":
+      },
+      merge: () => {
         finalBox.classList.add("active");
         mergeAllMapperOutputs();
-        break;
-
-      case "shuffle":
+      },
+      shuffle: () => {
         reducersBox.classList.add("active");
         reducers.forEach(r => r.classList.add("active"));
-        if (!reducersHydrated && progress > 0.15) {
-          const allFinal = mapperStates.flatMap(m => m.final);
+        if (!simulationState.reducersHydrated && progress > 0.15) {
+          const allFinal = simulationState.mapperStates.flatMap(m => m.final);
           allFinal.forEach(record => {
             if (!record.el || !record.el.parentElement) return;
             record.el.style.opacity = "0.08";
             const target = getReducerContainer(record.partition);
             const el = createRecordElement("reducer", target, record);
-            const wordData = WORD_KEYS.find(w => w.key === record.key);
+            const wordData = CONFIG.WORD_KEYS.find(w => w.key === record.key);
             if (wordData) {
               el.style.background = wordData.color;
             }
-            reducerRecords.push({ ...record, el });
+            simulationState.reducerRecords.push({ ...record, el });
           });
-          logStageEvent("Shuffle", "Reducers received their partitions", reducerRecords.map(cloneRecord));
-          reducersHydrated = true;
+          logStageEvent("Shuffle", "Reducers received their partitions", simulationState.reducerRecords.map(cloneRecord));
+          simulationState.reducersHydrated = true;
         }
         if (progress > 0.6) {
           runReducerCombine();
         }
-        break;
-
-      case "hdfs":
+      },
+      hdfs: () => {
         hdfsBox.classList.add("active");
         hdfsTargets.forEach(r => r.classList.add("active"));
-        if (hdfsRecords.length === 0 && progress > 0.25) {
-          if (reducerOutputs.flat().length === 0) {
+        if (simulationState.hdfsRecords.length === 0 && progress > 0.25) {
+          if (simulationState.reducerOutputs.flat().length === 0) {
             runReducerCombine();
           }
-          const reduceSource = reducerOutputs.flat().length ? reducerOutputs.flat() : reducerRecords;
+          const reduceSource = simulationState.reducerOutputs.flat().length ? simulationState.reducerOutputs.flat() : simulationState.reducerRecords;
           reduceSource.forEach(record => {
             if (!record.el || !record.el.parentElement) return;
             const keyData = { key: record.key, partition: record.partition, count: record.count, color: record.color };
             const target = getHdfsContainer(record.partition);
             const el = createRecordElement("final", target, keyData);
             el.textContent = "(" + record.key + ", " + record.count + ")";
-            const wordData = WORD_KEYS.find(w => w.key === record.key);
+            const wordData = CONFIG.WORD_KEYS.find(w => w.key === record.key);
             if (wordData) {
               el.style.background = wordData.color;
             }
-            hdfsRecords.push({ ...keyData, el });
+            simulationState.hdfsRecords.push({ ...keyData, el });
             record.el.classList.add("processed-blur");
             record.el.style.opacity = "0.12";
           });
-          logStageEvent("HDFS", "Final blocks written to HDFS", hdfsRecords.map(cloneRecord));
+          logStageEvent("HDFS", "Final blocks written to HDFS", simulationState.hdfsRecords.map(cloneRecord));
         }
-        break;
+      }
+    };
+
+    const handler = stepHandlers[step.id];
+    if (handler) {
+      handler();
     }
 
     updateMetrics();
   }
 
   function animateStep(timestamp) {
-    if (!started || paused) {
+    if (!simulationState.started || simulationState.paused) {
       return;
     }
 
-    if (!stepStartTime) {
-      stepStartTime = timestamp - pausedTime;
-      pausedTime = 0;
+    if (!simulationState.stepStartTime) {
+      simulationState.stepStartTime = timestamp - simulationState.pausedTime;
+      simulationState.pausedTime = 0;
     }
 
-    const step = steps[currentStepIndex];
+    const step = steps[simulationState.currentStepIndex];
     if (!step) {
-      cancelAnimationFrame(animationId);
+      cancelAnimationFrame(simulationState.animationId);
       logStageOnce("complete", () => {
         logStageEvent("Complete", "All simulation phases finished.");
       });
       return;
     }
 
-    const elapsed = (timestamp - stepStartTime) * speedFactor;
+    const elapsed = (timestamp - simulationState.stepStartTime) * simulationState.speedFactor;
     const progress = Math.min(1, elapsed / step.duration);
 
     updateStepVisuals(step, progress);
 
     if (progress >= 1) {
-      currentStepIndex++;
-      stepStartTime = null;
-      pausedTime = 0;
+      simulationState.currentStepIndex++;
+      simulationState.stepStartTime = null;
+      simulationState.pausedTime = 0;
       updateTimelineHighlight();
       updateLogTexts();
     }
 
-    animationId = requestAnimationFrame(animateStep);
+    simulationState.animationId = requestAnimationFrame(animateStep);
   }
 
   startBtn.addEventListener("click", () => {
-    if (started) return;
-    started = true;
-    paused = false;
+    if (simulationState.started) return;
+    simulationState.started = true;
+    simulationState.paused = false;
     startBtn.disabled = true;
     pauseBtn.disabled = false;
     resetBtn.disabled = false;
     updateTimelineHighlight();
     updateLogTexts();
-    animationId = requestAnimationFrame(animateStep);
+    simulationState.animationId = requestAnimationFrame(animateStep);
   });
 
   pauseBtn.addEventListener("click", () => {
-    paused = !paused;
-    pauseBtn.textContent = paused ? "▶ Resume" : "⏸ Pause";
-    pauseBtn.classList.toggle("pause", !paused);
-    pauseBtn.classList.toggle("secondary", paused);
-    if (!paused && stepStartTime) {
-      pausedTime = 0;
+    simulationState.paused = !simulationState.paused;
+    pauseBtn.textContent = simulationState.paused ? "▶ Resume" : "⏸ Pause";
+    pauseBtn.classList.toggle("pause", !simulationState.paused);
+    pauseBtn.classList.toggle("secondary", simulationState.paused);
+    if (!simulationState.paused && simulationState.stepStartTime) {
+      simulationState.pausedTime = 0;
     }
   });
 
@@ -1917,8 +1914,8 @@
   });
 
   speedSlider.addEventListener("input", (e) => {
-    speedFactor = parseFloat(e.target.value);
-    speedLabel.textContent = speedFactor.toFixed(2).replace(/\.00$/, "") + "×";
+    simulationState.speedFactor = parseFloat(e.target.value);
+    speedLabel.textContent = simulationState.speedFactor.toFixed(2).replace(/\.00$/, "") + "×";
   });
 
   resetState();
