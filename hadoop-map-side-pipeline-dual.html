@@ -884,8 +884,7 @@
         <div class="timeline" id="timeline">
           <div class="timeline-step" title="InputFormat splits the input into logical segments">InputFormat</div>
           <div class="timeline-step" title="RecordReaders pull from different splits">RecordReaders</div>
-          <div class="timeline-step" title="Two independent mappers fill their buffers at different speeds">Parallel Mappers</div>
-          <div class="timeline-step" title="Each mapper spills independently to disk">Independent Spills</div>
+          <div class="timeline-step" title="Two independent mappers fill their buffers at different speeds">Parallel Mappers & Spills</div>
           <div class="timeline-step" title="All mapper outputs merge into a combined map output">Merge</div>
           <div class="timeline-step" title="Reducers fetch partitions from both mappers">Shuffle</div>
           <div class="timeline-step" title="Final outputs are written to HDFS">Write to HDFS</div>
@@ -1183,22 +1182,12 @@
     },
     {
       id: "parallel",
-      label: "Parallel Mappers",
-      duration: 4200,
+      label: "Parallel Mappers & Spills",
+      duration: 6600,
       narrative: [
-        "Mapper A and Mapper B fill their buffers at different speeds from their own RecordReader.",
-        "Buffers back pressure RecordReaders independently, so fill levels diverge naturally.",
-        "Spill thresholds differ per mapper to stress that MapReduce pipelines are asynchronous."
-      ]
-    },
-    {
-      id: "spills",
-      label: "Independent Spills",
-      duration: 2400,
-      narrative: [
-        "Each mapper spills to its own disk files; spill timing is decoupled.",
-        "Spills sort by partition then key, applying a combiner per mapper.",
-        "Students should notice that spill 0A/0B do not fire in lockstep."
+        "Mappers process records, filling their buffers. When a buffer is 80% full, it spills to disk.",
+        "Each mapper spills independently, sorting records by partition and key.",
+        "This shows how MapReduce handles memory pressure by using local disk."
       ]
     },
     {
@@ -1236,8 +1225,8 @@
   const CONFIG = {
     TOTAL_SPLITS: 2,
     MAPPERS: [
-      { id: 0, label: "Mapper A", delay: 0, speed: 1.05, thresholds: [0.42, 0.8] },
-      { id: 1, label: "Mapper B", delay: 0.12, speed: 1.3, thresholds: [0.3, 0.65] }
+      { id: 0, label: "Mapper A", delay: 0, speed: 1.05 },
+      { id: 1, label: "Mapper B", delay: 0.12, speed: 1.3 }
     ],
     BUFFER_CAPACITY: 16,
     BUFFER_TRIGGER_RATIO: 0.8,
@@ -1610,11 +1599,13 @@
 
     updateBufferIndicators(mapperIndex);
 
-    state.spilled.forEach((done, idx) => {
-      if (!done && adjusted >= cfg.thresholds[idx] && state.buffer.length > 2) {
-        spillBuffer(mapperIndex, idx);
+    const bufferUsageRatio = state.buffer.length / CONFIG.BUFFER_CAPACITY;
+    if (bufferUsageRatio >= CONFIG.BUFFER_TRIGGER_RATIO) {
+      const spillIndex = state.spilled.indexOf(false); // Find the next available spill slot
+      if (spillIndex !== -1) {
+        spillBuffer(mapperIndex, spillIndex);
       }
-    });
+    }
   }
 
   function flushRemainingBuffer(mapperIndex) {
@@ -1769,26 +1760,11 @@
       },
       parallel: () => {
         bufferBox.classList.add("active");
+        spillBox.classList.add("active");
         mapperCards.forEach(card => card.classList.add("active"));
         setSplitReaderState({ showAll: true, readerActive: true });
         fillMapperBuffer(0, progress);
         fillMapperBuffer(1, progress);
-      },
-      spills: () => {
-        spillBox.classList.add("active");
-        mapperCards.forEach(card => card.classList.add("active"));
-        if (progress > 0.25) {
-          spillBuffer(0, 0);
-        }
-        if (progress > 0.55) {
-          spillBuffer(1, 0);
-        }
-        if (progress > 0.72) {
-          spillBuffer(0, 1);
-        }
-        if (progress > 0.9) {
-          spillBuffer(1, 1);
-        }
       },
       merge: () => {
         finalBox.classList.add("active");
