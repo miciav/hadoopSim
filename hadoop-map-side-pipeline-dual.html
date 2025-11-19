@@ -237,11 +237,16 @@
       border-radius: 10px;
       border: 1px dashed #cbd5e1;
       background: rgba(255,255,255,0.8);
-      padding: 4px 6px;
+      padding: 32px 14px 14px;
       min-height: 110px;
       position: relative;
       overflow: hidden;
       transition: border-color 0.3s ease;
+    }
+
+    #reducersBox,
+    #hdfsBox {
+      overflow: visible;
     }
 
     /* Give the circular buffer extra headroom for more rows of records */
@@ -353,8 +358,12 @@
       border-radius: 12px;
       background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
       position: relative;
-      padding: 16px 16px 20px;
+      padding: 18px 18px 22px;
       box-shadow: 0 4px 14px rgba(0,0,0,0.05);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 220px;
     }
 
     .mapper-header {
@@ -382,8 +391,8 @@
 
     .row-title {
       position: absolute;
-      top: 4px;
-      left: 8px;
+      top: 10px;
+      left: 12px;
       font-size: 10px;
       text-transform: uppercase;
       letter-spacing: 0.1em;
@@ -397,13 +406,14 @@
       border: 1px solid #cbd5e1;
       background: rgba(255,255,255,0.95);
       overflow: hidden;
-      min-height: 150px;
-      padding: 14px 10px 10px;
+      min-height: 170px;
+      padding: 26px 12px 12px;
       display: flex;
       flex-wrap: wrap;
       align-items: flex-start;
       align-content: flex-start;
-      margin-top: 10px;
+      margin-top: 0;
+      flex: 1;
     }
 
     .buffer-capacity {
@@ -484,47 +494,10 @@
       transition: opacity 0.5s ease, transform 0.5s ease, filter 0.5s ease;
     }
 
-    .kv-record.debug-ghost {
-      opacity: 0.6;
-      border: 1px dashed #94a3b8;
-      box-shadow: none;
-      background: #e2e8f0;
-      color: #0f172a;
-    }
-
     .kv-record.processed-blur {
       opacity: 0.4;
       filter: blur(1px);
     }
-
-    .debug-overlay {
-      position: fixed;
-      right: 16px;
-      bottom: 16px;
-      width: min(420px, 90vw);
-      max-height: 70vh;
-      overflow: auto;
-      background: #0f172a;
-      color: #e2e8f0;
-      border-radius: 12px;
-      padding: 14px;
-      box-shadow: 0 10px 24px rgba(0,0,0,0.35);
-      font-size: 12px;
-      line-height: 1.4;
-      z-index: 2000;
-    }
-
-    .debug-overlay h4 {
-      margin: 6px 0 4px;
-      font-size: 12px;
-      color: #38bdf8;
-    }
-
-    .debug-overlay pre {
-      background: #1e293b;
-      padding: 8px;
-      border-radius: 8px;
-      white-space: pre-wrap;
       margin: 0 0 8px;
     }
 
@@ -588,14 +561,14 @@
       flex-wrap: wrap;
       align-items: flex-start;
       align-content: flex-start;
-      padding: 14px 8px 10px;
-      margin-top: 6px;
+      padding: 28px 10px 12px;
+      margin-top: 16px;
     }
 
     .spill-label {
       position: absolute;
-      top: 6px;
-      left: 8px;
+      top: 10px;
+      left: 10px;
       font-size: 9px;
       text-transform: uppercase;
       color: #64748b;
@@ -638,7 +611,7 @@
       overflow: hidden;
       transition: all 0.3s ease;
       min-height: 150px;
-      padding: 18px 10px 10px;
+      padding: 32px 12px 12px;
       display: flex;
       flex-wrap: wrap;
       align-items: flex-start;
@@ -658,10 +631,11 @@
     }
 
     .reducers-inner {
-      position: absolute;
-      inset: 20px 6px 6px 6px;
+      position: relative;
       display: flex;
-      gap: 8px;
+      gap: 12px;
+      margin-top: 18px;
+      padding: 0 6px 6px;
     }
 
     .reducer-box {
@@ -677,6 +651,8 @@
       flex-wrap: wrap;
       align-items: flex-start;
       align-content: flex-start;
+      padding: 32px 12px 12px;
+      min-height: 170px;
     }
 
     .reducer-box.active {
@@ -684,33 +660,39 @@
       box-shadow: 0 0 20px rgba(147,51,234,0.25);
     }
 
+    .reducer-box.reducing {
+      box-shadow: 0 0 24px rgba(147,51,234,0.35);
+      background: linear-gradient(135deg, rgba(147,51,234,0.15) 0%, #ffffff 70%);
+    }
+
     .reducer-label {
       position: absolute;
-      top: 4px;
-      left: 8px;
-      font-size: 9px;
+      top: 8px;
+      left: 10px;
+      font-size: 10px;
       text-transform: uppercase;
-      letter-spacing: 0.1em;
+      letter-spacing: 0.12em;
       color: #9333ea;
       font-weight: 600;
     }
 
     .hdfs-inner {
-      position: absolute;
-      inset: 20px 6px 6px 6px;
+      position: relative;
       display: flex;
-      gap: 8px;
+      gap: 12px;
+      margin-top: 16px;
     }
 
     .hdfs-box {
       flex: 1;
-      border-radius: 8px;
+      border-radius: 10px;
       border: 1px dashed #cbd5e1;
-      background: linear-gradient(135deg, rgba(16,185,129,0.1) 0%, #ffffff 70%);
+      background: linear-gradient(135deg, rgba(16,185,129,0.12) 0%, #ffffff 70%);
       position: relative;
       overflow: hidden;
       transition: all 0.3s ease;
-    
+      padding: 36px 14px 14px;
+      min-height: 190px;
       display: flex;
       flex-wrap: wrap;
       align-items: flex-start;
@@ -720,6 +702,11 @@
     .hdfs-box.active {
       border-color: #16a34a;
       box-shadow: 0 0 20px rgba(22,163,74,0.2);
+    }
+
+    .kv-record.reducer-output {
+      box-shadow: 0 0 10px rgba(99,102,241,0.35);
+      border: 1px solid rgba(255,255,255,0.85);
     }
 
     /* Log Panel */
@@ -850,7 +837,6 @@
       <button id="startBtn">▶ Start Simulation</button>
       <button id="pauseBtn" class="pause" disabled>⏸ Pause</button>
       <button id="resetBtn" class="secondary">↻ Reset</button>
-      <button id="debugBtn" class="secondary" disabled>🔍 Dump State</button>
       <div class="speed-control">
         <label for="speedSlider">Speed:</label>
         <input type="range" id="speedSlider" min="0.5" max="3" step="0.25" value="1" />
@@ -1252,6 +1238,8 @@
     { id: 0, label: "Mapper A", delay: 0, speed: 1.05, thresholds: [0.42, 0.8] },
     { id: 1, label: "Mapper B", delay: 0.12, speed: 1.3, thresholds: [0.3, 0.65] }
   ];
+  const BUFFER_CAPACITY = 16;
+  const BUFFER_TRIGGER_RATIO = 0.8;
 
   const WORD_KEYS = [
     { key: "cat", partition: 0, color: "#8b5cf6" },
@@ -1292,21 +1280,35 @@
 
   let mapperStates = [];
   let reducerRecords = [];
+  let reducerOutputs = [[], [], []];
+  let reducersHydrated = false;
   let hdfsRecords = [];
-  const debugBtn = document.getElementById("debugBtn");
-  const debugState = {
-    spillsRaw: [
-      [[], []],
-      [[], []]
-    ],
-    spillsCombined: [
-      [[], []],
-      [[], []]
-    ],
-    finals: [[], []],
-    reducers: [],
-    hdfs: []
-  };
+  const stageOnceLog = new Set();
+
+  function formatRecordForLog(record) {
+    if (!record) return "";
+    const count = typeof record.count === "number"
+      ? record.count
+      : (typeof record.value === "number" ? record.value : 1);
+    return "(" + record.key + ", " + count + ")[P" + record.partition + "]";
+  }
+
+  function logStageEvent(stage, message, tuples = []) {
+    const list = Array.isArray(tuples) ? tuples : [tuples];
+    const payload = list.filter(Boolean);
+    if (payload.length === 0) {
+      console.log("[" + stage + "] " + message);
+      return;
+    }
+    console.log("[" + stage + "] " + message + ": " + payload.map(formatRecordForLog).join(", "));
+  }
+
+  function logStageOnce(key, callback) {
+    if (stageOnceLog.has(key)) return;
+    stageOnceLog.add(key);
+    callback();
+  }
+
   let metrics = { totalRecords: 0, spillsCreated: 0, recordsRead: 0 };
   let speedFactor = 1;
   let started = false;
@@ -1348,12 +1350,11 @@
       finished: false
     }));
     reducerRecords = [];
+    reducerOutputs = [[], [], []];
+    reducersHydrated = false;
     hdfsRecords = [];
-    debugState.spillsRaw = [[[], []], [[], []]];
-    debugState.spillsCombined = [[[], []], [[], []]];
-    debugState.finals = [[], []];
-    debugState.reducers = [];
-    debugState.hdfs = [];
+    stageOnceLog.clear();
+    logStageEvent("Reset", "Simulation state reset.");
 
     [bufferInners[0], bufferInners[1],
       spillSlots[0][0], spillSlots[0][1],
@@ -1366,6 +1367,7 @@
     bufferFills.forEach(fill => fill.style.height = "0%");
     bufferPercentages.forEach(pct => pct.textContent = "0%");
     spillHighlights.flat().forEach(h => h.style.opacity = 0);
+    reducers.forEach(box => box.classList.remove("reducing"));
     progressFill.style.width = "0%";
 
     [inputBox, readerRowBox, bufferBox, spillBox, finalBox, reducersBox, hdfsBox].forEach(box => box.classList.remove("active"));
@@ -1381,7 +1383,6 @@
     startBtn.disabled = false;
     pauseBtn.disabled = true;
     resetBtn.disabled = false;
-    debugBtn.disabled = true;
   }
 
   function updateTimelineHighlight() {
@@ -1464,7 +1465,6 @@
 
     records.forEach(record => {
       if (!record.el || !record.el.parentElement) return;
-      record.el.style.opacity = "0.08";
 
       const keyData = {
         key: record.key,
@@ -1492,12 +1492,19 @@
   }
 
   const COMBINE_DELAY = 1200;
+  const COMBINE_FLASH_DELAY = 220;
 
   function cloneRecord(rec) {
     return { key: rec.key, partition: rec.partition, count: rec.count || 1, color: rec.color };
   }
 
   function combineSpillToContainer(spillArr, container, animate = false, onDone = null) {
+    const fadeOutExisting = () => {
+      container.querySelectorAll(".kv-record").forEach(el => {
+        el.classList.add("combiner-pending");
+      });
+    };
+
     const performCombine = () => {
       const groups = new Map();
       spillArr.forEach(rec => {
@@ -1522,7 +1529,6 @@
         };
         const el = createRecordElement("spill", container, keyData);
         el.textContent = "(" + g.key + ", " + g.count + ")";
-        el.classList.add("processed-blur");
         spillArr.push({ el, key: g.key, partition: g.partition, id: idx, count: g.count, color: g.color });
       });
 
@@ -1531,11 +1537,11 @@
       }
     };
 
+    fadeOutExisting();
     if (animate) {
-      container.querySelectorAll(".kv-record").forEach(el => el.classList.add("combiner-pending"));
       setTimeout(performCombine, COMBINE_DELAY);
     } else {
-      performCombine();
+      setTimeout(performCombine, COMBINE_FLASH_DELAY);
     }
   }
 
@@ -1558,10 +1564,11 @@
     const targetSlot = spillSlots[mapperIndex][spillIndex];
     const targetHighlight = spillHighlights[mapperIndex][spillIndex];
     targetHighlight.style.opacity = 1;
+    const snapshot = state.buffer.map(cloneRecord);
+    logStageEvent("Spill", MAPPERS[mapperIndex].label + " started spill " + spillIndex, snapshot);
     moveRecords(state.buffer, state.spills[spillIndex], bufferInners[mapperIndex], targetSlot, "spill", true);
-    debugState.spillsRaw[mapperIndex][spillIndex] = state.spills[spillIndex].map(cloneRecord);
     combineSpillToContainer(state.spills[spillIndex], targetSlot, true, combined => {
-      debugState.spillsCombined[mapperIndex][spillIndex] = combined;
+      logStageEvent("Combiner", MAPPERS[mapperIndex].label + " combined spill " + spillIndex, combined);
     });
     state.spilled[spillIndex] = true;
     state.finished = state.spilled[0] && state.spilled[1];
@@ -1571,6 +1578,16 @@
 
     // Clear any lingering buffer visuals to avoid confusion after spill
     bufferInners[mapperIndex].querySelectorAll(".kv-record").forEach(el => el.remove());
+  }
+
+  function updateBufferIndicators(mapperIndex) {
+    const state = mapperStates[mapperIndex];
+    if (!state) return;
+    const thresholdCapacity = Math.max(1, Math.floor(BUFFER_CAPACITY * BUFFER_TRIGGER_RATIO));
+    const occupancy = state.buffer.length / BUFFER_CAPACITY;
+    const percent = Math.min(100, Math.max(0, Math.round((occupancy / BUFFER_TRIGGER_RATIO) * 100)));
+    bufferFills[mapperIndex].style.height = percent + "%";
+    bufferPercentages[mapperIndex].textContent = percent + "%";
   }
 
   function fillMapperBuffer(mapperIndex, progress) {
@@ -1583,10 +1600,6 @@
     const adjusted = Math.min(1, Math.max(0, (progress - cfg.delay) * cfg.speed));
     const expected = Math.floor(seq.length * adjusted);
 
-    const fillWave = Math.min(94, adjusted * 110 - mapperIndex * 4 + Math.sin(adjusted * 3) * 5);
-    bufferFills[mapperIndex].style.height = Math.max(0, fillWave) + "%";
-    bufferPercentages[mapperIndex].textContent = Math.round(Math.max(0, fillWave)) + "%";
-
     for (let i = state.recordsRead; i < expected; i++) {
       const keyData = seq[i];
       const el = createRecordElement("buffer", bufferInners[mapperIndex], keyData);
@@ -1594,7 +1607,10 @@
       state.recordsRead++;
       metrics.recordsRead++;
       metrics.totalRecords++;
+      logStageEvent("Mapper", MAPPERS[mapperIndex].label + " processed tuple", [keyData]);
     }
+
+    updateBufferIndicators(mapperIndex);
 
     state.spilled.forEach((done, idx) => {
       if (!done && adjusted >= cfg.thresholds[idx] && state.buffer.length > 2) {
@@ -1613,10 +1629,11 @@
     targetHighlight.style.opacity = 1;
 
     const wasSpilled = state.spilled[targetIdx];
+    const snapshot = state.buffer.map(cloneRecord);
+    logStageEvent("Spill", MAPPERS[mapperIndex].label + " flushed remaining buffer into spill " + targetIdx, snapshot);
     moveRecords(state.buffer, state.spills[targetIdx], bufferInners[mapperIndex], targetSlot, "spill", true);
-    debugState.spillsRaw[mapperIndex][targetIdx] = state.spills[targetIdx].map(cloneRecord);
     combineSpillToContainer(state.spills[targetIdx], targetSlot, false, combined => {
-      debugState.spillsCombined[mapperIndex][targetIdx] = combined;
+      logStageEvent("Combiner", MAPPERS[mapperIndex].label + " spill " + targetIdx + " after aggregation", combined);
     });
     state.spilled[targetIdx] = true;
     if (!wasSpilled) {
@@ -1664,11 +1681,68 @@
     });
     state.spills = [[], []];
 
-    debugState.finals[mapperIndex] = state.final.map(cloneRecord);
+    logStageEvent("Merge", MAPPERS[mapperIndex].label + " completed map output", state.final.map(cloneRecord));
   }
 
   function mergeAllMapperOutputs() {
     mapperStates.forEach((_, idx) => mergeMapperOutputs(idx));
+  }
+
+  function runReducerCombine() {
+    if (reducerRecords.length === 0 || reducerOutputs.some(arr => arr.length > 0)) {
+      return;
+    }
+
+    reducers.forEach(box => box.classList.add("reducing"));
+
+    const partitionGroups = new Map();
+    reducerRecords.forEach(record => {
+      if (!record) return;
+      const part = typeof record.partition === "number" ? record.partition : 0;
+      if (!partitionGroups.has(part)) {
+        partitionGroups.set(part, new Map());
+      }
+      const bucket = partitionGroups.get(part);
+      const key = part + "|" + record.key;
+      const count = typeof record.count === "number" ? record.count : 1;
+      if (!bucket.has(key)) {
+        bucket.set(key, { key: record.key, partition: part, count: 0, color: record.color });
+      }
+      bucket.get(key).count += count;
+      if (record.el && record.el.parentElement) {
+        record.el.remove();
+      }
+    });
+
+    reducerRecords = [];
+    reducerOutputs = [[], [], []];
+    [0, 1, 2].forEach(partition => {
+      const target = getReducerContainer(partition);
+      target.querySelectorAll(".kv-record").forEach(el => el.remove());
+      const bucket = partitionGroups.get(partition);
+      if (!bucket) {
+        reducerOutputs[partition] = [];
+        return;
+      }
+      const combined = [];
+      const sorted = Array.from(bucket.values()).sort((a, b) => a.key.localeCompare(b.key));
+      sorted.forEach((g, idx) => {
+        const wordData = WORD_KEYS.find(w => w.key === g.key && w.partition === g.partition) || WORD_KEYS.find(w => w.key === g.key);
+        const keyData = { key: g.key, partition: g.partition, id: idx, count: g.count, color: wordData ? wordData.color : g.color };
+        const el = createRecordElement("reducer", target, keyData);
+        el.textContent = "(" + g.key + ", " + g.count + ")";
+        if (wordData || keyData.color) {
+          el.style.background = (wordData ? wordData.color : keyData.color);
+        }
+        el.classList.add("reducer-output");
+        el.classList.remove("processed-blur");
+        combined.push({ el, ...keyData });
+      });
+      reducerOutputs[partition] = combined;
+      if (combined.length) {
+        logStageEvent("Reduce", "Reducer " + partition + " combined tuples", combined.map(cloneRecord));
+      }
+    });
   }
 
   function updateStepVisuals(step, progress) {
@@ -1680,11 +1754,21 @@
         inputBox.classList.add("active");
         inputFormatBox.classList.add("active");
         setSplitReaderState({ showAll: true, readerActive: false });
+        logStageOnce("inputfmt", () => {
+          mapperSequences.forEach((seq, idx) => {
+            logStageEvent("InputFormat", "Split " + idx + " assigned to " + (MAPPERS[idx] ? MAPPERS[idx].label : "Mapper " + idx), seq);
+          });
+        });
         break;
 
       case "readers":
         readerRowBox.classList.add("active");
         setSplitReaderState({ showAll: true, readerActive: true });
+        logStageOnce("readers", () => {
+          mapperSequences.forEach((seq, idx) => {
+            logStageEvent("RecordReader", "RR" + idx + " feeds " + (MAPPERS[idx] ? MAPPERS[idx].label : "Mapper " + idx), seq);
+          });
+        });
         break;
 
       case "parallel":
@@ -1720,7 +1804,7 @@
       case "shuffle":
         reducersBox.classList.add("active");
         reducers.forEach(r => r.classList.add("active"));
-        if (reducerRecords.length === 0 && progress > 0.15) {
+        if (!reducersHydrated && progress > 0.15) {
           const allFinal = mapperStates.flatMap(m => m.final);
           allFinal.forEach(record => {
             if (!record.el || !record.el.parentElement) return;
@@ -1733,7 +1817,11 @@
             }
             reducerRecords.push({ ...record, el });
           });
-          debugState.reducers = reducerRecords.map(cloneRecord);
+          logStageEvent("Shuffle", "Reducers received their partitions", reducerRecords.map(cloneRecord));
+          reducersHydrated = true;
+        }
+        if (progress > 0.6) {
+          runReducerCombine();
         }
         break;
 
@@ -1741,19 +1829,25 @@
         hdfsBox.classList.add("active");
         hdfsTargets.forEach(r => r.classList.add("active"));
         if (hdfsRecords.length === 0 && progress > 0.25) {
-          reducerRecords.forEach(record => {
+          if (reducerOutputs.flat().length === 0) {
+            runReducerCombine();
+          }
+          const reduceSource = reducerOutputs.flat().length ? reducerOutputs.flat() : reducerRecords;
+          reduceSource.forEach(record => {
             if (!record.el || !record.el.parentElement) return;
-            record.el.style.opacity = "0.08";
+            const keyData = { key: record.key, partition: record.partition, count: record.count, color: record.color };
             const target = getHdfsContainer(record.partition);
-            const el = createRecordElement("final", target, record);
+            const el = createRecordElement("final", target, keyData);
             el.textContent = "(" + record.key + ", " + record.count + ")";
             const wordData = WORD_KEYS.find(w => w.key === record.key);
             if (wordData) {
               el.style.background = wordData.color;
             }
-            hdfsRecords.push({ ...record, el });
+            hdfsRecords.push({ ...keyData, el });
+            record.el.classList.add("processed-blur");
+            record.el.style.opacity = "0.12";
           });
-          debugState.hdfs = hdfsRecords.map(cloneRecord);
+          logStageEvent("HDFS", "Final blocks written to HDFS", hdfsRecords.map(cloneRecord));
         }
         break;
     }
@@ -1774,7 +1868,9 @@
     const step = steps[currentStepIndex];
     if (!step) {
       cancelAnimationFrame(animationId);
-      debugBtn.disabled = false;
+      logStageOnce("complete", () => {
+        logStageEvent("Complete", "All simulation phases finished.");
+      });
       return;
     }
 
@@ -1818,81 +1914,6 @@
 
   resetBtn.addEventListener("click", () => {
     resetState();
-  });
-
-  function describeRecords(title, records) {
-    if (!records || records.length === 0) {
-      return title + ": (vuoto)";
-    }
-    const rows = records.map(r => "(" + r.key + ", " + (r.count || 1) + ") [P" + r.partition + "]");
-    return title + ":\n  " + rows.join("\n  ");
-  }
-
-  debugBtn.addEventListener("click", () => {
-    if (!debugBtn.disabled) {
-      // Remove previous debug ghosts and overlay
-      document.querySelectorAll(".kv-record.debug-ghost").forEach(el => el.remove());
-      document.querySelectorAll(".debug-overlay").forEach(el => el.remove());
-
-      // Remove blur from live placements
-      document.querySelectorAll(".kv-record.processed-blur").forEach(el => el.classList.remove("processed-blur"));
-
-      const renderInto = (records, container, type, ghost = false) => {
-        records.forEach(rec => {
-          const keyData = { key: rec.key, partition: rec.partition, count: rec.count, color: rec.color };
-          const el = createRecordElement(type, container, keyData);
-          el.textContent = "(" + rec.key + ", " + (rec.count || 1) + ")";
-          if (ghost) {
-            el.classList.add("debug-ghost");
-          }
-        });
-      };
-
-      // Re-render snapshots (ghosts) alongside live data
-      debugState.spillsRaw.forEach((mapperSpills, mi) => {
-        mapperSpills.forEach((spill, si) => renderInto(spill, spillSlots[mi][si], "spill", true));
-      });
-      debugState.spillsCombined.forEach((mapperSpills, mi) => {
-        mapperSpills.forEach((spill, si) => renderInto(spill, spillSlots[mi][si], "spill", true));
-      });
-      debugState.finals.forEach((finals, idx) => renderInto(finals, finalOutputs[idx], "final", true));
-      renderInto(debugState.reducers, reducer0, "reducer", true);
-      renderInto(debugState.reducers.filter(r => r.partition === 1), reducer1, "reducer", true);
-      renderInto(debugState.reducers.filter(r => r.partition === 2), reducer2, "reducer", true);
-      renderInto(debugState.hdfs, hdfs0, "final", true);
-      renderInto(debugState.hdfs.filter(r => r.partition === 1), hdfs1, "final", true);
-      renderInto(debugState.hdfs.filter(r => r.partition === 2), hdfs2, "final", true);
-
-      const overlay = document.createElement("div");
-      overlay.className = "debug-overlay";
-      overlay.innerHTML = `
-        <h4>Debug Snapshot</h4>
-        <pre>${describeRecords("Spill A0 (raw)", debugState.spillsRaw[0][0])}
-
-${describeRecords("Spill A0 (combined)", debugState.spillsCombined[0][0])}
-
-${describeRecords("Spill A1 (raw)", debugState.spillsRaw[0][1])}
-
-${describeRecords("Spill A1 (combined)", debugState.spillsCombined[0][1])}
-
-${describeRecords("Spill B0 (raw)", debugState.spillsRaw[1][0])}
-
-${describeRecords("Spill B0 (combined)", debugState.spillsCombined[1][0])}
-
-${describeRecords("Spill B1 (raw)", debugState.spillsRaw[1][1])}
-
-${describeRecords("Spill B1 (combined)", debugState.spillsCombined[1][1])}
-
-${describeRecords("Map_0.out", debugState.finals[0])}
-
-${describeRecords("Map_1.out", debugState.finals[1])}
-
-${describeRecords("Reducers", debugState.reducers)}
-
-${describeRecords("HDFS", debugState.hdfs)}</pre>
-      `;
-      document.body.appendChild(overlay);
-    }
   });
 
   speedSlider.addEventListener("input", (e) => {
