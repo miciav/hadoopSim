@@ -1548,6 +1548,8 @@
     const state = simulationState.mapperStates[mapperIndex];
     if (!state || state.buffer.length === 0 || state.spilled[spillIndex]) return;
 
+    console.log(`Spill triggered for mapper ${mapperIndex} at buffer usage ${state.buffer.length / CONFIG.BUFFER_CAPACITY}`);
+
     const targetSlot = spillSlots[mapperIndex][spillIndex];
     const targetHighlight = spillHighlights[mapperIndex][spillIndex];
     targetHighlight.style.opacity = 1;
@@ -1637,6 +1639,7 @@
     const state = simulationState.mapperStates[mapperIndex];
     if (!state || state.final.length > 0) return;
 
+    console.log(`Merging spills for mapper ${mapperIndex}`);
     flushRemainingBuffer(mapperIndex);
 
     const mergeGroups = new Map();
@@ -1664,6 +1667,7 @@
 
     // After merge, clear spill visuals for this mapper to avoid leftovers
     spillSlots[mapperIndex].forEach(slot => {
+      console.log(`Clearing spill slot: ${slot.id}`);
       slot.querySelectorAll(".kv-record").forEach(el => el.remove());
     });
     spillHighlights[mapperIndex].forEach(h => h.style.opacity = 0);
