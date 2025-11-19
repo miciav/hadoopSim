@@ -1595,15 +1595,16 @@
       simulationState.metrics.recordsRead++;
       simulationState.metrics.totalRecords++;
       logStageEvent("Mapper", CONFIG.MAPPERS[mapperIndex].label + " processed tuple", [keyData]);
-    }
 
-    updateBufferIndicators(mapperIndex);
+      updateBufferIndicators(mapperIndex);
 
-    const bufferUsageRatio = state.buffer.length / CONFIG.BUFFER_CAPACITY;
-    if (bufferUsageRatio >= CONFIG.BUFFER_TRIGGER_RATIO) {
-      const spillIndex = state.spilled.indexOf(false); // Find the next available spill slot
-      if (spillIndex !== -1) {
-        spillBuffer(mapperIndex, spillIndex);
+      const bufferUsageRatio = state.buffer.length / CONFIG.BUFFER_CAPACITY;
+      if (bufferUsageRatio >= CONFIG.BUFFER_TRIGGER_RATIO) {
+        const spillIndex = state.spilled.indexOf(false); // Find the next available spill slot
+        if (spillIndex !== -1) {
+          spillBuffer(mapperIndex, spillIndex);
+          updateBufferIndicators(mapperIndex); // Update indicators again after spill
+        }
       }
     }
   }
@@ -1644,9 +1645,6 @@
       const count = typeof rec.count === "number" ? rec.count : 1;
       if (!mergeGroups.has(key)) mergeGroups.set(key, { key: rec.key, partition: rec.partition, count: 0, color: rec.color });
       mergeGroups.get(key).count += count;
-      if (rec.el && rec.el.parentElement) {
-        rec.el.remove();
-      }
     });
 
     const groupedArray = Array.from(mergeGroups.values());
@@ -1665,9 +1663,11 @@
     });
 
     // After merge, clear spill visuals for this mapper to avoid leftovers
-    state.spills.forEach((_, spillIdx) => {
-      spillHighlights[mapperIndex][spillIdx].style.opacity = 0;
+    spillSlots[mapperIndex].forEach(slot => {
+      slot.querySelectorAll(".kv-record").forEach(el => el.remove());
     });
+    spillHighlights[mapperIndex].forEach(h => h.style.opacity = 0);
+    
     state.spills = [[], []];
 
     logStageEvent("Merge", CONFIG.MAPPERS[mapperIndex].label + " completed map output", state.final.map(cloneRecord));
