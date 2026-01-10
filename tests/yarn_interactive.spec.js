@@ -1,34 +1,62 @@
 import { test, expect } from '@playwright/test';
-import { getNumberFromText, getPercent } from './helpers.js';
+import { getClusterSnapshot } from './helpers.js';
 
-test('YARN allocates resources and keeps usage bounded', async ({ page }) => {
+const seedRandom = (seedValue) => () => {
+  let seed = seedValue;
+  Math.random = () => {
+    seed = (seed * 1664525 + 1013904223) % 4294967296;
+    return seed / 4294967296;
+  };
+};
+
+test('YARN resource usage stays within node capacity', async ({ page }) => {
+  await page.addInitScript(seedRandom(99));
+  await page.goto('/yarn_interactive.html');
+
+  await page.evaluate(() => {
+    submitJob();
+    submitJob();
+    submitBigJob();
+    submitJob();
+  });
+
+  const snapshot = await getClusterSnapshot(page);
+  snapshot.nodes.forEach((node) => {
+    expect(node.cpuUsed).toBeGreaterThanOrEqual(0);
+    expect(node.cpuUsed).toBeLessThanOrEqual(node.cpuTotal);
+    expect(node.memoryUsed).toBeGreaterThanOrEqual(0);
+    expect(node.memoryUsed).toBeLessThanOrEqual(node.memoryTotal);
+  });
+});
+
+test('YARN queue drains when resources free up', async ({ page }) => {
   await page.addInitScript(() => {
-    let seed = 1337;
-    Math.random = () => {
-      seed = (seed * 1664525 + 1013904223) % 4294967296;
-      return seed / 4294967296;
-    };
+    Math.random = () => 0.1;
+    const nativeSetTimeout = window.setTimeout;
+    window.setTimeout = (fn, ms, ...args) => nativeSetTimeout(fn, Math.min(ms, 20), ...args);
   });
 
   await page.goto('/yarn_interactive.html');
 
-  await expect(page.locator('#totalNodes')).toHaveText('6');
-  await expect(page.locator('#queuedJobs')).toHaveText('0');
+  await page.evaluate(() => {
+    cluster.nodes.forEach((node) => {
+      node.cpuTotal = 2;
+      node.memoryTotal = 4;
+    });
+    renderCluster();
 
-  await page.evaluate(() => submitJob());
-  await page.evaluate(() => submitJob());
+    for (let i = 0; i < 15; i++) {
+      submitJob();
+    }
+  });
 
-  const activeApps = await getNumberFromText(page, '#activeApps');
-  const cpuUsage = await getPercent(page, '#cpuUsage');
-  const memUsage = await getPercent(page, '#memoryUsage');
+  const initialQueue = await page.evaluate(() => cluster.jobQueue.length);
+  expect(initialQueue).toBeGreaterThan(0);
 
-  expect(activeApps).toBeGreaterThan(0);
-  expect(cpuUsage).toBeGreaterThanOrEqual(0);
-  expect(cpuUsage).toBeLessThanOrEqual(100);
-  expect(memUsage).toBeGreaterThanOrEqual(0);
-  expect(memUsage).toBeLessThanOrEqual(100);
+  await page.waitForTimeout(300);
 
-  await page.evaluate(() => resetCluster());
+  const finalQueue = await page.evaluate(() => cluster.jobQueue.length);
+  expect(finalQueue).toBe(0);
+
   await expect(page.locator('#activeApps')).toHaveText('0');
-  await expect(page.locator('#queuedJobs')).toHaveText('0');
 });

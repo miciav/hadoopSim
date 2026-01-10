@@ -23,3 +23,10 @@ export async function getPercent(page, selector) {
   }
   return Number(match[0]);
 }
+
+export async function getClusterSnapshot(page, globalName = 'cluster') {
+  return page.evaluate((name) => {
+    const value = globalThis[name];
+    return JSON.parse(JSON.stringify(value));
+  }, globalName);
+}

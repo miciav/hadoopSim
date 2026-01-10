@@ -1,40 +1,96 @@
 import { test, expect } from '@playwright/test';
-import { getNumberFromText, getPercent } from './helpers.js';
+import { getClusterSnapshot } from './helpers.js';
 
-test('HDFS basic flows and invariants', async ({ page }) => {
-  await page.addInitScript(() => {
-    let seed = 42;
-    Math.random = () => {
-      seed = (seed * 1664525 + 1013904223) % 4294967296;
-      return seed / 4294967296;
-    };
-  });
+const seedRandom = (seedValue) => () => {
+  let seed = seedValue;
+  Math.random = () => {
+    seed = (seed * 1664525 + 1013904223) % 4294967296;
+    return seed / 4294967296;
+  };
+};
 
+test('HDFS replication factor preserved when space is available', async ({ page }) => {
+  await page.addInitScript(seedRandom(42));
   await page.goto('/hdfs_interactive.html');
-
-  await expect(page.locator('#totalNodes')).toHaveText('4');
-  await expect(page.locator('#activeNodes')).toHaveText('4');
-  await expect(page.locator('#totalFiles')).toHaveText('0');
-  await expect(page.locator('#totalBlocks')).toHaveText('0');
-  await expect(page.locator('#replicationFactor')).toHaveText('3');
 
   await page.evaluate(() => uploadFile());
 
-  const totalFiles = await getNumberFromText(page, '#totalFiles');
-  const totalBlocks = await getNumberFromText(page, '#totalBlocks');
-  const storageUsage = await getPercent(page, '#storageUsage');
+  const snapshot = await getClusterSnapshot(page);
+  const rf = await page.evaluate(() => REPLICATION_FACTOR);
 
-  expect(totalFiles).toBeGreaterThan(0);
-  expect(totalBlocks).toBeGreaterThan(0);
-  expect(storageUsage).toBeGreaterThan(0);
+  const counts = {};
+  snapshot.datanodes.forEach((node) => {
+    node.blocks.forEach((block) => {
+      counts[block.id] = (counts[block.id] || 0) + 1;
+    });
+  });
 
-  const blockCount = await page.locator('.block').count();
-  expect(blockCount).toBe(totalBlocks);
+  const file = snapshot.files[0];
+  expect(file).toBeTruthy();
+  file.blocks.forEach((block) => {
+    expect(counts[block.id]).toBe(rf);
+  });
+
+  snapshot.datanodes.forEach((node) => {
+    const ids = node.blocks.map((block) => block.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+test('HDFS avoids failed nodes and keeps storage within bounds', async ({ page }) => {
+  await page.addInitScript(seedRandom(123));
+  await page.goto('/hdfs_interactive.html');
 
   await page.evaluate(() => simulateNodeFailure());
-  await expect(page.locator('#activeNodes')).toHaveText('3');
+  await page.evaluate(() => uploadFile());
 
-  await page.evaluate(() => resetCluster());
-  await expect(page.locator('#totalFiles')).toHaveText('0');
-  await expect(page.locator('#totalBlocks')).toHaveText('0');
+  const snapshot = await getClusterSnapshot(page);
+  const failedNode = snapshot.datanodes.find((node) => node.failed);
+  expect(failedNode).toBeTruthy();
+
+  const latestFile = snapshot.files[snapshot.files.length - 1];
+  expect(latestFile).toBeTruthy();
+
+  const failedBlockIds = new Set(failedNode.blocks.map((block) => block.id));
+  const overlaps = latestFile.blocks.some((block) => failedBlockIds.has(block.id));
+  expect(overlaps).toBe(false);
+
+  snapshot.datanodes.forEach((node) => {
+    expect(node.storageUsed).toBeGreaterThanOrEqual(0);
+    expect(node.storageUsed).toBeLessThanOrEqual(node.storageTotal);
+  });
+});
+
+test('HDFS rolls back partial uploads when space runs out', async ({ page }) => {
+  await page.addInitScript(seedRandom(7));
+  await page.goto('/hdfs_interactive.html');
+
+  await page.evaluate(() => {
+    resetCluster();
+    cluster.datanodes.forEach((node) => {
+      node.storageTotal = 200;
+      node.storageUsed = 0;
+      node.blocks = [];
+    });
+    cluster.files = [];
+    cluster.blockCounter = 1;
+    cluster.fileCounter = 1;
+    renderCluster();
+  });
+
+  await page.evaluate(() => uploadLargeFile());
+
+  const snapshot = await getClusterSnapshot(page);
+  const expectedFileName = 'largefile1.dat';
+  const file = snapshot.files.find((entry) => entry.name === expectedFileName);
+  expect(file).toBeUndefined();
+
+  const leakedBlocks = snapshot.datanodes.flatMap((node) =>
+    node.blocks.filter((block) => block.fileName === expectedFileName)
+  );
+  expect(leakedBlocks.length).toBe(0);
+
+  snapshot.datanodes.forEach((node) => {
+    expect(node.storageUsed).toBe(0);
+  });
 });
