@@ -7,7 +7,8 @@
   - `hdfs_interactive.html`
   - `yarn_interactive.html`
   - `hadoop-map-side-pipeline-dual_nodes.html`
-- Page logic is in `assets/js/` and loaded via `<script src="./assets/js/...">`.
+- Page logic is in `assets/js/`; shared helpers live under `assets/js/core/`.
+- Static pages load ES modules via `<script type="module" src="./assets/js/...">`.
 - The React/Babel simulator keeps JSX in `assets/js/hadoop-ecosystem-simulator.js` and compiles at runtime with the Babel CDN.
 - If you split functionality further, keep new modules under `assets/js/` and import them with ES modules to keep pages static-host friendly.
 
@@ -24,10 +25,10 @@
 - Add short comments only for complex allocation logic or tricky loops.
 
 ## Testing Guidelines
-- No automated suite yet; validate manually in the browser after every change.
+- Run Playwright smoke tests with `npm test` (installs via `npm install`, `npx playwright install --with-deps`).
+- Validate manually in the browser after every change.
 - Check: cluster bootstrap, file uploads (small/large), node failure + recovery, job submission, shuffle/reduce transitions, progress bars, and Gantt rendering.
 - Keep DevTools console open for React warnings.
-- For heavy logic, you may extract helpers and run ad-hoc tests with `node --test helper.spec.js`, but remove throwaway files before committing.
 
 ## Commit & Pull Request Guidelines
 - Use imperative commit subjects (e.g., “Hide map phase once Gantt renders”).

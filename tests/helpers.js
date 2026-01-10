@@ -25,8 +25,22 @@ export async function getPercent(page, selector) {
 }
 
 export async function getClusterSnapshot(page, globalName = 'cluster') {
-  return page.evaluate((name) => {
-    const value = globalThis[name];
+  const snapshot = await page.evaluate((name) => {
+    let value;
+    if (typeof globalThis[name] !== 'undefined') {
+      value = globalThis[name];
+    }
+    if (!value && name === 'cluster' && typeof cluster !== 'undefined') {
+      value = cluster;
+    }
+    if (!value) {
+      return null;
+    }
     return JSON.parse(JSON.stringify(value));
   }, globalName);
+
+  if (!snapshot) {
+    throw new Error(`Global \"${globalName}\" is not available in page context`);
+  }
+  return snapshot;
 }

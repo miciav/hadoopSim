@@ -1,3 +1,14 @@
+import { createTimerManager } from './core/timers.js';
+import { createNotifier } from './core/notifications.js';
+import { createColorCycle } from './core/random.js';
+import {
+  allocateBlock as coreAllocateBlock,
+  rollbackFileAllocation as coreRollbackFileAllocation,
+  reReplicateBlocksDetailed
+} from './core/hdfs.js';
+import { allocateContainer as coreAllocateContainer, releaseContainerByName } from './core/yarn.js';
+import { runMapReduceJob, handleMapReduceNodeFailure } from './core/mapreduce.js';
+
 // Configuration
         const BLOCK_SIZE = 256; // MB
         const REPLICATION_FACTOR = 2;
@@ -5,7 +16,7 @@
         
         // Colors for blocks
         const COLORS = ['#3182ce', '#38a169', '#d69e2e', '#e53e3e', '#805ad5', '#dd6b20'];
-        let colorIndex = 0;
+        let nextColor = createColorCycle(COLORS);
         
         // Cluster state
         let cluster = {
@@ -20,34 +31,23 @@
             jobQueue: []
         };
 
-        const clusterTimeouts = new Set();
-        const clusterIntervals = new Set();
+        const timers = createTimerManager();
+        const notifier = createNotifier({ root: document.body, ttlMs: 4000 });
 
         function scheduleClusterTimeout(callback, delay) {
-            const timeoutId = setTimeout(() => {
-                clusterTimeouts.delete(timeoutId);
-                callback();
-            }, delay);
-            clusterTimeouts.add(timeoutId);
-            return timeoutId;
+            return timers.timeout(callback, delay);
         }
 
         function scheduleClusterInterval(callback, delay) {
-            const intervalId = setInterval(callback, delay);
-            clusterIntervals.add(intervalId);
-            return intervalId;
+            return timers.interval(callback, delay);
         }
 
         function clearClusterInterval(intervalId) {
-            clearInterval(intervalId);
-            clusterIntervals.delete(intervalId);
+            timers.clearInterval(intervalId);
         }
 
         function clearClusterTimers() {
-            clusterTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
-            clusterTimeouts.clear();
-            clusterIntervals.forEach(intervalId => clearInterval(intervalId));
-            clusterIntervals.clear();
+            timers.clearAll();
         }
         
         // Initialize cluster
@@ -79,9 +79,7 @@
         
         // Get next color
         function getNextColor() {
-            const color = COLORS[colorIndex % COLORS.length];
-            colorIndex++;
-            return color;
+            return nextColor();
         }
         
         // Render entire cluster
@@ -581,60 +579,19 @@
         }
         
         // Allocate block with replication
-        
         function allocateBlock(block, file) {
-            const activeNodes = cluster.nodes.filter(n => !n.failed);
-
-            if (activeNodes.length < REPLICATION_FACTOR) {
-                showNotification(`⚠️ Warning: insufficient nodes for ${REPLICATION_FACTOR}x replication!`, 'warning');
-            }
-
-            // block.size è in MB → convertiamo in GB per lo storage dei nodi
-            const blockSizeGB = block.size / 1024;
-
-            const sortedNodes = [...activeNodes].sort((a, b) => 
-                (b.storageTotal - b.storageUsed) - (a.storageTotal - a.storageUsed)
-            );
-
-            let replicasCreated = 0;
-
-            for (let i = 0; i < sortedNodes.length && replicasCreated < REPLICATION_FACTOR; i++) {
-                const node = sortedNodes[i];
-                const availableSpaceGB = node.storageTotal - node.storageUsed;
-
-                if (availableSpaceGB >= blockSizeGB) {
-                    const isReplica = replicasCreated > 0;
-                    node.storageUsed += blockSizeGB;
-                    node.blocks.push({
-                        ...block,
-                        isReplica: isReplica
-                    });
-                    replicasCreated++;
-
-                    if (!isReplica) {
-                        // salviamo il blocco logico nel file (dimensione resta in MB, solo per visualizzazione)
-                        file.blocks.push(block);
-                    }
-                }
-            }
-
-            return replicasCreated > 0;
+            return coreAllocateBlock({
+                nodes: cluster.nodes,
+                block,
+                file,
+                replicationFactor: REPLICATION_FACTOR,
+                storageUnitMb: 1024,
+                notifier
+            });
         }
 
         function rollbackFileAllocation(fileName) {
-            cluster.nodes.forEach(node => {
-                let freedStorageMb = 0;
-                node.blocks = node.blocks.filter(block => {
-                    if (block.fileName === fileName) {
-                        freedStorageMb += block.size;
-                        return false;
-                    }
-                    return true;
-                });
-                if (freedStorageMb > 0) {
-                    node.storageUsed = Math.max(0, node.storageUsed - freedStorageMb / 1024);
-                }
-            });
+            coreRollbackFileAllocation({ nodes: cluster.nodes, fileName, storageUnitMb: 1024 });
         }
 
         
@@ -725,27 +682,12 @@
                 job.completedContainers++;
                 
                 // Free container resources
-                cluster.nodes.forEach(node => {
-                    const containerIndex = node.containers.findIndex(c => c.name === containerName);
-                    if (containerIndex !== -1) {
-                        node.cpuUsed -= cpu;
-                        node.memoryUsed -= memory;
-                        node.containers.splice(containerIndex, 1);
-                    }
-                });
+                releaseContainerByName(cluster.nodes, containerName);
                 
                 // Check if job is complete
                 if (job.completedContainers === job.numContainers) {
                     // Free ApplicationMaster
-                    cluster.nodes.forEach(node => {
-                        const amIndex = node.containers.findIndex(c => c.isApplicationMaster && c.jobName === job.name);
-                        if (amIndex !== -1) {
-                            const am = node.containers[amIndex];
-                            node.cpuUsed -= am.cpu;
-                            node.memoryUsed -= am.memory;
-                            node.containers.splice(amIndex, 1);
-                        }
-                    });
+                    releaseContainerByName(cluster.nodes, `AM-${job.name}`);
                     
                     showNotification(`✅ ${job.name} completed!`, 'success');
                 }
@@ -756,589 +698,140 @@
         
         // Allocate ApplicationMaster
         function allocateApplicationMaster(jobName, job) {
-            const cpu = 1;
-            const memory = 2;
-            const amName = `AM-${jobName}`;
-            
-            const activeNodes = cluster.nodes.filter(n => !n.failed);
-            
-            // Try to allocate on a node with available resources
-            for (let node of activeNodes) {
-                const cpuAvailable = node.cpuTotal - node.cpuUsed;
-                const memAvailable = node.memoryTotal - node.memoryUsed;
-                
-                if (cpuAvailable >= cpu && memAvailable >= memory) {
-                    node.cpuUsed += cpu;
-                    node.memoryUsed += memory;
-                    node.containers.push({
-                        name: amName,
-                        cpu: cpu,
-                        memory: memory,
-                        isApplicationMaster: true,
-                        jobName: jobName
-                    });
-                    
-                    job.appMasterNode = node.id;
-                    return true;
-                }
+            const container = {
+                name: `AM-${jobName}`,
+                cpu: 1,
+                memory: 2,
+                isApplicationMaster: true,
+                jobName: jobName
+            };
+
+            const node = coreAllocateContainer({
+                nodes: cluster.nodes.filter(n => !n.failed),
+                container
+            });
+
+            if (node) {
+                job.appMasterNode = node.id;
+                return true;
             }
-            
+
             return false;
         }
         
         // Allocate YARN container
         function allocateYarnContainer(name, cpu, memory, isMapReduce, blockIds) {
+            const container = {
+                name: name,
+                cpu: cpu,
+                memory: memory,
+                isMapReduce: isMapReduce,
+                blockIds: blockIds
+            };
+
             const activeNodes = cluster.nodes.filter(n => !n.failed);
-            
-            // If MapReduce and blockIds provided, try data locality first
+
             if (isMapReduce && blockIds && blockIds.length > 0) {
-                // Try to find a node that has one of the blocks
-                for (let blockId of blockIds) {
-                    for (let node of activeNodes) {
-                        if (node.blocks.some(b => b.id === blockId)) {
-                            const cpuAvailable = node.cpuTotal - node.cpuUsed;
-                            const memAvailable = node.memoryTotal - node.memoryUsed;
-                            
-                            if (cpuAvailable >= cpu && memAvailable >= memory) {
-                                node.cpuUsed += cpu;
-                                node.memoryUsed += memory;
-                                node.containers.push({
-                                    name: name,
-                                    cpu: cpu,
-                                    memory: memory,
-                                    isMapReduce: isMapReduce,
-                                    blockIds: blockIds
-                                });
-                                
-                                // Auto-complete after timeout
-                                scheduleClusterTimeout(() => completeContainer(node.id, name, cpu, memory), Math.random() * 5000 + 8000);
-                                return true;
-                            }
+                const preferredNodeIds = [];
+                blockIds.forEach(blockId => {
+                    activeNodes.forEach(node => {
+                        if (node.blocks.some(b => b.id === blockId) && !preferredNodeIds.includes(node.id)) {
+                            preferredNodeIds.push(node.id);
                         }
-                    }
-                }
-            }
-            
-            // Fallback: random allocation
-            const shuffledNodes = [...activeNodes].sort(() => Math.random() - 0.5);
-            
-            for (let node of shuffledNodes) {
-                const cpuAvailable = node.cpuTotal - node.cpuUsed;
-                const memAvailable = node.memoryTotal - node.memoryUsed;
-                
-                if (cpuAvailable >= cpu && memAvailable >= memory) {
-                    node.cpuUsed += cpu;
-                    node.memoryUsed += memory;
-                    node.containers.push({
-                        name: name,
-                        cpu: cpu,
-                        memory: memory,
-                        isMapReduce: isMapReduce,
-                        blockIds: blockIds
                     });
-                    
-                    // Auto-complete after timeout
-                    scheduleClusterTimeout(() => completeContainer(node.id, name, cpu, memory), Math.random() * 5000 + 8000);
-                    return true;
+                });
+
+                if (preferredNodeIds.length > 0) {
+                    const node = coreAllocateContainer({
+                        nodes: activeNodes,
+                        container,
+                        preferredNodeIds
+                    });
+
+                    if (node) {
+                        scheduleClusterTimeout(() => completeContainer(node.id, name, cpu, memory), Math.random() * 5000 + 8000);
+                        return true;
+                    }
                 }
             }
-            
+
+            const node = coreAllocateContainer({ nodes: activeNodes, container });
+            if (node) {
+                scheduleClusterTimeout(() => completeContainer(node.id, name, cpu, memory), Math.random() * 5000 + 8000);
+                return true;
+            }
+
             return false;
-        }
-
-        function releaseMapReduceResources(job) {
-            const mapperNames = new Set(job.mappers.map(mapper => mapper.name));
-
-            cluster.nodes.forEach(node => {
-                let freedCpu = 0;
-                let freedMemory = 0;
-                node.containers = node.containers.filter(container => {
-                    const isMapper = mapperNames.has(container.name);
-                    const isAppMaster = container.isApplicationMaster && container.jobName === job.name;
-                    if (isMapper || isAppMaster) {
-                        freedCpu += container.cpu || 0;
-                        freedMemory += container.memory || 0;
-                        return false;
-                    }
-                    return true;
-                });
-                if (freedCpu || freedMemory) {
-                    node.cpuUsed = Math.max(0, node.cpuUsed - freedCpu);
-                    node.memoryUsed = Math.max(0, node.memoryUsed - freedMemory);
-                }
-            });
         }
         
         // Complete a container
         function completeContainer(nodeId, containerName, cpu, memory) {
-            const node = cluster.nodes.find(n => n.id === nodeId);
-            if (!node) return;
-            
-            const containerIndex = node.containers.findIndex(c => c.name === containerName);
-            if (containerIndex !== -1) {
-                node.cpuUsed -= cpu;
-                node.memoryUsed -= memory;
-                node.containers.splice(containerIndex, 1);
-                renderCluster();
-            }
+            releaseContainerByName(cluster.nodes, containerName);
+            renderCluster();
         }
         
         // Run MapReduce job
         function runMapReduce() {
-            if (cluster.files.length === 0) {
-                showNotification('⚠️ Upload an HDFS file first!', 'warning');
-                return;
-            }
-            
-            // Pick a random file
-            const file = cluster.files[Math.floor(Math.random() * cluster.files.length)];
-            const jobName = `MapReduce-${cluster.mapReduceCounter++}`;
-            
-            // Build a map of which nodes have which blocks
-            const blockLocations = {}; // blockId -> [nodeIds that have it]
-            cluster.nodes.forEach(node => {
-                if (!node.failed) {
-                    node.blocks.forEach(block => {
-                        if (block.fileName === file.name) {
-                            if (!blockLocations[block.id]) {
-                                blockLocations[block.id] = [];
-                            }
-                            blockLocations[block.id].push(node.id);
-                        }
+            const result = runMapReduceJob({
+                cluster,
+                notifier,
+                timers,
+                allocateApplicationMaster,
+                allocateContainerOnNodes: ({ nodes, container, preferredNodeIds }) => {
+                    return coreAllocateContainer({
+                        nodes: nodes.filter(node => !node.failed),
+                        container,
+                        preferredNodeIds
                     });
-                }
+                },
+                onUpdate: renderCluster
             });
-            
-            const job = {
-                name: jobName,
-                fileName: file.name,
-                numMappers: file.blocks.length,
-                status: 'running',
-                progress: 0,
-                mappers: [],
-                appMasterNode: null
-            };
-            
-            cluster.mapReduceJobs.push(job);
-            
-            // First, allocate ApplicationMaster
-            const amAllocated = allocateApplicationMaster(jobName, job);
-            
-            if (!amAllocated) {
-                cluster.mapReduceJobs.pop();
-                cluster.jobQueue.push({ type: 'mapreduce' });
-                showNotification(`⏳ ${jobName} queued: cannot allocate ApplicationMaster`, 'warning');
-                return;
-            }
-            
-            // Track how many mappers are allocated per node for load balancing
-            const nodeMapperCount = {};
-            cluster.nodes.forEach(node => {
-                nodeMapperCount[node.id] = node.containers.filter(c => c.isMapReduce).length;
-            });
-            
-            // Allocate ONE mapper per logical block, choosing the best replica
-            let allocatedMappers = 0;
-            let dataLocalityCount = 0;
-            
-            file.blocks.forEach((block, index) => {
-                const cpu = 2;
-                const memory = 4;
-                const mapperName = `${jobName}-M${index+1}`;
-                
-                // Get all nodes that have this block
-                const nodesWithBlock = blockLocations[block.id] || [];
-                
-                if (nodesWithBlock.length === 0) {
-                    // Block is completely lost: mark job as failed and free its ApplicationMaster
-                    job.status = 'failed';
-                    showNotification(`❌ ${jobName} cannot start: block ${block.id} not found on any node!`, 'error');
 
-                    releaseMapReduceResources(job);
-                    renderCluster();
-                    return;
-                }
-                
-                // Sort candidate nodes by:
-                // 1. Number of mappers already allocated (ascending - prefer nodes with fewer mappers)
-                // 2. Available resources
-                const candidateNodes = nodesWithBlock
-                    .map(nodeId => cluster.nodes.find(n => n.id === nodeId))
-                    .filter(node => node && !node.failed)
-                    .sort((a, b) => {
-                        // First priority: balance mapper count
-                        const aMappers = nodeMapperCount[a.id];
-                        const bMappers = nodeMapperCount[b.id];
-                        if (aMappers !== bMappers) return aMappers - bMappers;
-                        
-                        // Second priority: available CPU
-                        const aCpuAvail = a.cpuTotal - a.cpuUsed;
-                        const bCpuAvail = b.cpuTotal - b.cpuUsed;
-                        return bCpuAvail - aCpuAvail;
-                    });
-                
-                // Try to allocate on the best candidate node (with data locality)
-                let allocated = false;
-                for (let targetNode of candidateNodes) {
-                    const cpuAvailable = targetNode.cpuTotal - targetNode.cpuUsed;
-                    const memAvailable = targetNode.memoryTotal - targetNode.memoryUsed;
-                    
-                    if (cpuAvailable >= cpu && memAvailable >= memory) {
-                        targetNode.cpuUsed += cpu;
-                        targetNode.memoryUsed += memory;
-                        targetNode.containers.push({
-                            name: mapperName,
-                            cpu: cpu,
-                            memory: memory,
-                            isMapReduce: true,
-                            blockIds: [block.id]
-                        });
-                        
-                        nodeMapperCount[targetNode.id]++;
-                        allocatedMappers++;
-                        dataLocalityCount++;
-                        
-                        job.mappers.push({
-                            name: mapperName,
-                            blockId: block.id,
-                            nodeId: targetNode.id,
-                            progress: 0
-                        });
-                        
-                        allocated = true;
-                        break;
-                    }
-                }
-                
-                // Fallback: allocate on any available node (without data locality)
-                if (!allocated) {
-                    const activeNodes = cluster.nodes
-                        .filter(n => !n.failed)
-                        .sort((a, b) => {
-                            const aMappers = nodeMapperCount[a.id];
-                            const bMappers = nodeMapperCount[b.id];
-                            return aMappers - bMappers;
-                        });
-                    
-                    for (let node of activeNodes) {
-                        const cpuAvailable = node.cpuTotal - node.cpuUsed;
-                        const memAvailable = node.memoryTotal - node.memoryUsed;
-                        
-                        if (cpuAvailable >= cpu && memAvailable >= memory) {
-                            node.cpuUsed += cpu;
-                            node.memoryUsed += memory;
-                            node.containers.push({
-                                name: mapperName,
-                                cpu: cpu,
-                                memory: memory,
-                                isMapReduce: true,
-                                blockIds: [block.id]
-                            });
-                            
-                            nodeMapperCount[node.id]++;
-                            allocatedMappers++;
-                            
-                            job.mappers.push({
-                                name: mapperName,
-                                blockId: block.id,
-                                nodeId: node.id, // No data locality, but we track the node
-                                progress: 0
-                            });
-                            
-                            allocated = true;
-                            break;
-                        }
-                    }
-                }
-            });
-            
-            if (allocatedMappers === file.blocks.length) {
-                const localityPercent = Math.round((dataLocalityCount / allocatedMappers) * 100);
-                showNotification(`✅ ${jobName} started`, 'success');
-                
-                // Simulate individual mapper progress (all in parallel)
-                job.mappers.forEach(mapper => {
-                    const mapperInterval = scheduleClusterInterval(() => {
-                        // Skip failed mappers (progress = -1)
-                        if (mapper.progress === -1) {
-                            clearClusterInterval(mapperInterval);
-                            return;
-                        }
-                        
-                        // Skip if job has failed
-                        if (job.status === 'failed') {
-                            clearClusterInterval(mapperInterval);
-                            return;
-                        }
-                        
-                        mapper.progress += 6.25; // 16 steps to completion (doubled duration)
-                        
-                        if (mapper.progress >= 100) {
-                            mapper.progress = 100;
-                            clearClusterInterval(mapperInterval);
-                        }
-                        
-                        // Calculate progress only from active mappers (not failed ones)
-                        const activeMappers = job.mappers.filter(m => m.progress >= 0);
-                        const totalProgress = activeMappers.reduce((sum, m) => sum + m.progress, 0);
-                        job.progress = activeMappers.length > 0 ? totalProgress / activeMappers.length : 0;
-                        
-                        // Job completes when all active mappers are done
-                        const allActiveDone = activeMappers.every(m => m.progress >= 100);
-                        if (allActiveDone && activeMappers.length > 0) {
-                            job.status = 'completed';
-                            
-                            // Free resources (only active mappers)
-                            cluster.nodes.forEach(node => {
-                                activeMappers.forEach(mapper => {
-                                    const containerIndex = node.containers.findIndex(c => c.name === mapper.name);
-                                    if (containerIndex !== -1) {
-                                        const container = node.containers[containerIndex];
-                                        node.cpuUsed -= container.cpu;
-                                        node.memoryUsed -= container.memory;
-                                        node.containers.splice(containerIndex, 1);
-                                    }
-                                });
-                                
-                                // Free ApplicationMaster
-                                const amIndex = node.containers.findIndex(c => c.isApplicationMaster && c.jobName === jobName);
-                                if (amIndex !== -1) {
-                                    const am = node.containers[amIndex];
-                                    node.cpuUsed -= am.cpu;
-                                    node.memoryUsed -= am.memory;
-                                    node.containers.splice(amIndex, 1);
-                                }
-                            });
-                            
-                            const failedMappers = job.mappers.filter(m => m.progress === -1).length;
-                            if (failedMappers > 0) {
-                                showNotification(`✅ ${jobName} completed with ${failedMappers} failed mapper(s)!`, 'success');
-                            } else {
-                                showNotification(`✅ ${jobName} completed!`, 'success');
-                            }
-                        }
-                        
-                        renderCluster();
-                    }, 600 + Math.random() * 400);
-                });
-            } else {
-                showNotification(`⚠️ Only ${allocatedMappers}/${file.blocks.length} mappers allocated`, 'warning');
+            if (result) {
+                renderCluster();
             }
-            
-            renderCluster();
         }
         
         // Simulate node failure
-        
-function simulateFailure() {
-    const activeNodes = cluster.nodes.filter(n => !n.failed);
-    if (activeNodes.length === 0) {
-        showNotification('❌ All nodes are already failed!', 'error');
-        return;
-    }
-
-    // Pick a random active node to fail
-    const randomNode = activeNodes[Math.floor(Math.random() * activeNodes.length)];
-    randomNode.failed = true;
-
-    // Remaining nodes that can host rescheduled tasks
-    const remainingNodes = cluster.nodes.filter(n => !n.failed && n.id !== randomNode.id);
-
-    let affectedJobs = [];
-    cluster.mapReduceJobs.forEach(job => {
-        if (job.status === 'running') {
-            const mappersOnFailedNode = job.mappers.filter(m => m.nodeId === randomNode.id);
-
-            if (mappersOnFailedNode.length > 0) {
-                let rescheduled = 0;
-                let notRescheduled = 0;
-
-                mappersOnFailedNode.forEach(mapper => {
-                    // Remove mapper container from the failed node (if present)
-                    const containerIndex = randomNode.containers.findIndex(c => c.name === mapper.name);
-                    let cpu = 2;
-                    let memory = 4;
-
-                    if (containerIndex !== -1) {
-                        const container = randomNode.containers[containerIndex];
-                        cpu = container.cpu;
-                        memory = container.memory;
-                        randomNode.cpuUsed -= container.cpu;
-                        randomNode.memoryUsed -= container.memory;
-                        randomNode.containers.splice(containerIndex, 1);
-                    }
-
-                    // Try to reschedule mapper on another node that has the same block
-                    const nodesWithBlock = remainingNodes.filter(node =>
-                        node.blocks.some(b => b.id === mapper.blockId)
-                    );
-
-                    // Prefer nodes with the block, otherwise any remaining node
-                    const candidateNodes = nodesWithBlock.length > 0 ? nodesWithBlock : remainingNodes;
-
-                    let allocated = false;
-                    for (let node of candidateNodes) {
-                        const cpuAvailable = node.cpuTotal - node.cpuUsed;
-                        const memAvailable = node.memoryTotal - node.memoryUsed;
-
-                        if (cpuAvailable >= cpu && memAvailable >= memory) {
-                            node.cpuUsed += cpu;
-                            node.memoryUsed += memory;
-                            node.containers.push({
-                                name: mapper.name,
-                                cpu: cpu,
-                                memory: memory,
-                                isMapReduce: true,
-                                blockIds: [mapper.blockId]
-                            });
-
-                            // Restart mapper on the new node
-                            mapper.nodeId = node.id;
-                            mapper.progress = 0;
-
-                            allocated = true;
-                            rescheduled++;
-                            break;
-                        }
-                    }
-
-                    // If we cannot reschedule, mark mapper as failed
-                    if (!allocated) {
-                        mapper.progress = -1;
-                        notRescheduled++;
-                    }
-                });
-
-                let summary = `${job.name}: ${mappersOnFailedNode.length} mapper(s) on failed node`;
-                if (rescheduled > 0) {
-                    summary += `, ${rescheduled} restarted on other nodes`;
-                }
-                if (notRescheduled > 0) {
-                    summary += `, ${notRescheduled} could not be restarted`;
-                }
-                affectedJobs.push(summary);
-
-                // Handle ApplicationMaster on the failed node: try to reallocate
-                const amIndex = randomNode.containers.findIndex(c => c.isApplicationMaster && c.jobName === job.name);
-                if (amIndex !== -1) {
-                    const am = randomNode.containers[amIndex];
-                    randomNode.cpuUsed -= am.cpu;
-                    randomNode.memoryUsed -= am.memory;
-                    randomNode.containers.splice(amIndex, 1);
-
-                    const reallocated = allocateApplicationMaster(job.name, job);
-                    if (!reallocated) {
-                        job.status = 'failed';
-                        releaseMapReduceResources(job);
-                    }
-                }
-            }
-        }
-    });
-
-    if (affectedJobs.length > 0) {
-        showNotification(`💥 ${randomNode.name} failed! MapReduce job(s) affected: ${affectedJobs.join(' | ')}`, 'error');
-    } else {
-        showNotification(`💥 ${randomNode.name} has failed! HDFS will re-replicate blocks...`, 'warning');
-    }
-
-    // Simulate re-replication after failure
-    scheduleClusterTimeout(() => {
-        reReplicateBlocks(randomNode);
-    }, 2000);
-
-    renderCluster();
-}
-
-        
-        // Re-replicate blocks (IMPROVED)
-        function reReplicateBlocks(failedNode) {
-            const activeNodes = cluster.nodes.filter(n => !n.failed && n.id !== failedNode.id);
-            
+        function simulateFailure() {
+            const activeNodes = cluster.nodes.filter(n => !n.failed);
             if (activeNodes.length === 0) {
-                showNotification('❌ No active nodes available for re-replication!', 'error');
+                showNotification('❌ All nodes are already failed!', 'error');
                 return;
             }
-            
-            // Step 1: Build replication status for ALL blocks
-            const blockReplicationStatus = {};
-            
-            // Include blocks from ALL nodes to track what existed
-            cluster.nodes.forEach(node => {
-                node.blocks.forEach(block => {
-                    if (!blockReplicationStatus[block.id]) {
-                        blockReplicationStatus[block.id] = {
-                            block: block,
-                            replicaCount: 0,
-                            sourceNodes: [],
-                            wasOnFailedNode: false
-                        };
-                    }
-                    
-                    if (!node.failed) {
-                        blockReplicationStatus[block.id].replicaCount++;
-                        blockReplicationStatus[block.id].sourceNodes.push(node);
-                    } else if (node.id === failedNode.id) {
-                        blockReplicationStatus[block.id].wasOnFailedNode = true;
-                    }
-                });
+
+            // Pick a random active node to fail
+            const randomNode = activeNodes[Math.floor(Math.random() * activeNodes.length)];
+            randomNode.failed = true;
+
+            const affectedJobs = handleMapReduceNodeFailure({
+                cluster,
+                failedNode: randomNode,
+                notifier,
+                allocateApplicationMaster
             });
-            
-            // Step 2: Identify under-replicated blocks and completely lost blocks
-            let reReplicated = 0;
-            let underReplicated = 0;
-            let totalLost = 0;
-            
-            for (const [blockId, status] of Object.entries(blockReplicationStatus)) {
-                // Check if block is completely lost (no replicas on active nodes)
-                if (status.replicaCount === 0) {
-                    totalLost++;
-                    continue;
-                }
-                
-                // Check if block is under-replicated
-                if (status.replicaCount < REPLICATION_FACTOR) {
-                    underReplicated++;
-                    
-                    // Find best source node (one that has the block)
-                    const sourceNode = status.sourceNodes[0];
-                    
-                    // Find best target node (has space, doesn't have this block)
-                    const candidateNodes = activeNodes
-                        .filter(node => !node.blocks.some(b => b.id === blockId))
-                        .sort((a, b) => {
-                            const aSpace = a.storageTotal - a.storageUsed;
-                            const bSpace = b.storageTotal - b.storageUsed;
-                            return bSpace - aSpace;
-                        });
-                    
 
-                    if (candidateNodes.length > 0) {
-                        const targetNode = candidateNodes[0];
-                        const availableSpaceGB = targetNode.storageTotal - targetNode.storageUsed;
-                        const blockSizeGB = status.block.size / 1024; // MB → GB
-
-                        if (availableSpaceGB >= blockSizeGB) {
-                            // Copy block from sourceNode to targetNode
-                            targetNode.storageUsed += blockSizeGB;
-                            targetNode.blocks.push({
-                                ...status.block,
-                                isReplica: true
-                            });
-                            reReplicated++;
-                        }
-                    }
-                }
+            if (affectedJobs.length === 0) {
+                showNotification(`💥 ${randomNode.name} has failed! HDFS will re-replicate blocks...`, 'warning');
             }
 
-            // Show comprehensive notification
-            if (totalLost > 0) {
-                showNotification(`❌ CRITICAL: ${totalLost} blocks PERMANENTLY LOST! Data corruption detected!`, 'error');
-            } else if (underReplicated > 0) {
-                showNotification(`✅ Re-replication complete! ${reReplicated} replicas added, ${underReplicated} under-replicated blocks recovered`, 'success');
-            } else {
-                showNotification(`✅ No blocks need re-replication (all have RF=${REPLICATION_FACTOR})`, 'success');
-            }
+            // Simulate re-replication after failure
+            scheduleClusterTimeout(() => {
+                reReplicateBlocks(randomNode);
+            }, 2000);
+
+            renderCluster();
+        }
+
+        // Re-replicate blocks
+        function reReplicateBlocks(failedNode) {
+            reReplicateBlocksDetailed({
+                failedNode,
+                nodes: cluster.nodes,
+                replicationFactor: REPLICATION_FACTOR,
+                storageUnitMb: 1024,
+                notifier
+            });
 
             renderCluster();
         }
@@ -1347,7 +840,7 @@ function simulateFailure() {
         // Reset cluster
         function resetCluster() {
             clearClusterTimers();
-            colorIndex = 0;
+            nextColor = createColorCycle(COLORS);
             cluster.fileCounter = 1;
             cluster.jobCounter = 1;
             cluster.mapReduceCounter = 1;
@@ -1358,18 +851,19 @@ function simulateFailure() {
         
         // Show notification
         function showNotification(message, type) {
-            const notification = document.createElement('div');
-            notification.className = `notification ${type}`;
-            notification.textContent = message;
-            notification.setAttribute('role', 'status');
-            notification.setAttribute('aria-live', 'polite');
-            document.body.appendChild(notification);
-            
-            setTimeout(() => {
-                notification.style.opacity = '0';
-                setTimeout(() => notification.remove(), 300);
-            }, 4000);
+            notifier.raw(message, type);
         }
         
         // Initialize
         initializeCluster();
+
+        window.cluster = cluster;
+        window.REPLICATION_FACTOR = REPLICATION_FACTOR;
+        window.renderCluster = renderCluster;
+        window.uploadFile = uploadFile;
+        window.uploadLargeFile = uploadLargeFile;
+        window.submitYarnJob = submitYarnJob;
+        window.submitBigYarnJob = submitBigYarnJob;
+        window.runMapReduce = runMapReduce;
+        window.simulateFailure = simulateFailure;
+        window.resetCluster = resetCluster;

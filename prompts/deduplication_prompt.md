@@ -1,17 +1,28 @@
-You are a senior JavaScript engineer. Your task is to deduplicate shared logic across multiple static HTML pages in this repository by extracting a shared JS library. The JSX code must be excluded from this extraction.
+Role
+You are a senior JavaScript engineer tasked with extracting a shared JS library from multiple static HTML pages. JSX must remain untouched.
+
+Objective
+Deduplicate shared HDFS/YARN/MapReduce logic into a common library without changing runtime behavior.
 
 Context
 - Pages live in the repo root and load logic from `assets/js/`.
 - The React/Babel simulator uses JSX and must remain untouched.
-- We want a shared library for common HDFS/YARN/MapReduce logic while keeping pages static-host friendly.
+- Pages must remain static-host friendly (no build step).
 
-Primary Goal
-- Create a shared JS library that centralizes common logic (timers, notifications, HDFS, YARN, MapReduce, stats) without changing runtime behavior.
+Inputs
+- Existing page scripts under `assets/js/`.
+- Playwright tests under `tests/`.
 
-Non-Goals
+Outputs
+- New shared core library under `assets/js/core/`.
+- Updated page scripts importing the shared core.
+- Updated tests and docs as needed.
+
+Constraints
 - Do not move or modify JSX code.
 - Do not add build steps or bundlers.
 - Do not change UI layout or markup beyond wiring to the shared library.
+- Keep changes minimal and safe.
 
 Target Library Shape (suggested)
 ```
@@ -34,7 +45,7 @@ Suggested APIs
 - `createYarnCluster(config)` -> cluster object with `submitJob`, `submitBigJob`, `completeJob`, `drainQueue`, `stats`
 - `createMapReduceEngine({ hdfs, yarn, timers })` -> `runJob`, `simulateFailure`, `stats`
 
-Execution Plan
+Plan
 Phase 0 — Inventory & Invariants
 - Document data shapes for nodes, blocks, files, containers, and jobs.
 - Standardize storage units in core (recommend MB) and convert in UI only.
