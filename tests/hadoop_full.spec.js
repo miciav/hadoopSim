@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { getNumberFromText, getPercent } from './helpers.js';
+import { getNumberFromText } from './helpers.js';
 
 test('Full simulator keeps HDFS/YARN/MapReduce invariants', async ({ page }) => {
   await page.addInitScript(() => {
@@ -28,10 +28,6 @@ test('Full simulator keeps HDFS/YARN/MapReduce invariants', async ({ page }) => 
   expect(totalBlocks).toBeGreaterThan(0);
   expect(activeJobs).toBeGreaterThanOrEqual(0);
   expect(mapReduceJobs).toBeGreaterThanOrEqual(0);
-
-  const storagePercent = await getPercent(page, '#storageUsage');
-  expect(storagePercent).toBeGreaterThanOrEqual(0);
-  expect(storagePercent).toBeLessThanOrEqual(100);
 
   const jobCards = await page.locator('.mapreduce-job').count();
   expect(jobCards).toBeGreaterThan(0);

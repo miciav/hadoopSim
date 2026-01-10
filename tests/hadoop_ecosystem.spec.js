@@ -5,5 +5,5 @@ test('Ecosystem simulator renders core controls', async ({ page }) => {
 
   await expect(page.locator('#root')).toBeVisible();
   await expect(page.getByRole('button', { name: /Upload 256 MB/i })).toBeVisible();
-  await expect(page.getByRole('button', { name: /MapReduce/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /MapReduce/i })).toBeVisible();
 });
