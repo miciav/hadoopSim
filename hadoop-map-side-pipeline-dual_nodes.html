@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hadoop Cluster Simulator</title>
+  <style>
+    /* --- STILI BASE --- */
+    * { box-sizing: border-box; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    body { margin: 0; padding: 20px; background: #f8fafc; color: #334155; display: flex; justify-content: center; min-height: 100vh; }
+    .app { max-width: 1350px; width: 100%; background: #ffffff; border-radius: 16px; padding: 20px 24px 28px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
+    
+    h1 { font-size: 22px; margin: 0 0 6px; color: #0f172a; font-weight: 700; letter-spacing: -0.5px; }
+    .subtitle { font-size: 13px; color: #64748b; margin-bottom: 16px; }
+
+    /* Controls */
+    .controls { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; background: #fff; padding: 10px; border-radius: 10px; position: sticky; top: 0; z-index: 500; border: 1px solid #e2e8f0; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
+    button { border-radius: 6px; padding: 8px 20px; font-size: 13px; border: none; cursor: pointer; background: #10b981; color: #fff; font-weight: 600; transition: all 0.15s; display: flex; align-items: center; gap: 6px; }
+    button:hover:not(:disabled) { background: #059669; transform: translateY(-1px); shadow: 0 2px 4px rgba(16,185,129,0.3); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    button.secondary { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+    button.secondary:hover:not(:disabled) { background: #e2e8f0; }
+    
+    .options { margin-left: auto; display: flex; gap: 20px; align-items: center; font-size: 12px; color: #475569; font-weight: 500; }
+    
+    /* Metrics */
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0; }
+    .metric-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 16px; display: flex; flex-direction: column; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+    .metric-value { font-size: 20px; font-weight: 800; color: #0f172a; font-family: 'Monaco', monospace; }
+    .metric-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; margin-top: 2px; font-weight: 600; }
+
+    /* Layout */
+    .layout { display: grid; grid-template-columns: 2.8fr 1.2fr; gap: 20px; margin-top: 10px; align-items: start; }
+    
+    /* CLUSTER NODES */
+    .cluster-rack { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+    
+    .node-container {
+      border: 1px solid #cbd5e1; border-radius: 12px; padding: 16px; 
+      position: relative; background: #fff; transition: box-shadow 0.3s;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .node-container.active-node { box-shadow: 0 0 0 2px #10b981, 0 10px 20px rgba(16,185,129,0.1); border-color: #10b981; }
+
+    .node-tag {
+      position: absolute; top: -10px; left: 16px; background: #fff; padding: 2px 10px;
+      font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; border: 1px solid #cbd5e1; border-radius: 20px;
+      display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .node-map { background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); }
+    .node-reduce { background: linear-gradient(180deg, #ffffff 0%, #f0f9ff 100%); border-color: #bae6fd; }
+
+    /* Network Layer */
+    .network-layer {
+      height: 36px; margin: 0 0 0 0; 
+      background: repeating-linear-gradient(45deg, #1e293b, #1e293b 10px, #334155 10px, #334155 20px);
+      border-radius: 8px; display: flex; align-items: center; justify-content: center;
+      color: rgba(255,255,255,0.8); font-size: 11px; font-family: 'Monaco', monospace; letter-spacing: 2px;
+      position: relative; overflow: hidden; border: 2px solid #475569; z-index: 5; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);
+    }
+    .network-pulse {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.8), transparent);
+      transform: translateX(-100%); pointer-events: none;
+    }
+    .network-pulse.active { animation: netPulse 1s linear infinite; }
+    @keyframes netPulse { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+
+    /* Components */
+    .box-label { font-size: 10px; text-transform: uppercase; color: #64748b; margin-bottom: 4px; font-weight: 700; display: flex; justify-content: space-between; }
+    
+    .box-content { 
+      border-radius: 8px; border: 1px dashed #cbd5e1; background: rgba(248,250,252,0.5); 
+      padding: 8px; min-height: 70px; position: relative; transition: all 0.3s;
+    }
+    .box-content.active { border-color: #10b981; background: rgba(236,253,245,0.6); }
+
+    /* Mapper */
+    .mapper-card { 
+      border: 1px solid #e2e8f0; border-radius: 6px; background: #fff;
+      padding: 8px; display: flex; flex-direction: column; min-height: 110px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    }
+    .mapper-header { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; margin-bottom: 6px; }
+    
+    .buffer-inner {
+      position: relative; border-radius: 4px; border: 1px solid #cbd5e1; background: #f1f5f9;
+      /* Increased height slightly to accommodate larger tuples */
+      height: 85px; 
+      padding: 2px; display: flex; flex-wrap: wrap; align-content: flex-start; overflow: hidden;
+    }
+    .buffer-fill {
+      position: absolute; bottom: 0; left: 0; right: 0; height: 0%;
+      background: linear-gradient(to top, rgba(16,185,129,0.2), rgba(16,185,129,0.05));
+      transition: height 0.2s; pointer-events: none; border-top: 2px solid #10b981; z-index: 0;
+    }
+    .buffer-fill.limit { background: linear-gradient(to top, rgba(249,115,22,0.2), rgba(249,115,22,0.05)); border-color: #f97316; }
+
+    /* Spills & Output */
+    .spill-container { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+    .spill-slot {
+      /* Increased min-width for larger tuples */
+      flex: 1; min-width: 50px; 
+      border-radius: 4px; border: 1px solid #cbd5e1; background: #fff;
+      min-height: 70px; padding: 16px 2px 2px; position: relative; display: flex; flex-wrap: wrap; align-content: flex-start;
+    }
+    .mini-label { position: absolute; top: 3px; left: 4px; font-size: 8px; text-transform: uppercase; color: #94a3b8; font-weight: 700; }
+    
+    .final-output {
+      border-radius: 4px; border: 1px dashed #cbd5e1; background: linear-gradient(135deg, rgba(249,115,22,0.03) 0%, #fff 60%);
+      min-height: 70px; padding: 18px 2px 2px; position: relative; display: flex; flex-wrap: wrap; align-content: flex-start;
+    }
+
+    /* Reducers */
+    .reducers-inner { display: flex; gap: 10px; }
+    .reducer-box { 
+      flex: 1; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff; 
+      min-height: 110px; padding: 18px 2px; position: relative; display: flex; flex-wrap: wrap; align-content: flex-start;
+    }
+
+    /* --- LOG PANEL --- */
+    .log-panel {
+      background: #0f172a; color: #e2e8f0; border-radius: 12px; 
+      height: 620px; display: flex; flex-direction: column; overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 1px solid #334155;
+    }
+    .log-header {
+      background: #1e293b; padding: 10px 14px; font-size: 11px; text-transform: uppercase; 
+      font-weight: 700; color: #94a3b8; border-bottom: 1px solid #334155; display: flex; justify-content: space-between;
+    }
+    .log-content {
+      flex: 1; overflow-y: auto; padding: 12px; font-family: 'Menlo', 'Monaco', 'Consolas', monospace; font-size: 11px; line-height: 1.5;
+    }
+    .log-entry { 
+      margin-bottom: 8px; padding: 6px 10px; border-radius: 4px; background: rgba(255,255,255,0.03);
+      border-left: 3px solid #64748b; animation: fadeIn 0.3s ease;
+    }
+    .log-entry strong { color: #fff; font-weight: 600; }
+    
+    .log-map { border-left-color: #10b981; background: rgba(16,185,129,0.05); }
+    .log-disk { border-left-color: #f59e0b; background: rgba(245,158,11,0.05); }
+    .log-net { border-left-color: #3b82f6; background: rgba(59,130,246,0.05); }
+    .log-red { border-left-color: #d946ef; background: rgba(217,70,239,0.05); }
+    .log-sys { border-left-color: #94a3b8; }
+    
+    @keyframes fadeIn { from { opacity: 0; transform: translateX(5px); } to { opacity: 1; transform: translateX(0); } }
+
+    /* --- RECORDS (ZOOMED +15%) --- */
+    .kv-record {
+      font-size: 11px;    /* Increased from 9px */
+      padding: 0 6px;     /* Increased from 4px */
+      height: 22px;       /* Increased from 18px */
+      min-width: 44px;    /* Increased from 36px */
+      border-radius: 4px; 
+      color: white; font-weight: 700;
+      margin: 3px;        /* Slightly more spacing */
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2); 
+      opacity: 0; transform: scale(0.5); flex-shrink: 0; 
+      z-index: 10; position: relative; border: 1px solid rgba(255,255,255,0.25); font-family: 'Monaco', monospace;
+    }
+    .kv-record.show { opacity: 1; transform: scale(1); }
+    .kv-record.ghost { filter: grayscale(100%); background: #e2e8f0 !important; color: #94a3b8; opacity: 0.4; transform: scale(0.9); border: 1px dashed #cbd5e1; z-index: 1; box-shadow: none; } 
+    .kv-record.persistent { opacity: 0.7; filter: none; transform: scale(0.95); border: 1px solid rgba(0,0,0,0.1); box-shadow: none; z-index: 5; }
+
+    .bg-p0 { background: #8b5cf6; }
+    .bg-p1 { background: #ec4899; }
+    .bg-p2 { background: #f59e0b; }
+    
+    .flying-record {
+      position: absolute; z-index: 9999; pointer-events: none;
+      transition: top 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), left 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      box-shadow: 0 8px 15px rgba(0,0,0,0.2); transform: scale(1.3);
+    }
+    .progress-bar { height: 6px; background: #e2e8f0; margin: 10px 0; border-radius: 3px; overflow: hidden; }
+    .progress-fill { height: 100%; width: 0%; background: #10b981; transition: width 0.3s; }
+
+  </style>
+</head>
+<body>
+
+<div class="app">
+  <h1>Hadoop Cluster Simulator</h1>
+  <p class="subtitle">Distributed Mode: True Parallelism • Enhanced Visibility • Network Contention</p>
+
+  <div class="controls">
+    <button id="startBtn">
+      <span>▶</span> Deploy Job
+    </button>
+    <button id="resetBtn" class="secondary">↻ Reset</button>
+    <div class="options">
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer; background:#f1f5f9; padding:6px 12px; border-radius:6px;">
+        <input type="checkbox" id="teachingMode" checked> <strong>Teaching Mode</strong>
+      </label>
+      <span style="display:flex; align-items:center; gap:6px;">Speed: <input type="range" id="speedSlider" min="0.5" max="3.0" step="0.5" value="1.5"></span>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric-card"><span class="metric-value" id="mRecords">0</span><span class="metric-label">Records In</span></div>
+    <div class="metric-card"><span class="metric-value" id="mSpills">0</span><span class="metric-label">Disk Spills</span></div>
+    <div class="metric-card"><span class="metric-value" id="mNet">0</span><span class="metric-label">Net Packets</span></div>
+    <div class="metric-card"><span class="metric-value" id="mPhase" style="color:#3b82f6">IDLE</span><span class="metric-label">Status</span></div>
+  </div>
+
+  <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+
+  <div class="layout">
+    <div class="pipeline-col">
+      
+      <div class="cluster-rack">
+        
+        <div class="node-container node-map" id="node01">
+          <div class="node-tag"><span>🖥️</span> Node 01</div>
+          
+          <div class="node-row">
+            <div class="box-label"><span>HDFS Block</span> <span>64 MB</span></div>
+            <div class="box-content" id="boxInput0">
+              <div style="display:flex; justify-content:center; margin-top:10px;">
+                <div id="split0" class="kv-record bg-p0 show" style="width:90px; height:28px; font-size:11px;">Split 0</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="node-row">
+            <div class="box-label"><span>Map Task (JVM)</span> <span id="pct0" style="color:#10b981">0%</span></div>
+            <div class="box-content" id="boxMap0">
+              <div class="mapper-card">
+                <div class="mapper-header"><span>Mapper A</span></div>
+                <div class="buffer-inner" id="buf0"><div class="buffer-fill" id="fill0"></div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="node-row">
+            <div class="box-label">Local FS (Spills)</div>
+            <div class="box-content" id="boxSpill0">
+              <div class="spill-container">
+                <div class="spill-slot" id="spillA0"><div class="mini-label">Spill 0</div></div>
+                <div class="spill-slot" id="spillA1"><div class="mini-label">Spill 1</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="node-row">
+            <div class="box-label">Map Output</div>
+            <div class="box-content" id="boxMerge0">
+              <div class="final-output" id="finalA"><div class="mini-label" style="color:#f97316">part-m-00000</div></div>
+            </div>
+          </div>
+
+        </div>
+        <div class="node-container node-map" id="node02">
+          <div class="node-tag"><span>🖥️</span> Node 02</div>
+          
+          <div class="node-row">
+            <div class="box-label"><span>HDFS Block</span> <span>64 MB</span></div>
+            <div class="box-content" id="boxInput1">
+              <div style="display:flex; justify-content:center; margin-top:10px;">
+                <div id="split1" class="kv-record bg-p1 show" style="width:90px; height:28px; font-size:11px;">Split 1</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="node-row">
+            <div class="box-label"><span>Map Task (JVM)</span> <span id="pct1" style="color:#10b981">0%</span></div>
+            <div class="box-content" id="boxMap1">
+              <div class="mapper-card">
+                <div class="mapper-header"><span>Mapper B</span></div>
+                <div class="buffer-inner" id="buf1"><div class="buffer-fill" id="fill1"></div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="node-row">
+            <div class="box-label">Local FS (Spills)</div>
+            <div class="box-content" id="boxSpill1">
+              <div class="spill-container">
+                <div class="spill-slot" id="spillB0"><div class="mini-label">Spill 0</div></div>
+                <div class="spill-slot" id="spillB1"><div class="mini-label">Spill 1</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="node-row">
+            <div class="box-label">Map Output</div>
+            <div class="box-content" id="boxMerge1">
+              <div class="final-output" id="finalB"><div class="mini-label" style="color:#f97316">part-m-00001</div></div>
+            </div>
+          </div>
+
+        </div>
+        </div>
+      <div class="network-layer" id="networkLayer">
+        <div class="network-pulse" id="netPulse"></div>
+        <span>CORE SWITCH (HTTP SHUFFLE)</span>
+        <div id="netHub" style="position:absolute; left:50%; top:50%; width:1px; height:1px;"></div>
+      </div>
+
+      <div class="node-container node-reduce" style="margin-top: 20px;">
+        <div class="node-tag" style="color:#6366f1; border-color:#a5b4fc;"><span>🚀</span> Reduce Cluster</div>
+        <div class="box-label">Reduce Tasks (Aggregation)</div>
+        <div class="box-content" id="boxReduce">
+           <div class="reducers-inner">
+             <div class="reducer-box" id="red0"><div class="mini-label" style="color:#8b5cf6; font-size:9px; top:2px;">R-0 (Part 0)</div></div>
+             <div class="reducer-box" id="red1"><div class="mini-label" style="color:#ec4899; font-size:9px; top:2px;">R-1 (Part 1)</div></div>
+             <div class="reducer-box" id="red2"><div class="mini-label" style="color:#f59e0b; font-size:9px; top:2px;">R-2 (Part 2)</div></div>
+           </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="log-panel">
+      <div class="log-header">
+        <span>Job History Log</span>
+        <span style="opacity:0.5">Live Stream</span>
+      </div>
+      <div class="log-content" id="consoleLog">
+        <div class="log-entry log-sys">> Cluster Daemon Started. Waiting for job...</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+  <script src="./assets/js/hadoop-map-side-pipeline-dual_nodes.js"></script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 # Hadoop Ecosystem Simulator
 
-An interactive, browser-based playground that visualizes how Hadoop HDFS, YARN, and MapReduce cooperate. Everything ships in a single HTML file backed by React 18 (via CDN) and Babel for live JSX compilation, so you can open it locally without an install step and watch nodes, blocks, and jobs evolve in real time.
+An interactive, browser-based playground that visualizes how Hadoop HDFS, YARN, and MapReduce cooperate. Everything runs as static HTML with JavaScript modules loaded from `assets/js`, plus React 18 + Babel (CDN) for the main ecosystem simulator.
 
 ## Features
 - **Cluster dashboard** – See CPU, memory, and storage consumption across nodes, plus container allocations and per-block replica placement.
@@ -10,42 +10,35 @@ An interactive, browser-based playground that visualizes how Hadoop HDFS, YARN, 
 
 ## Quick Start
 1. Clone or download the repo.
-2. Open `hadoop-ecosystem-simulator.html` directly in a browser, or start a static server:
+2. Start a static server:
    ```bash
    python3 -m http.server 5173
-   # then visit http://localhost:5173/hadoop-ecosystem-simulator.html
+   # then visit http://localhost:5173/index.html
    ```
-3. Use the sidebar controls to upload sample files, launch MapReduce jobs, and manage nodes.
+3. Open any page in the root (examples):
+   - `index.html` (landing page)
+   - `hadoop-ecosystem-simulator.html`
+   - `hadoop_full.html`
+   - `hdfs_interactive.html`
+   - `yarn_interactive.html`
+   - `hadoop-map-side-pipeline-dual_nodes.html`
 
 > Tip: When editing JSX, keep DevTools open; Babel transpiles on the fly, so syntax errors are logged immediately.
 
 ## Development Notes
-- Source + logic reside entirely in `hadoop-ecosystem-simulator.html` under a `<script type="text/babel">`. Hooks (`useState`, `useEffect`, `useCallback`) drive state updates.
+- HTML entry points live in the repo root and load logic from `assets/js/`.
+- The React/Babel simulator uses `assets/js/hadoop-ecosystem-simulator.js` and compiles at runtime via Babel CDN.
 - Formatting: two-space indentation, `const`/`let`, `camelCase` for functions/state, `PascalCase` for components, and `UPPER_SNAKE_CASE` for shared constants.
-- Run `npx prettier --write hadoop-ecosystem-simulator.html` after large edits to keep JSX tidy.
+- Run `npx prettier --write hadoop-ecosystem-simulator.html` after large JSX edits.
 
-## How It Works (Babel + React in One File)
-- The HTML pulls React 18 UMD bundles and Babel Standalone from CDNs; Babel compiles the inline `<script type="text/babel">` at load time directly in the browser, so JSX and modern JS features work without a build step.
-- JSX/logic live in the same script: helper constants, pure utility functions, and React components (NotificationToaster, StatsPanel, SidebarControls, NodeGrid/NodeCard, FilesPanel, JobsPanel/JobCard, GanttChart) are defined once and mounted via `ReactDOM.createRoot`.
-- State is fully client-side: `useState` drives cluster/files/jobs, `useEffect` handles persistence (localStorage) and async job simulation loops, and `useCallback` memoizes repeated handlers.
-- Because Babel runs in-browser, syntax errors show in DevTools immediately; no bundler or CLI is needed to iterate locally.
+## GitHub Pages
+- The site is published via GitHub Actions from the repo root.
+- `index.html` is the landing page; all demos are linked from there.
 
-## Internal Architecture (single-page)
-```
-index.html
-├─ Head: React UMD, ReactDOM UMD, Babel Standalone, vis-timeline CSS/JS
-├─ <div id="root"></div>
-└─ <script type="text/babel">
-   ├─ Constants + persistence helpers
-   ├─ UI components (pure):
-   │   NotificationToaster, StatsPanel, SidebarControls, NodeGrid/NodeCard,
-   │   FilesPanel, JobsPanel/JobCard, GanttChart (vis-timeline)
-   ├─ Cluster / job logic:
-   │   bootstrap nodes, upload files (replication/blocks), node failure/recovery,
-   │   mapper/reducer allocation, shuffle timing, progress simulation, notifications
-   └─ Root component (HadoopEcosystem):
-       initializes state, wires handlers, renders layout
-```
+## How It Works (React + Babel)
+- The HTML pulls React 18 UMD bundles and Babel Standalone from CDNs; Babel compiles the external script at load time directly in the browser.
+- JSX/logic live in `assets/js/hadoop-ecosystem-simulator.js` and are mounted via `ReactDOM.createRoot`.
+- State is fully client-side: hooks drive cluster/files/jobs, and persistence uses localStorage.
 
 ## Testing & Validation
 There is no automated harness yet. After changes, manually verify:

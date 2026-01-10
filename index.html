@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hadoop Simulators</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7fafc;
+      --panel: #ffffff;
+      --ink: #1a202c;
+      --muted: #4a5568;
+      --accent: #0f766e;
+      --accent-2: #0369a1;
+      --shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: radial-gradient(circle at top, #e6fffa 0%, #f7fafc 55%, #ffffff 100%);
+      min-height: 100vh;
+    }
+
+    header {
+      padding: 48px 20px 24px;
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(2rem, 3vw, 3rem);
+      letter-spacing: -0.02em;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 20px 60px;
+      display: grid;
+      gap: 24px;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+
+    .card {
+      background: var(--panel);
+      border-radius: 18px;
+      padding: 22px;
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(15, 23, 42, 0.06);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      min-height: 210px;
+    }
+
+    .card h2 {
+      margin: 0;
+      font-size: 1.3rem;
+    }
+
+    .card p {
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    .card a {
+      margin-top: auto;
+      text-decoration: none;
+      color: white;
+      background: var(--accent);
+      padding: 10px 14px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      box-shadow: 0 6px 16px rgba(15, 118, 110, 0.3);
+    }
+
+    .card a.secondary {
+      background: var(--accent-2);
+      box-shadow: 0 6px 16px rgba(3, 105, 161, 0.3);
+    }
+
+    .card a:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(15, 118, 110, 0.3);
+    }
+
+    footer {
+      text-align: center;
+      padding: 12px 20px 32px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation: none !important;
+        transition: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Hadoop Simulators</h1>
+    <p>Choose a visual walkthrough of Hadoop HDFS, YARN, and MapReduce.</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Hadoop Ecosystem Simulator</h2>
+      <p>React + Babel powered simulator with a Gantt timeline, job orchestration, and node control.</p>
+      <a href="./hadoop-ecosystem-simulator.html">Launch simulator →</a>
+    </section>
+
+    <section class="card">
+      <h2>Unified Hadoop (HDFS + YARN + MapReduce)</h2>
+      <p>Single-page dashboard for storage, compute, and MapReduce workloads in one view.</p>
+      <a href="./hadoop_full.html" class="secondary">Open full view →</a>
+    </section>
+
+    <section class="card">
+      <h2>HDFS Interactive</h2>
+      <p>Explore file uploads, replication, and DataNode failure recovery flows.</p>
+      <a href="./hdfs_interactive.html">Open HDFS demo →</a>
+    </section>
+
+    <section class="card">
+      <h2>YARN Interactive</h2>
+      <p>Simulate resource scheduling, container allocations, and job queue behavior.</p>
+      <a href="./yarn_interactive.html" class="secondary">Open YARN demo →</a>
+    </section>
+
+    <section class="card">
+      <h2>Map-Side Pipeline (Dual Nodes)</h2>
+      <p>Walk through map-side pipeline behavior with staged logs and data cards.</p>
+      <a href="./hadoop-map-side-pipeline-dual_nodes.html">Open pipeline →</a>
+    </section>
+  </main>
+
+  <footer>
+    Hosted on GitHub Pages · Static HTML + JS
+  </footer>
+</body>
+</html>
