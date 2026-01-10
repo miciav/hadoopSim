@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hadoop Map Task Simulator v14 (Final)</title>
+  <style>
+    /* --- BASE STYLES --- */
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+    body { margin: 0; padding: 20px; background: #f8fafc; color: #1e293b; display: flex; justify-content: center; min-height: 100vh; }
+    .app { max-width: 1200px; width: 100%; background: #ffffff; border-radius: 16px; padding: 20px 24px 28px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; }
+    
+    h1 { font-size: 24px; margin: 0 0 6px; color: #0f172a; font-weight: 700; }
+    .subtitle { font-size: 14px; color: #475569; margin-bottom: 16px; }
+
+    /* Controls */
+    .controls { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; background: #f1f5f9; padding: 10px; border-radius: 10px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+    button { border-radius: 8px; padding: 8px 18px; font-size: 14px; border: none; cursor: pointer; background: #16a34a; color: #fff; font-weight: 600; transition: all 0.15s; }
+    button:hover:not(:disabled) { background: #15803d; transform: translateY(-1px); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.secondary { background: #ffffff; color: #334155; border: 1px solid #cbd5e1; }
+    
+    .options { margin-left: auto; display: flex; gap: 15px; align-items: center; font-size: 13px; color: #475569; }
+    
+    /* Metrics */
+    .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin: 16px 0; padding: 16px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; }
+    .metric { text-align: center; }
+    .metric-value { font-size: 24px; font-weight: 700; color: #16a34a; display: block; }
+    .metric-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; }
+
+    /* Layout */
+    .layout { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; margin-top: 16px; align-items: start; }
+    
+    /* Pipeline Styling */
+    .pipeline { background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-radius: 12px; padding: 12px; border: 1px solid #e2e8f0; }
+    .row { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+    .row-label { width: 100px; font-size: 11px; text-transform: uppercase; font-weight: 600; color: #475569; margin-top: 10px; position: sticky; top: 80px; }
+    
+    .row-box { 
+      flex: 1; border-radius: 10px; border: 1px dashed #cbd5e1; background: rgba(255,255,255,0.8); 
+      padding: 28px 12px 12px; min-height: 110px; position: relative; transition: border-color 0.3s ease; 
+      height: auto; overflow: visible;
+    }
+    .row-box.active { border-color: #16a34a; border-style: solid; background: rgba(240,253,244,0.9); box-shadow: 0 0 15px rgba(22,163,74,0.1); }
+    .row-title { position: absolute; top: 8px; left: 12px; font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 600; }
+
+    /* Mapper Cards */
+    .mapper-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+    .mapper-card { 
+      border: 1px solid #e2e8f0; border-radius: 12px; background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+      padding: 12px; display: flex; flex-direction: column; min-height: 200px; position: relative;
+      transition: all 0.3s;
+    }
+    .mapper-header { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+    
+    /* Buffer */
+    .buffer-inner {
+      position: relative; border-radius: 8px; border: 1px solid #cbd5e1; background: rgba(255,255,255,0.95);
+      min-height: 150px; 
+      padding: 4px; display: flex; flex-wrap: wrap; align-content: flex-start;
+      transition: all 0.3s ease;
+    }
+    .buffer-fill {
+      position: absolute; bottom: 0; left: 0; right: 0; height: 0%;
+      background: linear-gradient(to top, rgba(22,163,74,0.25), rgba(22,163,74,0.05));
+      transition: height 0.2s; pointer-events: none; border-top: 1px solid #16a34a; z-index: 0;
+    }
+    .buffer-fill.limit { background: linear-gradient(to top, rgba(234,88,12,0.25), rgba(234,88,12,0.05)); border-color: #ea580c; }
+
+    /* Spills */
+    .spill-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+    .spill-column { display: flex; gap: 8px; flex-direction: column; }
+    .spill-column-inner { display: flex; gap: 8px; }
+    
+    .spill-slot {
+      flex: 1; border-radius: 8px; border: 1px solid #cbd5e1; background: #fff;
+      min-height: 120px; padding: 20px 4px 4px; position: relative; display: flex; flex-wrap: wrap; align-content: flex-start;
+      height: auto; overflow: visible;
+    }
+    .spill-label { position: absolute; top: 4px; left: 6px; font-size: 9px; text-transform: uppercase; color: #94a3b8; }
+
+    /* Final Output */
+    .final-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+    .final-output {
+      border-radius: 8px; border: 1px dashed #cbd5e1; background: linear-gradient(135deg, rgba(234,88,12,0.05) 0%, #fff 60%);
+      min-height: 140px; padding: 24px 6px 6px; position: relative; display: flex; flex-wrap: wrap; align-content: flex-start;
+      height: auto; overflow: visible;
+    }
+    .final-label { position: absolute; top: 5px; left: 10px; font-size: 10px; font-weight: 700; color: #ea580c; text-transform: uppercase; }
+
+    /* Records - ACTIVE */
+    .kv-record {
+      font-size: 10px; padding: 0 6px; height: 20px; border-radius: 4px; color: white; font-weight: 700;
+      margin: 2px; display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3); transition: all 0.3s ease;
+      min-width: 50px; opacity: 0; transform: scale(0.8); flex-shrink: 0; 
+      z-index: 10; position: relative;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .kv-record.show { opacity: 1; transform: scale(1); }
+    
+    /* GHOST - HISTORY (GRAY) */
+    .kv-record.ghost { 
+      filter: grayscale(100%);      /* All gray */
+      background: #e2e8f0 !important; /* Force light gray background */
+      color: #94a3b8;               /* Gray text */
+      opacity: 0.5;                 /* Transparency */
+      transform: scale(0.9); 
+      border: 1px dashed #cbd5e1;   /* Dashed border */
+      box-shadow: none;
+      z-index: 1;
+    } 
+    
+    /* Flying Record Animation */
+    .flying-record {
+      position: absolute; z-index: 9999; pointer-events: none;
+      transition: top 0.4s ease-in-out, left 0.4s ease-in-out;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+      transform: scale(1.1);
+    }
+
+    /* Colors */
+    .bg-p0 { background: #8b5cf6; }
+    .bg-p1 { background: #ec4899; }
+    .bg-p2 { background: #f59e0b; }
+
+    /* Reducers */
+    .reducers-inner { display: flex; gap: 12px; align-items: start; }
+    .reducer-box { 
+      flex: 1; border-radius: 8px; border: 1px solid #cbd5e1; background: #faf5ff; 
+      min-height: 150px; padding: 24px 6px; position: relative; 
+      display: flex; flex-wrap: wrap; align-content: flex-start;
+      height: auto; overflow: visible;
+    }
+    
+    /* Log Panel */
+    .log { background: #f8fafc; border-radius: 12px; padding: 16px; border: 1px solid #e2e8f0; height: 600px; overflow-y: auto; font-family: monospace; font-size: 11px; position: sticky; top: 20px; }
+    .log-entry { margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
+    .log-type { font-weight: 700; margin-right: 5px; }
+
+    /* Progress */
+    .progress-bar { height: 4px; background: #e2e8f0; margin: 16px 0; border-radius: 2px; overflow: hidden; }
+    .progress-fill { height: 100%; width: 0%; background: #16a34a; transition: width 0.3s; }
+
+  </style>
+</head>
+<body>
+
+<div class="app">
+  <h1>Hadoop Map Task Simulator</h1>
+  <p class="subtitle">Teaching Mode: Historical records become gray ghosts, active records remain colored.</p>
+
+  <div class="controls">
+    <button id="startBtn">▶ Start Simulation</button>
+    <button id="resetBtn" class="secondary">↻ Reset</button>
+    <div class="options">
+      <label style="display:flex; align-items:center; gap:6px; cursor:pointer;" title="If checked, processed records remain visible (gray) instead of being deleted.">
+        <input type="checkbox" id="teachingMode" checked> <strong>Teaching Mode</strong>
+      </label>
+      <span>Speed: <input type="range" id="speedSlider" min="0.5" max="3.0" step="0.5" value="1.5"></span>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric"><span class="metric-value" id="mRecords">0</span><span class="metric-label">Records</span></div>
+    <div class="metric"><span class="metric-value" id="mSpills">0</span><span class="metric-label">Spills</span></div>
+    <div class="metric"><span class="metric-value" id="mPhase">Idle</span><span class="metric-label">Phase</span></div>
+  </div>
+
+  <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+
+  <div class="layout">
+    <div class="pipeline">
+      
+      <div class="row">
+        <div class="row-label">Input</div>
+        <div class="row-box" id="boxInput">
+          <div class="row-title">Splits & RecordReaders</div>
+          <div style="display:flex; justify-content:center; gap:20px; margin-top:10px;">
+            <div id="split0" class="kv-record bg-p0 show" style="width:100px; height:40px; font-size:12px;">Split 0</div>
+            <div id="split1" class="kv-record bg-p1 show" style="width:100px; height:40px; font-size:12px;">Split 1</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row-label">Mappers</div>
+        <div class="row-box" id="boxMap">
+          <div class="row-title">Map Task Buffer</div>
+          <div class="mapper-grid">
+            <div class="mapper-card">
+              <div class="mapper-header"><span>Mapper A</span><span id="pct0" style="color:#16a34a">0%</span></div>
+              <div class="buffer-inner" id="buf0">
+                <div class="buffer-fill" id="fill0"></div>
+              </div>
+            </div>
+            <div class="mapper-card">
+              <div class="mapper-header"><span>Mapper B</span><span id="pct1" style="color:#16a34a">0%</span></div>
+              <div class="buffer-inner" id="buf1">
+                <div class="buffer-fill" id="fill1"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row-label">Spills</div>
+        <div class="row-box" id="boxSpill">
+          <div class="row-title">Local Spills (Combine)</div>
+          <div class="spill-grid">
+            <div class="spill-column">
+              <div class="spill-column-inner">
+                 <div class="spill-slot" id="spillA0"><div class="spill-label">Spill 0</div></div>
+                 <div class="spill-slot" id="spillA1"><div class="spill-label">Spill 1</div></div>
+              </div>
+            </div>
+            <div class="spill-column">
+              <div class="spill-column-inner">
+                <div class="spill-slot" id="spillB0"><div class="spill-label">Spill 0</div></div>
+                <div class="spill-slot" id="spillB1"><div class="spill-label">Spill 1</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row-label">Map Out</div>
+        <div class="row-box" id="boxMerge">
+          <div class="row-title">Map Output (Merge)</div>
+          <div class="final-grid">
+            <div class="final-output" id="finalA">
+              <div class="final-label">map_0.out</div>
+            </div>
+            <div class="final-output" id="finalB">
+              <div class="final-label">map_1.out</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row-label">Reducers</div>
+        <div class="row-box" id="boxReduce">
+          <div class="row-title">Shuffle & Reduce</div>
+          <div class="reducers-inner">
+            <div class="reducer-box" id="red0"><div class="row-title" style="color:#8b5cf6">Partition 0</div></div>
+            <div class="reducer-box" id="red1"><div class="row-title" style="color:#ec4899">Partition 1</div></div>
+            <div class="reducer-box" id="red2"><div class="row-title" style="color:#f59e0b">Partition 2</div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="log" id="consoleLog">
+      <div class="log-entry" style="color:#64748b">System Ready.</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* --- CONFIGURATION --- */
+const RAW_DATA_A = [
+  { k: "cat", p: 0, c: "bg-p0" }, { k: "cat", p: 0, c: "bg-p0" }, { k: "cat", p: 0, c: "bg-p0" },
+  { k: "dog", p: 1, c: "bg-p1" }, { k: "dog", p: 1, c: "bg-p1" },
+  { k: "ant", p: 2, c: "bg-p2" }, { k: "ant", p: 2, c: "bg-p2" }, { k: "ant", p: 2, c: "bg-p2" },
+  { k: "car", p: 0, c: "bg-p0" }, { k: "car", p: 0, c: "bg-p0" },
+  { k: "day", p: 1, c: "bg-p1" }, { k: "day", p: 1, c: "bg-p1" },
+  { k: "cat", p: 0, c: "bg-p0" }, { k: "dog", p: 1, c: "bg-p1" }
+];
+
+const RAW_DATA_B = [
+  { k: "cup", p: 0, c: "bg-p0" }, { k: "cup", p: 0, c: "bg-p0" },
+  { k: "dot", p: 1, c: "bg-p1" }, { k: "dot", p: 1, c: "bg-p1" }, { k: "dot", p: 1, c: "bg-p1" },
+  { k: "arm", p: 2, c: "bg-p2" }, { k: "arm", p: 2, c: "bg-p2" },
+  { k: "cup", p: 0, c: "bg-p0" }, { k: "arm", p: 2, c: "bg-p2" },
+  { k: "dog", p: 1, c: "bg-p1" }, { k: "cat", p: 0, c: "bg-p0" } 
+];
+
+const CONFIG = {
+  BUFFER_CAPACITY: 8, 
+  SPILL_THRESHOLD: 0.8
+};
+
+/* --- STATE --- */
+let state = {
+  running: false,
+  mappers: [
+    { id: 0, buffer: [], spills: [], final: [], data: [...RAW_DATA_A] },
+    { id: 1, buffer: [], spills: [], final: [], data: [...RAW_DATA_B] }
+  ]
+};
+
+/* --- UTILITIES --- */
+const el = (id) => document.getElementById(id);
+const wait = (ms) => new Promise(r => setTimeout(r, ms));
+
+function log(msg, type="INFO") {
+  const div = document.createElement('div');
+  div.className = 'log-entry';
+  const color = type === "ERROR" ? "#ef4444" : (type === "SUCCESS" ? "#16a34a" : "#3b82f6");
+  div.innerHTML = `<span class="log-type" style="color:${color}">${type}</span> ${msg}`;
+  el('consoleLog').prepend(div);
+}
+
+function createRecord(data, count=1) {
+  const d = document.createElement('div');
+  d.className = `kv-record ${data.c}`; // .bg-p0, .bg-p1 apply color
+  d.textContent = `${data.k}:${count}`;
+  return d;
+}
+
+function handleTeachingTransition(container) {
+  if (el('teachingMode').checked) {
+    const active = Array.from(container.querySelectorAll('.kv-record:not(.ghost)'));
+    active.forEach(r => {
+      r.classList.add('ghost');
+      r.classList.remove('show');
+    });
+  }
+}
+
+function clearContainer(container) {
+  if (!el('teachingMode').checked) {
+    // OFF: Clear everything
+    Array.from(container.querySelectorAll('.kv-record')).forEach(r => r.remove());
+  }
+  // ON: Do nothing, records are already transitioned to ghosts
+}
+
+function highlightPhase(boxId, phaseName) {
+  ['boxInput','boxMap','boxSpill','boxMerge','boxReduce'].forEach(id => {
+    el(id).classList.remove('active');
+  });
+  if (boxId) el(boxId).classList.add('active');
+  el('mPhase').textContent = phaseName;
+}
+
+// Calculate position + Scroll for animation
+async function flyRecord(sourceId, targetId, recordData, duration) {
+  const src = el(sourceId);
+  const tgt = el(targetId);
+  if (!src || !tgt) return;
+
+  const rectSrc = src.getBoundingClientRect();
+  const rectTgt = tgt.getBoundingClientRect();
+
+  const flyer = createRecord(recordData, 1);
+  flyer.classList.add('flying-record', 'show');
+  document.body.appendChild(flyer);
+
+  flyer.style.left = (rectSrc.left + window.scrollX + 20) + 'px';
+  flyer.style.top = (rectSrc.top + window.scrollY + 10) + 'px';
+
+  flyer.getBoundingClientRect(); // Reflow
+
+  flyer.style.left = (rectTgt.left + window.scrollX + 20) + 'px';
+  flyer.style.top = (rectTgt.top + window.scrollY + 20) + 'px';
+  flyer.style.transition = `top ${duration}ms ease-in-out, left ${duration}ms ease-in-out`;
+
+  await wait(duration);
+  flyer.remove();
+}
+
+
+/* --- CORE LOGIC --- */
+
+async function runSimulation() {
+  if (state.running) return;
+  state.running = true;
+  el('startBtn').disabled = true;
+  resetUI();
+
+  const speedMult = parseFloat(el('speedSlider').value);
+  const tick = 1000 / speedMult;
+
+  // 1. INPUT
+  highlightPhase('boxInput', 'Input Splits');
+  log("Input: Splits calculated.", "INFO");
+  await wait(tick);
+
+  // 2. MAP & BUFFER
+  highlightPhase('boxMap', 'Map & Buffer');
+  log("Mappers: RecordReaders feeding circular buffers...", "INFO");
+  el('boxSpill').classList.add('active'); 
+
+  const p1 = runMapper(0, tick);
+  const p2 = runMapper(1, tick * 1.2); 
+  await Promise.all([p1, p2]);
+
+  // 3. MERGE
+  highlightPhase('boxMerge', 'Merge Sort');
+  log("Map: Merging spills...", "INFO");
+  await runMerge(0, tick);
+  await runMerge(1, tick);
+
+  // 4. SHUFFLE & REDUCE
+  highlightPhase('boxReduce', 'Shuffle & Reduce');
+  log("Shuffle: Transferring to Reducers...", "INFO");
+  await runShuffle(tick);
+
+  log("Job Complete.", "SUCCESS");
+  el('mPhase').textContent = "Done";
+  el('startBtn').disabled = false;
+  state.running = false;
+  el('progressFill').style.width = "100%";
+}
+
+async function runMapper(id, delay) {
+  const mapper = state.mappers[id];
+  const bufEl = el(`buf${id}`);
+  const fillEl = el(`fill${id}`);
+  const pctEl = el(`pct${id}`);
+  const splitId = `split${id}`; 
+  
+  const workData = mapper.data;
+
+  for (let i=0; i<workData.length; i++) {
+    const rec = workData[i];
+    mapper.buffer.push(rec);
+    el('mRecords').innerText = parseInt(el('mRecords').innerText) + 1;
+
+    // FLY ANIMATION
+    await flyRecord(splitId, `buf${id}`, rec, delay * 0.4);
+
+    const r = createRecord(rec);
+    bufEl.appendChild(r);
+    r.classList.add('show');
+
+    const usage = mapper.buffer.length / CONFIG.BUFFER_CAPACITY;
+    const pct = Math.min(100, Math.round(usage * 100));
+    fillEl.style.height = pct + "%";
+    pctEl.innerText = pct + "%";
+
+    // SPILL CHECK
+    if (usage >= CONFIG.SPILL_THRESHOLD || i === workData.length - 1) {
+      fillEl.classList.add('limit');
+      log(`Mapper ${id==0?'A':'B'}: Buffer Limit. SPILLING...`, "ERROR");
+      
+      await wait(delay); 
+      
+      await spill(id, mapper.spills.length, delay);
+      
+      // Mappers buffer: turn to ghosts
+      handleTeachingTransition(bufEl);
+      clearContainer(bufEl);
+      
+      mapper.buffer = [];
+      fillEl.style.height = "0%";
+      fillEl.classList.remove('limit');
+      pctEl.innerText = "0%";
+    }
+    await wait(delay * 0.2);
+  }
+}
+
+async function spill(mapperId, spillIdx, delay) {
+  const mapper = state.mappers[mapperId];
+  const sorted = [...mapper.buffer].sort((a,b) => (a.p - b.p) || a.k.localeCompare(b.k));
+  const combined = combine(sorted);
+  mapper.spills.push(combined);
+  el('mSpills').innerText = parseInt(el('mSpills').innerText) + 1;
+
+  const slotId = `spill${mapperId==0?'A':'B'}${spillIdx}`;
+  const slot = el(slotId);
+  
+  if (slot) {
+    // Show Raw (Active)
+    sorted.forEach(rec => {
+        const r = createRecord(rec, 1);
+        slot.appendChild(r);
+        setTimeout(() => r.classList.add('show'), 20);
+    });
+    
+    await wait(delay * 1.5);
+    
+    // Raw becomes Ghost (Gray)
+    handleTeachingTransition(slot);
+    clearContainer(slot);
+    
+    // Show Combined (Active & Colored)
+    combined.forEach(rec => {
+      const r = createRecord(rec, rec.count);
+      r.style.zIndex = 100; 
+      r.style.boxShadow = "0 0 5px rgba(0,0,0,0.4)";
+      slot.appendChild(r);
+      setTimeout(() => r.classList.add('show'), 20);
+    });
+
+    log(`Mapper ${mapperId==0?'A':'B'}: Spill ${spillIdx} written.`, "SUCCESS");
+  }
+}
+
+async function runMerge(mapperId, tick) {
+  const mapper = state.mappers[mapperId];
+  const target = el(`final${mapperId==0?'A':'B'}`);
+  
+  let all = [];
+  mapper.spills.forEach(s => all.push(...s));
+  
+  // 1. Gather (Raw/Colored)
+  all.forEach(rec => {
+    const r = createRecord(rec, rec.count);
+    r.style.opacity = 0.9; 
+    target.appendChild(r);
+    setTimeout(()=>r.classList.add('show'), 10);
+  });
+  
+  await wait(tick * 1.5);
+  
+  // 2. Gathered becomes Ghost (Gray)
+  handleTeachingTransition(target);
+  clearContainer(target);
+  await wait(tick * 0.5);
+
+  // 3. Cleanup spills source (Ghosts)
+  const labelA = mapperId===0 ? 'A' : 'B';
+  for(let i=0; i<mapper.spills.length; i++) {
+      const spillSlot = el(`spill${labelA}${i}`);
+      if(spillSlot) {
+        handleTeachingTransition(spillSlot);
+        clearContainer(spillSlot);
+      }
+  }
+
+  const merged = combine(all.sort((a,b) => (a.p - b.p) || a.k.localeCompare(b.k)));
+  mapper.final = merged;
+
+  // 4. Merged Result (Colored & Active)
+  merged.forEach(rec => {
+    const r = createRecord(rec, rec.count);
+    r.style.zIndex = 100;
+    r.style.boxShadow = "0 0 5px rgba(0,0,0,0.4)";
+    target.appendChild(r);
+    setTimeout(()=>r.classList.add('show'), 10);
+  });
+  log(`Mapper ${mapperId==0?'A':'B'}: Merge complete.`, "SUCCESS");
+}
+
+async function runShuffle(tick) {
+  const m0 = state.mappers[0].final;
+  const m1 = state.mappers[1].final;
+  const all = [...m0, ...m1];
+
+  for (const rec of all) {
+    const target = el(`red${rec.p}`);
+    const r = createRecord(rec, rec.count);
+    target.appendChild(r);
+    setTimeout(()=>r.classList.add('show'), 10);
+    await wait(tick/5);
+  }
+
+  // Cleanup Maps
+  handleTeachingTransition(el('finalA')); clearContainer(el('finalA'));
+  handleTeachingTransition(el('finalB')); clearContainer(el('finalB'));
+
+  await wait(tick);
+  
+  const partitions = [0,1,2];
+  const reducePromises = partitions.map(async (p) => {
+      const box = el(`red${p}`);
+      const recs = all.filter(x => x.p === p);
+      const reduced = combine(recs); 
+      
+      // Incoming becomes ghost
+      handleTeachingTransition(box);
+      clearContainer(box);
+      await wait(tick);
+      
+      // Final result active
+      reduced.forEach(rec => {
+        const r = createRecord(rec, rec.count);
+        r.style.border = "2px solid #333";
+        r.style.zIndex = 100;
+        r.style.transform = "scale(1.1)";
+        box.appendChild(r);
+        setTimeout(()=>r.classList.add('show'), 10);
+      });
+  });
+
+  await Promise.all(reducePromises);
+  log("Reducers: Aggregation done.", "SUCCESS");
+}
+
+function combine(list) {
+  const m = new Map();
+  list.forEach(x => {
+    if(!m.has(x.k)) m.set(x.k, { ...x, count: 0 });
+    m.get(x.k).count += (x.count || 1);
+  });
+  return Array.from(m.values());
+}
+
+function resetUI() {
+  state.mappers = [
+      { id: 0, buffer: [], spills: [], final: [], data: [...RAW_DATA_A] },
+      { id: 1, buffer: [], spills: [], final: [], data: [...RAW_DATA_B] }
+  ];
+  
+  el('consoleLog').innerHTML = '<div class="log-entry" style="color:#64748b">System Ready.</div>';
+  el('mRecords').innerText = '0';
+  // el('mBuffer').innerText = '0%'; // Removed
+  el('mSpills').innerText = '0';
+  
+  if(el('pct0')) { el('pct0').innerText = '0%'; el('fill0').style.height = '0%'; }
+  if(el('pct1')) { el('pct1').innerText = '0%'; el('fill1').style.height = '0%'; }
+  el('progressFill').style.width = '0%';
+  
+  const containers = [
+    el('buf0'), el('buf1'), el('spillA0'), el('spillA1'), el('spillB0'), el('spillB1'),
+    el('finalA'), el('finalB'), el('red0'), el('red1'), el('red2')
+  ];
+  containers.forEach(c => {
+    if(c) Array.from(c.querySelectorAll('.kv-record')).forEach(r => r.remove());
+  });
+  
+  el('spillA0').innerHTML = '<div class="spill-label">Spill 0</div>';
+  el('spillA1').innerHTML = '<div class="spill-label">Spill 1</div>';
+  el('spillB0').innerHTML = '<div class="spill-label">Spill 0</div>';
+  el('spillB1').innerHTML = '<div class="spill-label">Spill 1</div>';
+  
+  ['boxInput','boxMap','boxSpill','boxMerge','boxReduce'].forEach(id => el(id).classList.remove('active'));
+}
+
+el('startBtn').addEventListener('click', runSimulation);
+el('resetBtn').addEventListener('click', () => { state.running=false; resetUI(); el('startBtn').disabled=false; });
+
+</script>
+</body>
+</html>

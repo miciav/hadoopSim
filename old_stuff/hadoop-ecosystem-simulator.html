@@ -1,0 +1,2593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Hadoop Ecosystem Simulator + Gantt (Improved)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- React and ReactDOM from CDN -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <!-- Babel for on-the-fly JSX compilation -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- vis-timeline for richer Gantt rendering -->
+  <link rel="stylesheet" href="https://unpkg.com/vis-timeline@7.7.4/styles/vis-timeline-graph2d.min.css">
+  <script src="https://unpkg.com/vis-timeline@7.7.4/standalone/umd/vis-timeline-graph2d.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useRef } = React;
+
+    // Constants
+    const REPLICATION_FACTOR = 3;
+    const BLOCK_SIZE = 128;
+    const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
+    const MAX_TASK_RETRIES = 3;
+    const TASK_RETRY_DELAY_MS = 2000;
+    const STORAGE_KEY = 'hadoop-ecosystem-simulator/v1';
+
+    // Persistence helpers
+    const loadPersistedState = () => {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed?.cluster) return null;
+        return parsed;
+      } catch (err) {
+        console.warn('Failed to load persisted state', err);
+        return null;
+      }
+    };
+
+    const persistState = (state) => {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (err) {
+        console.warn('Failed to persist state', err);
+      }
+    };
+
+    // UI Components (pure/presentational)
+    const NotificationToaster = ({ notifications }) => (
+      <div>
+        {notifications.map(n => (
+          <div key={n.id} className={`notification ${n.type}`}>
+            {n.message}
+          </div>
+        ))}
+      </div>
+    );
+
+    const StatsPanel = ({ stats }) => (
+      <div className="stats-section">
+        <h2>📊 Statistics</h2>
+        <div className="stat-item">
+          <span className="stat-label">Nodes:</span>
+          <span className="stat-value">{stats.activeNodes}/{stats.totalNodes}</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-label">CPU:</span>
+          <span className="stat-value">{stats.cpuUsage}</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-label">Memory:</span>
+          <span className="stat-value">{stats.memoryUsage}</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-label">Storage:</span>
+          <span className="stat-value">{stats.storageUsage}</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-label">Files:</span>
+          <span className="stat-value">{stats.totalFiles}</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-label">Running Jobs:</span>
+          <span className="stat-value">{stats.runningJobs}</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-label">Completed:</span>
+          <span className="stat-value">{stats.completedJobs}</span>
+        </div>
+      </div>
+    );
+
+    const SidebarControls = ({ cluster, uploadFile, submitMapReduceJob, addNode, removeNode, rebalanceCluster, simulateNodeFailure, resetCluster, stats }) => (
+      <div className="sidebar">
+        <h2>🔧 Controls</h2>
+
+        <div>
+          <button className="btn btn-hdfs" onClick={() => uploadFile(256)}>
+            📤 Upload 256 MB
+          </button>
+          <button className="btn btn-hdfs" onClick={() => uploadFile(512)}>
+            📤 Upload 512 MB
+          </button>
+          <button className="btn btn-hdfs" onClick={() => uploadFile(1024)}>
+            📤 Upload 1 GB
+          </button>
+        </div>
+
+        <div style={{ marginTop: '15px' }}>
+          <h2>🎯 MapReduce</h2>
+          {cluster.files.map((file, idx) => (
+            <button
+              key={idx}
+              className="btn btn-mapreduce"
+              onClick={() => submitMapReduceJob(idx)}
+            >
+              🚀 Run on {file.name}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ marginTop: '15px' }}>
+          <h2>🖥️ Cluster</h2>
+          <button className="btn btn-yarn" onClick={addNode}>
+            ➕ Add Node
+          </button>
+          <button className="btn btn-yarn" onClick={removeNode}>
+            ➖ Remove Node
+          </button>
+          <button className="btn btn-hdfs" onClick={() => {
+            const activeNodes = cluster?.nodes.filter(n => !n.failed);
+            if (activeNodes && activeNodes.length > 0) {
+              rebalanceCluster(activeNodes[activeNodes.length - 1]);
+            }
+          }}>
+            ⚖️ Rebalance Storage
+          </button>
+        </div>
+
+        <div style={{ marginTop: '15px' }}>
+          <button className="btn btn-yarn" onClick={simulateNodeFailure}>
+            💥 Simulate Failure
+          </button>
+          <button className="btn btn-danger" onClick={resetCluster}>
+            🔄 Reset Cluster
+          </button>
+        </div>
+
+        <StatsPanel stats={stats} />
+      </div>
+    );
+
+    const NodeCard = ({ node, isShuffleSource, isShuffleTarget }) => {
+      const hasDataLocality = node.containers.some(c =>
+        c.isMapReduce && c.blockIds?.some(blockId =>
+          node.blocks.some(b => b.id === blockId)
+        )
+      );
+
+      return (
+        <div
+          className={`node ${node.failed ? 'failed' : ''} ${hasDataLocality ? 'data-locality' : ''} ${node.containers.length > 0 ? 'busy' : ''} ${isShuffleSource ? 'shuffle-source' : ''} ${isShuffleTarget ? 'shuffle-target' : ''}`}
+        >
+          <div className="node-header">
+            <span className="node-name">{node.name}</span>
+            <span className={`node-status ${node.failed ? 'status-failed' : 'status-active'}`}>
+              {node.failed ? 'FAILED' : 'ACTIVE'}
+            </span>
+          </div>
+
+          <div className="node-resources">
+            <div>
+              CPU: {node.cpuUsed}/{node.cpuTotal} cores
+              <div className="resource-bar">
+                <div
+                  className="resource-fill cpu-fill"
+                  style={{ width: `${(node.cpuUsed / node.cpuTotal) * 100}%` }}
+                />
+              </div>
+            </div>
+            <div>
+              Memory: {node.memoryUsed.toFixed(1)}/{node.memoryTotal} GB
+              <div className="resource-bar">
+                <div
+                  className="resource-fill memory-fill"
+                  style={{ width: `${(node.memoryUsed / node.memoryTotal) * 100}%` }}
+                />
+              </div>
+            </div>
+            <div>
+              Storage: {node.storageUsed.toFixed(1)}/{node.storageTotal} GB
+              <div className="resource-bar">
+                <div
+                  className="resource-fill storage-fill"
+                  style={{ width: `${(node.storageUsed / node.storageTotal) * 100}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {node.blocks.length > 0 && (
+            <div className="blocks-section">
+              <div className="section-title">📦 HDFS Blocks ({node.blocks.length})</div>
+              <div className="block-list">
+                {node.blocks.map((block, idx) => (
+                  <div
+                    key={idx}
+                    className={`block-item ${block.isReplica ? 'replica' : ''}`}
+                    style={{ backgroundColor: block.color }}
+                    title={`${block.id} - ${block.fileName}${block.isReplica ? ' (Replica)' : ' (Primary)'}`}
+                  >
+                    {block.id}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {node.containers.length > 0 && (
+            <div className="containers-section">
+              <div className="section-title">🎯 YARN Containers ({node.containers.length})</div>
+              <div className="container-list">
+                {node.containers.map((container, idx) => (
+                  <div
+                    key={idx}
+                    className={`container-item ${container.isApplicationMaster ? 'am' : ''} ${container.isReducer ? 'reducer' : ''}`}
+                    title={`${container.name} - CPU: ${container.cpu}, Mem: ${container.memory}GB`}
+                  >
+                    {container.isApplicationMaster ? '🎯 AM' : container.isReducer ? '🔄 Reducer' : container.name}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    const NodeGrid = ({ cluster }) => (
+      <div className="cluster-panel">
+        <div className="panel-header">
+          <span className="panel-icon">🖥️</span>
+          <h2>Cluster Nodes</h2>
+        </div>
+        <div className="nodes-container">
+          {cluster.nodes.map(node => {
+            const isShuffleSource = cluster.mapReduceJobs.some(job =>
+              job.shufflePhase?.inProgress &&
+              job.shufflePhase.sourceNodes.includes(node.id)
+            );
+
+            const isShuffleTarget = cluster.mapReduceJobs.some(job =>
+              job.shufflePhase?.inProgress &&
+              job.reducers.some(r => r.nodeId === node.id)
+            );
+
+            return (
+              <NodeCard
+                key={node.id}
+                node={node}
+                isShuffleSource={isShuffleSource}
+                isShuffleTarget={isShuffleTarget}
+              />
+            );
+          })}
+        </div>
+      </div>
+    );
+
+    const FilesPanel = ({ files }) => {
+      if (files.length === 0) return null;
+
+      return (
+        <div className="cluster-panel">
+          <div className="panel-header">
+            <span className="panel-icon">📁</span>
+            <h2>HDFS Files</h2>
+          </div>
+          <div className="files-list">
+            {files.map((file, idx) => (
+              <div key={idx} className="file-item" style={{ borderLeftColor: file.color }}>
+                <div className="file-header">
+                  <span className="file-name">{file.name}</span>
+                  <span className="file-size">{file.size} MB</span>
+                </div>
+                <div className="file-blocks">
+                  {file.blocks.map((block, bidx) => (
+                    <div
+                      key={bidx}
+                      className="block-item"
+                      style={{ backgroundColor: file.color }}
+                    >
+                      {block.id}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    };
+
+    const GanttChart = ({ job }) => {
+      const containerRef = useRef(null);
+      const timelineRef = useRef(null);
+      const timelineKey = `${job.timelineStart || 0}-${job.timelineEnd || 0}-${job.mappers.map(m => `${m.nodeId || 'x'}:${m.startedAt || 0}:${m.endedAt || 0}`).join('|')}-${job.reducers.map(r => `${r.nodeId || 'x'}:${r.startedAt || 0}:${r.endedAt || 0}`).join('|')}-${job.shufflePhase?.startedAt || 0}-${job.shufflePhase?.endedAt || 0}`;
+
+      useEffect(() => {
+        if (!containerRef.current) return;
+        if (!window.vis || !window.vis.DataSet || !window.vis.Timeline) {
+          console.warn('vis-timeline not available');
+          return;
+        }
+
+        const { DataSet, Timeline } = window.vis;
+
+        const now = job.timelineEnd || Date.now();
+        const startTime = job.timelineStart || now;
+        const items = new DataSet();
+        const groups = new DataSet();
+        const seenNodes = new Set();
+
+        // Clear any placeholder content before vis takes over
+        if (containerRef.current) {
+          containerRef.current.innerHTML = '';
+        }
+
+        const ensureGroup = (nodeId) => {
+          if (!nodeId || seenNodes.has(nodeId)) return;
+          seenNodes.add(nodeId);
+          groups.add({ id: nodeId, content: `Node-${nodeId}` });
+        };
+
+        job.mappers.forEach(mapper => {
+          if (!mapper.startedAt || mapper.nodeId == null) return;
+          ensureGroup(mapper.nodeId);
+          items.add({
+            id: `map-${mapper.name}`,
+            group: mapper.nodeId,
+            content: `🗺️ ${mapper.name}`,
+            start: new Date(mapper.startedAt),
+            end: new Date(mapper.endedAt || now),
+            className: 'gantt-map'
+          });
+        });
+
+        job.reducers.forEach(reducer => {
+          if (!reducer.startedAt || reducer.nodeId == null) return;
+          ensureGroup(reducer.nodeId);
+          items.add({
+            id: `reduce-${reducer.name}`,
+            group: reducer.nodeId,
+            content: `🧮 ${reducer.name}`,
+            start: new Date(reducer.startedAt),
+            end: new Date(reducer.endedAt || now),
+            className: 'gantt-reduce'
+          });
+        });
+
+        const shuffleNodes = new Set();
+        job.shufflePhase?.sourceNodes?.forEach(n => shuffleNodes.add(n));
+        job.reducers.forEach(r => r.nodeId && shuffleNodes.add(r.nodeId));
+        if (job.shufflePhase?.startedAt) {
+          shuffleNodes.forEach(nodeId => {
+            ensureGroup(nodeId);
+            items.add({
+              id: `shuffle-${nodeId}`,
+              group: nodeId,
+              content: '🔀 Shuffle',
+              start: new Date(job.shufflePhase.startedAt),
+              end: new Date(job.shufflePhase.endedAt || now),
+              className: 'gantt-shuffle'
+            });
+          });
+        }
+
+        if (timelineRef.current) {
+          timelineRef.current.destroy();
+          timelineRef.current = null;
+        }
+
+        if (items.get().length === 0) {
+          return;
+        }
+
+        const groupCount = groups.length || groups.get().length || seenNodes.size;
+        const heightPx = Math.max(220, Math.min(700, 140 + groupCount * 34));
+
+        const options = {
+          stack: true,
+          horizontalScroll: true,
+          zoomKey: 'ctrlKey',
+          min: new Date(startTime),
+          max: new Date(now + 2000),
+          zoomMin: 1000,
+          zoomMax: 1000 * 60 * 60,
+          height: `${heightPx}px`,
+          width: '100%',
+          orientation: 'top',
+          groupOrder: (a, b) => (Number(a.id) || 0) - (Number(b.id) || 0),
+          margin: { item: 8, axis: 6 },
+          groupHeightMode: 'fitItems',
+          format: {
+            minorLabels: {
+              millisecond: 'SSS',
+              second: 's',
+              minute: 'HH:mm',
+              hour: 'HH:mm'
+            },
+            majorLabels: {
+              minute: 'ddd D MMM',
+              hour: 'ddd D MMM'
+            }
+          }
+        };
+
+        timelineRef.current = new Timeline(
+          containerRef.current,
+          items,
+          groups,
+          options
+        );
+        timelineRef.current.fit();
+        timelineRef.current.on('doubleClick', () => timelineRef.current && timelineRef.current.fit());
+
+        return () => {
+          if (timelineRef.current) {
+            timelineRef.current.destroy();
+            timelineRef.current = null;
+          }
+        };
+      }, [timelineKey, job.mappers.length, job.reducers.length]);
+
+      return (
+        <div className="gantt-container">
+          <div className="gantt-metrics">
+            <div className="gantt-metric">
+              <span>Job Status</span>
+              <strong>{job.status}</strong>
+            </div>
+            <div className="gantt-metric">
+              <span>AM Node</span>
+              <strong>{job.amNodeId ? `Node-${job.amNodeId}` : 'Pending'}</strong>
+            </div>
+            <div className="gantt-metric">
+              <span>Mappers</span>
+              <strong>{job.mappers.length}</strong>
+            </div>
+            <div className="gantt-metric">
+              <span>Reducers</span>
+              <strong>{job.reducers.length}</strong>
+            </div>
+          </div>
+
+          <div className="gantt-body">
+            <div className="gantt-legend">
+              <span className="legend-swatch map"></span> Map
+              <span className="legend-swatch shuffle"></span> Shuffle (per node)
+              <span className="legend-swatch reduce"></span> Reduce
+            </div>
+            <div ref={containerRef} className="gantt-vis-wrapper">
+              <div className="gantt-empty">Loading timeline…</div>
+            </div>
+            {job.mappers.length === 0 && job.reducers.length === 0 && (
+              <div className="gantt-empty">No timeline data yet.</div>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    const JobCard = ({ job, cluster, toggleJobVisibility }) => {
+      const isCollapsed = !!job.isCollapsed;
+      return (
+        <div className="job-item" style={{ borderLeftColor: job.fileColor }}>
+          <div className="job-header">
+            <span className="job-name">{job.name}</span>
+            <div className="job-actions">
+              <button
+                type="button"
+                className="job-toggle"
+                onClick={() => toggleJobVisibility(job.name)}
+                aria-expanded={!isCollapsed}
+                aria-label={`${isCollapsed ? 'Expand' : 'Minimize'} ${job.name}`}
+              >
+                {isCollapsed ? 'Expand' : 'Minimize'}
+              </button>
+              <span className={`job-status status-${job.status}`}>
+                {job.status.toUpperCase()}
+              </span>
+            </div>
+          </div>
+
+          <div className={`job-body ${isCollapsed ? 'collapsed' : ''}`}>
+            <div style={{ fontSize: '0.9em', color: '#718096', marginBottom: '10px' }}>
+              File: {job.fileName} | AM: Node-{job.amNodeId || 'N/A'}
+              {job.reducers.some(r => r.nodeId) && ` | Reducers: ${job.reducers.length}`}
+            </div>
+
+            {job.status !== 'completed' && (
+              <div className="mappers-container">
+                <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Map Phase:</div>
+                {job.mappers.map((mapper, midx) => {
+                  const node = cluster.nodes.find(n => n.id === mapper.nodeId);
+                  const hasLocality = node?.blocks.some(b => b.id === mapper.blockId);
+
+                  return (
+                    <div key={midx} className="mapper-item">
+                      <span className="mapper-name">
+                        {mapper.name}
+                        {hasLocality && ' ⚡'}
+                      </span>
+                      <span style={{ fontSize: '0.85em', color: '#718096' }}>
+                        Node-{mapper.nodeId || 'N/A'}
+                      </span>
+                      <div className="progress-bar">
+                        {mapper.progress >= 0 && (
+                          <div
+                            className="progress-fill"
+                            style={{ width: `${mapper.progress}%` }}
+                          >
+                            {mapper.progress.toFixed(0)}%
+                          </div>
+                        )}
+                        {mapper.progress < 0 && (
+                          <div style={{ padding: '0 10px', fontSize: '0.85em' }}>
+                            ❌ Failed
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {job.status === 'running' && job.mappers.every(m => m.progress >= 100 || m.progress < 0) && (
+              <>
+                {job.shufflePhase && job.shufflePhase.inProgress && (
+                  <div className="shuffle-phase">
+                    <div style={{ fontWeight: 'bold', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>🔀 Shuffle &amp; Sort Phase</span>
+                      <span style={{ fontSize: '0.85em', color: '#718096' }}>
+                        Source nodes: {job.shufflePhase.sourceNodes.join(', ')}
+                      </span>
+                    </div>
+                    <div className="progress-bar">
+                      <div
+                        className="progress-fill"
+                        style={{ width: `${job.shufflePhase.progress}%`, background: 'linear-gradient(90deg, #ed8936 0%, #dd6b20 100%)' }}
+                      >
+                        {job.shufflePhase.progress.toFixed(0)}%
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {job.reducers.length > 0 && (
+                  <div className="reducers-container">
+                    <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Reduce Phase:</div>
+                    {job.reducers.map((reducer, ridx) => (
+                      <div key={ridx} className="reducer-item">
+                        <span className="reducer-name">
+                          {reducer.name}
+                        </span>
+                        <span style={{ fontSize: '0.85em', color: '#718096' }}>
+                          Node-{reducer.nodeId || 'N/A'}
+                        </span>
+                        <div className="progress-bar">
+                          {reducer.progress >= 0 && (
+                            <div
+                              className="progress-fill reducer-fill"
+                              style={{ width: `${reducer.progress}%` }}
+                            >
+                              {reducer.progress.toFixed(0)}%
+                            </div>
+                          )}
+                          {reducer.progress < 0 && (
+                            <div style={{ padding: '0 10px', fontSize: '0.85em' }}>
+                              ❌ Failed
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {job.status === 'completed' && (
+              <div className="job-complete">
+                <div className="job-complete-title">✅ Job Completed</div>
+                <div className="job-complete-details">
+                  <div>AM: Node-{job.amNodeId || 'N/A'}</div>
+                  <div>Mappers: {job.mappers.length}</div>
+                  <div>Reducers: {job.reducers.length}</div>
+                </div>
+              </div>
+            )}
+
+            <GanttChart job={job} />
+          </div>
+        </div>
+      );
+    };
+
+    const JobsPanel = ({ cluster, toggleJobVisibility }) => {
+      if (cluster.mapReduceJobs.length === 0) return null;
+      return (
+        <div className="cluster-panel">
+          <div className="panel-header">
+            <span className="panel-icon">⚙️</span>
+            <h2>MapReduce Jobs</h2>
+          </div>
+          <div className="jobs-list">
+            {cluster.mapReduceJobs.map((job, idx) => (
+              <JobCard
+                key={idx}
+                job={job}
+                cluster={cluster}
+                toggleJobVisibility={toggleJobVisibility}
+              />
+            ))}
+          </div>
+        </div>
+      );
+    };
+
+    const HadoopEcosystem = () => {
+      // State
+      const [colorIndex, setColorIndex] = useState(0);
+      const [cluster, setCluster] = useState(null);
+      const [notifications, setNotifications] = useState([]);
+      const [nextNodeId, setNextNodeId] = useState(7);
+      const [resumeNeeded, setResumeNeeded] = useState(false);
+
+      // Initialize cluster
+      const initializeCluster = useCallback(() => {
+        const nodes = [];
+        for (let i = 0; i < 6; i++) {
+          nodes.push({
+            id: i + 1,
+            name: `Node-${i + 1}`,
+            cpuTotal: 16,
+            cpuUsed: 0,
+            memoryTotal: 32,
+            memoryUsed: 0,
+            storageTotal: 100,
+            storageUsed: 0,
+            blocks: [],
+            containers: [],
+            failed: false
+          });
+        }
+
+        setCluster({
+          nodes,
+          files: [],
+          mapReduceJobs: [],
+          fileCounter: 1,
+          jobCounter: 1,
+          mapReduceCounter: 1
+        });
+        setNextNodeId(7);
+      }, []);
+
+      useEffect(() => {
+        const persisted = loadPersistedState();
+        if (persisted?.cluster) {
+          setCluster(persisted.cluster);
+          setColorIndex(persisted.colorIndex ?? 0);
+          setNextNodeId(persisted.nextNodeId ?? 7);
+          setNotifications([]);
+          setResumeNeeded(true);
+        } else {
+          initializeCluster();
+          setResumeNeeded(false);
+        }
+      }, [initializeCluster]);
+
+      useEffect(() => {
+        if (!cluster) return;
+        persistState({
+          cluster,
+          colorIndex,
+          nextNodeId
+        });
+      }, [cluster, colorIndex, nextNodeId]);
+
+      // Notification system
+      const showNotification = (message, type) => {
+        const id = Date.now();
+        setNotifications(prev => [...prev, { id, message, type }]);
+        setTimeout(() => {
+          setNotifications(prev => prev.filter(n => n.id !== id));
+        }, 4000);
+      };
+
+      // Get next color
+      const getNextColor = () => {
+        const color = COLORS[colorIndex % COLORS.length];
+        setColorIndex(prev => prev + 1);
+        return color;
+      };
+
+      // Upload file to HDFS
+      const uploadFile = (sizeInMB) => {
+        if (!cluster) return;
+
+        const activeNodes = cluster.nodes.filter(n => !n.failed);
+        if (activeNodes.length < REPLICATION_FACTOR) {
+          showNotification(`❌ Cannot upload! Need at least ${REPLICATION_FACTOR} active nodes!`, 'error');
+          return;
+        }
+
+        const fileColor = getNextColor();
+        const fileId = cluster.fileCounter;
+        const fileName = `file-${fileId}.txt`;
+        const numBlocks = Math.ceil(sizeInMB / BLOCK_SIZE);
+        const blocks = [];
+
+        for (let i = 0; i < numBlocks; i++) {
+          const blockSize = Math.min(BLOCK_SIZE, sizeInMB - i * BLOCK_SIZE);
+          const block = {
+            id: `file-${fileId}-block-${i + 1}`,
+            fileName,
+            size: blockSize,
+            color: fileColor,
+            index: i
+          };
+
+          const nodesWithBlock = [];
+          for (let r = 0; r < REPLICATION_FACTOR; r++) {
+            const availableNodes = activeNodes.filter(node => 
+              !nodesWithBlock.includes(node) &&
+              (node.storageTotal - node.storageUsed) >= (blockSize / 1024)
+            );
+
+            if (availableNodes.length === 0) {
+              showNotification('❌ Not enough storage space!', 'error');
+              return;
+            }
+
+            const selectedNode = availableNodes[Math.floor(Math.random() * availableNodes.length)];
+            selectedNode.blocks.push({ ...block, isReplica: r > 0 });
+            selectedNode.storageUsed += blockSize / 1024;
+            nodesWithBlock.push(selectedNode);
+          }
+
+          blocks.push(block);
+        }
+
+        const newFile = { name: fileName, size: sizeInMB, blocks, color: fileColor };
+
+        setCluster(prev => ({
+          ...prev,
+          files: [...prev.files, newFile],
+          fileCounter: prev.fileCounter + 1
+        }));
+
+        showNotification(`✅ File "${fileName}" (${sizeInMB} MB) uploaded with ${numBlocks} blocks × RF${REPLICATION_FACTOR}`, 'success');
+      };
+
+      // Submit MapReduce job
+      const submitMapReduceJob = (fileId) => {
+        if (!cluster) return;
+
+        const file = cluster.files[fileId];
+        if (!file) {
+          showNotification('❌ File not found!', 'error');
+          return;
+        }
+
+        const activeNodes = cluster.nodes.filter(n => !n.failed);
+        if (activeNodes.length === 0) {
+          showNotification('❌ No active nodes available!', 'error');
+          return;
+        }
+
+        const jobName = `MapReduce-${cluster.mapReduceCounter}`;
+
+        // Create a mapper for EVERY block in the file
+        const mappers = file.blocks.map((block, idx) => ({
+          name: `Map-${cluster.mapReduceCounter}-${idx + 1}`,
+          blockId: block.id,
+          nodeId: null,
+          progress: 0,
+          retryCount: 0,
+          needsReschedule: false
+        }));
+
+        // Random number of reducers: 1, 2, or 3
+        const numReducers = Math.floor(Math.random() * 3) + 1;
+        const reducers = Array.from({ length: numReducers }, (_, idx) => ({
+          name: `Reduce-${cluster.mapReduceCounter}-${idx + 1}`,
+          progress: 0,
+          nodeId: null,
+          retryCount: 0,
+          needsReschedule: false
+        }));
+
+        const job = {
+          name: jobName,
+          fileName: file.name,
+          fileColor: file.color,
+          mappers,
+          reducers,
+          status: 'pending',
+          amNodeId: null,
+          timelineStart: Date.now(),
+          timelineEnd: null,
+          isCollapsed: false
+        };
+
+        setCluster(prev => ({
+          ...prev,
+          mapReduceJobs: [...prev.mapReduceJobs, job],
+          mapReduceCounter: prev.mapReduceCounter + 1
+        }));
+
+        showNotification(`🚀 Submitting ${jobName} with ${mappers.length} mapper${mappers.length > 1 ? 's' : ''} and ${numReducers} reducer${numReducers > 1 ? 's' : ''}`, 'info');
+        setTimeout(() => scheduleMapReduceJob(job), 100);
+      };
+
+      // Allocate Application Master
+      const allocateApplicationMaster = (jobName, job) => {
+        if (!cluster) return false;
+
+        const activeNodes = cluster.nodes.filter(n => !n.failed);
+        const sortedNodes = activeNodes.sort((a, b) => {
+          const aAvailCpu = a.cpuTotal - a.cpuUsed;
+          const bAvailCpu = b.cpuTotal - b.cpuUsed;
+          return bAvailCpu - aAvailCpu;
+        });
+
+        for (const node of sortedNodes) {
+          const cpuAvailable = node.cpuTotal - node.cpuUsed;
+          const memAvailable = node.memoryTotal - node.memoryUsed;
+
+          if (cpuAvailable >= 1 && memAvailable >= 2) {
+            node.cpuUsed += 1;
+            node.memoryUsed += 2;
+            node.containers.push({
+              name: `AM-${jobName}`,
+              cpu: 1,
+              memory: 2,
+              isApplicationMaster: true,
+              jobName
+            });
+
+            job.amNodeId = node.id;
+            setCluster(prev => ({ ...prev }));
+            return true;
+          }
+        }
+
+        return false;
+      };
+
+      // Schedule MapReduce job
+      const scheduleMapReduceJob = (job) => {
+        if (!cluster) return;
+
+        const allocated = allocateApplicationMaster(job.name, job);
+        if (!allocated) {
+          showNotification(`❌ Cannot allocate ApplicationMaster for ${job.name}!`, 'error');
+          job.status = 'failed';
+          setCluster(prev => ({ ...prev }));
+          return;
+        }
+
+        showNotification(`🚀 ${job.name} scheduled! AM allocated on Node-${job.amNodeId}`, 'info');
+
+        const activeNodes = cluster.nodes.filter(n => !n.failed);
+        let allMappersAllocated = true;
+
+        job.mappers.forEach(mapper => {
+          const nodesWithBlock = activeNodes.filter(node =>
+            node.blocks.some(b => b.id === mapper.blockId)
+          );
+
+          const candidateNodes = nodesWithBlock.length > 0 ? nodesWithBlock : activeNodes;
+          const sortedCandidates = candidateNodes.sort((a, b) => {
+            const aHasBlock = a.blocks.some(b => b.id === mapper.blockId);
+            const bHasBlock = b.blocks.some(b => b.id === mapper.blockId);
+            if (aHasBlock && !bHasBlock) return -1;
+            if (!aHasBlock && bHasBlock) return 1;
+            const aAvailCpu = a.cpuTotal - a.cpuUsed;
+            const bAvailCpu = b.cpuTotal - b.cpuUsed;
+            return bAvailCpu - aAvailCpu;
+          });
+
+          let allocated = false;
+          for (const node of sortedCandidates) {
+            const cpuAvailable = node.cpuTotal - node.cpuUsed;
+            const memAvailable = node.memoryTotal - node.memoryUsed;
+
+            if (cpuAvailable >= 2 && memAvailable >= 4) {
+              node.cpuUsed += 2;
+              node.memoryUsed += 4;
+              node.containers.push({
+                name: mapper.name,
+                cpu: 2,
+                memory: 4,
+                isMapReduce: true,
+                isMapper: true,
+                blockIds: [mapper.blockId]
+              });
+
+              mapper.nodeId = node.id;
+              mapper.hadLocality = node.blocks.some(b => b.id === mapper.blockId);
+              allocated = true;
+              break;
+            }
+          }
+
+          if (!allocated) {
+            allMappersAllocated = false;
+          }
+        });
+
+        if (!allMappersAllocated) {
+          showNotification(`⚠️ Some mappers for ${job.name} could not be allocated!`, 'warning');
+        }
+
+        job.status = 'running';
+        setCluster(prev => ({ ...prev }));
+
+        runMappers(job);
+      };
+
+      const allocateMapperTask = (mapper, nodes) => {
+        if (!mapper || !Array.isArray(nodes) || nodes.length === 0) return false;
+
+        const nodesWithBlock = nodes.filter(node =>
+          node.blocks.some(b => b.id === mapper.blockId)
+        );
+
+        const candidateNodes = nodesWithBlock.length > 0 ? nodesWithBlock : nodes;
+        const sortedNodes = [...candidateNodes].sort((a, b) => {
+          const aHasBlock = a.blocks.some(b => b.id === mapper.blockId);
+          const bHasBlock = b.blocks.some(b => b.id === mapper.blockId);
+          if (aHasBlock && !bHasBlock) return -1;
+          if (!aHasBlock && bHasBlock) return 1;
+          const aAvailCpu = a.cpuTotal - a.cpuUsed;
+          const bAvailCpu = b.cpuTotal - b.cpuUsed;
+          return bAvailCpu - aAvailCpu;
+        });
+
+        for (const node of sortedNodes) {
+          const cpuAvailable = node.cpuTotal - node.cpuUsed;
+          const memAvailable = node.memoryTotal - node.memoryUsed;
+
+          if (cpuAvailable >= 2 && memAvailable >= 4) {
+            node.cpuUsed += 2;
+            node.memoryUsed += 4;
+            node.containers.push({
+              name: mapper.name,
+              cpu: 2,
+              memory: 4,
+              isMapReduce: true,
+              isMapper: true,
+              blockIds: [mapper.blockId]
+            });
+
+            mapper.nodeId = node.id;
+            mapper.progress = 0;
+            mapper.startedAt = null;
+            mapper.endedAt = null;
+            mapper.needsReschedule = false;
+            mapper.hadLocality = node.blocks.some(b => b.id === mapper.blockId);
+            return true;
+          }
+        }
+
+        return false;
+      };
+
+      const allocateReducerTask = (reducer, jobName, nodes) => {
+        if (!reducer || !Array.isArray(nodes) || nodes.length === 0) return false;
+        const sortedNodes = [...nodes].sort((a, b) => {
+          const aAvailCpu = a.cpuTotal - a.cpuUsed;
+          const bAvailCpu = b.cpuTotal - b.cpuUsed;
+          return bAvailCpu - aAvailCpu;
+        });
+
+        for (const node of sortedNodes) {
+          const cpuAvailable = node.cpuTotal - node.cpuUsed;
+          const memAvailable = node.memoryTotal - node.memoryUsed;
+
+          if (cpuAvailable >= 2 && memAvailable >= 4) {
+            node.cpuUsed += 2;
+            node.memoryUsed += 4;
+            node.containers.push({
+              name: reducer.name,
+              cpu: 2,
+              memory: 4,
+              isMapReduce: true,
+              isReducer: true,
+              jobName
+            });
+
+            reducer.nodeId = node.id;
+            reducer.progress = 0;
+            reducer.startedAt = null;
+            reducer.endedAt = null;
+            reducer.needsReschedule = false;
+            return true;
+          }
+        }
+
+        return false;
+      };
+
+      const scheduleMapperRetry = (jobName, delay = TASK_RETRY_DELAY_MS) => {
+        setTimeout(() => {
+          let rescheduledAny = false;
+          let failedJob = null;
+
+          setCluster(prev => {
+            if (!prev) return prev;
+            const job = prev.mapReduceJobs.find(j => j.name === jobName);
+            if (!job || job.status !== 'running') return prev;
+
+            job.pendingMapperRetry = false;
+
+            const activeNodes = prev.nodes.filter(n => !n.failed);
+            job.mappers.forEach(mapper => {
+              if (mapper.nodeId === null && mapper.progress >= 0 && (mapper.retryCount || 0) < MAX_TASK_RETRIES) {
+                const allocated = allocateMapperTask(mapper, activeNodes);
+                if (allocated) {
+                  rescheduledAny = true;
+                }
+              }
+            });
+
+            const pendingMappers = job.mappers.filter(mapper => mapper.nodeId === null && mapper.progress >= 0);
+            const exhaustedAttempts = pendingMappers.some(mapper => (mapper.retryCount || 0) >= MAX_TASK_RETRIES);
+
+            if (exhaustedAttempts) {
+              job.status = 'failed';
+              failedJob = job.name;
+            } else if (pendingMappers.length > 0) {
+              job.pendingMapperRetry = true;
+              scheduleMapperRetry(job.name);
+            }
+
+            return { ...prev };
+          });
+
+          if (failedJob) {
+            showNotification(`❌ ${failedJob} failed: mapper retries exhausted`, 'error');
+          } else if (rescheduledAny) {
+            showNotification(`🔁 Rescheduled mapper tasks for ${jobName}`, 'info');
+          }
+        }, delay);
+      };
+
+      const scheduleReducerRetry = (jobName, delay = TASK_RETRY_DELAY_MS) => {
+        setTimeout(() => {
+          let rescheduledAny = false;
+          let failedJob = null;
+
+          setCluster(prev => {
+            if (!prev) return prev;
+            const job = prev.mapReduceJobs.find(j => j.name === jobName);
+            if (!job || job.status !== 'running') return prev;
+
+            job.pendingReducerRetry = false;
+
+            const activeNodes = prev.nodes.filter(n => !n.failed);
+            job.reducers.forEach(reducer => {
+              if (reducer.nodeId === null && reducer.progress >= 0 && (reducer.retryCount || 0) < MAX_TASK_RETRIES) {
+                const allocated = allocateReducerTask(reducer, job.name, activeNodes);
+                if (allocated) {
+                  rescheduledAny = true;
+                }
+              }
+            });
+
+            const pendingReducers = job.reducers.filter(reducer => reducer.nodeId === null && reducer.progress >= 0);
+            const exhaustedAttempts = pendingReducers.some(reducer => (reducer.retryCount || 0) >= MAX_TASK_RETRIES);
+
+            if (exhaustedAttempts) {
+              job.status = 'failed';
+              failedJob = job.name;
+            } else if (pendingReducers.length > 0) {
+              job.pendingReducerRetry = true;
+              scheduleReducerRetry(job.name);
+            }
+
+            return { ...prev };
+          });
+
+          if (failedJob) {
+            showNotification(`❌ ${failedJob} failed: reducer retries exhausted`, 'error');
+          } else if (rescheduledAny) {
+            showNotification(`🔁 Rescheduled reducer tasks for ${jobName}`, 'info');
+          }
+        }, delay);
+      };
+
+      // Toggle visibility of a MapReduce job card without breaking job references
+      const toggleJobVisibility = (jobName) => {
+        setCluster(prev => {
+          if (!prev) return prev;
+          const job = prev.mapReduceJobs.find(j => j.name === jobName);
+          if (job) {
+            job.isCollapsed = !job.isCollapsed;
+          }
+          return { ...prev };
+        });
+      };
+
+      // Run mappers with progress simulation (slower + timestamps)
+      const runMappers = (job) => {
+        const interval = setInterval(() => {
+          setCluster(prev => {
+            if (!prev) return prev;
+
+            const updatedJob = prev.mapReduceJobs.find(j => j.name === job.name);
+            if (!updatedJob || updatedJob.status !== 'running') {
+              clearInterval(interval);
+              return prev;
+            }
+
+            let allMappersComplete = true;
+            let anyMapperRunning = false;
+
+            updatedJob.mappers.forEach(mapper => {
+              if (mapper.progress >= 0 && mapper.progress < 100 && mapper.nodeId !== null) {
+                if (!mapper.startedAt) {
+                  mapper.startedAt = Date.now();
+                }
+                mapper.progress = Math.min(100, mapper.progress + Math.random() * 6);
+                if (mapper.progress >= 100 && !mapper.endedAt) {
+                  mapper.endedAt = Date.now();
+                }
+                anyMapperRunning = true;
+              }
+              if (mapper.progress < 100 && mapper.progress >= 0) {
+                allMappersComplete = false;
+              }
+            });
+
+            // Only complete map phase when ALL mappers are at 100%
+            if (allMappersComplete && anyMapperRunning === false && !updatedJob.reducers.some(r => r.nodeId !== null)) {
+              clearInterval(interval);
+              // Use setTimeout to ensure state update happens before starting reduce
+              setTimeout(() => completeMapPhase(updatedJob), 100);
+            }
+
+            return { ...prev };
+          });
+        }, 900);
+      };
+
+      // Complete map phase and start shuffle
+      const completeMapPhase = (job) => {
+        if (!cluster) return;
+
+        // First, free all mapper containers
+        const activeNodes = cluster.nodes.filter(n => !n.failed);
+        const mapperNodes = [];
+
+        activeNodes.forEach(node => {
+          job.mappers.forEach(mapper => {
+            const containerIndex = node.containers.findIndex(c => c.name === mapper.name);
+            if (containerIndex !== -1) {
+              mapperNodes.push(node.id);
+              const container = node.containers[containerIndex];
+              node.cpuUsed -= container.cpu;
+              node.memoryUsed -= container.memory;
+              node.containers.splice(containerIndex, 1);
+            }
+          });
+        });
+
+        // Set shuffle phase
+        job.shufflePhase = {
+          inProgress: true,
+          progress: 0,
+          sourceNodes: [...new Set(mapperNodes)],
+          startedAt: Date.now(),
+          endedAt: null
+        };
+
+        setCluster(prev => ({ ...prev }));
+        showNotification(`🔀 Shuffle phase started for ${job.name}! Transferring data...`, 'info');
+
+        // Simulate shuffle progress (slower)
+        const shuffleInterval = setInterval(() => {
+          setCluster(prev => {
+            if (!prev) return prev;
+
+            const updatedJob = prev.mapReduceJobs.find(j => j.name === job.name);
+            if (!updatedJob || !updatedJob.shufflePhase) {
+              clearInterval(shuffleInterval);
+              return prev;
+            }
+
+            updatedJob.shufflePhase.progress = Math.min(100, updatedJob.shufflePhase.progress + Math.random() * 10);
+
+            if (updatedJob.shufflePhase.progress >= 100) {
+              clearInterval(shuffleInterval);
+              updatedJob.shufflePhase.inProgress = false;
+              updatedJob.shufflePhase.endedAt = Date.now();
+              // Start reduce phase shortly after shuffle completes
+              setTimeout(() => startReducePhase(updatedJob), 100);
+            }
+
+            return { ...prev };
+          });
+        }, 800);
+      };
+
+      // Start reduce phase after shuffle
+      const startReducePhase = (job) => {
+        if (!cluster) return;
+
+        const activeNodes = cluster.nodes.filter(n => !n.failed);
+
+        // Allocate multiple reducer containers
+        let allReducersAllocated = true;
+
+        job.reducers.forEach(reducer => {
+          const reducerAllocated = allocateReducerTask(reducer, job.name, activeNodes);
+          if (reducerAllocated && !reducer.startedAt) {
+            reducer.startedAt = Date.now();
+          }
+          if (!reducerAllocated) {
+            allReducersAllocated = false;
+          }
+        });
+
+        if (!allReducersAllocated) {
+          showNotification(`❌ Cannot allocate all reducers for ${job.name}!`, 'error');
+          job.status = 'failed';
+          setCluster(prev => ({ ...prev }));
+          return;
+        }
+
+        setCluster(prev => ({ ...prev }));
+
+        const reducerNodes = [...new Set(job.reducers.map(r => r.nodeId))];
+        showNotification(`✅ Shuffle complete! ${job.reducers.length} reducer${job.reducers.length > 1 ? 's' : ''} allocated on ${reducerNodes.length} node${reducerNodes.length > 1 ? 's' : ''}`, 'success');
+
+        const reduceInterval = setInterval(() => {
+          setCluster(prev => {
+            if (!prev) return prev;
+
+            const updatedJob = prev.mapReduceJobs.find(j => j.name === job.name);
+            if (!updatedJob || updatedJob.status !== 'running') {
+              clearInterval(reduceInterval);
+              return prev;
+            }
+
+            // Update all reducers progress (slower + timestamps)
+            updatedJob.reducers.forEach(reducer => {
+              if (reducer.nodeId !== null && reducer.progress < 100) {
+                if (!reducer.startedAt) {
+                  reducer.startedAt = Date.now();
+                }
+                reducer.progress = Math.min(100, reducer.progress + Math.random() * 6);
+                if (reducer.progress >= 100 && !reducer.endedAt) {
+                  reducer.endedAt = Date.now();
+                }
+              }
+            });
+
+            // Check if all reducers completed
+            const allReducersComplete = updatedJob.reducers.every(r => r.progress >= 100);
+
+            if (allReducersComplete) {
+              clearInterval(reduceInterval);
+              completeJob(updatedJob);
+            }
+
+            return { ...prev };
+          });
+        }, 900);
+      };
+
+      useEffect(() => {
+        if (!resumeNeeded || !cluster) return;
+        cluster.mapReduceJobs.forEach(job => {
+          if (job.status === 'running') {
+            const hasPendingMappers = job.mappers.some(m => m.progress < 100 && m.progress >= 0);
+            const shuffleInProgress = job.shufflePhase?.inProgress;
+            const reducersRunning = job.reducers.some(r => r.progress < 100 && r.progress >= 0 && r.nodeId);
+
+            if (hasPendingMappers) {
+              runMappers(job);
+            } else if (shuffleInProgress) {
+              setTimeout(() => startReducePhase(job), 100);
+            } else if (reducersRunning) {
+              startReducePhase(job);
+            }
+          }
+        });
+        setResumeNeeded(false);
+      }, [resumeNeeded, cluster]);
+
+      // Complete job
+      const completeJob = (job) => {
+        job.status = 'completed';
+        job.timelineEnd = Date.now();
+
+        const activeNodes = cluster.nodes.filter(n => !n.failed);
+        activeNodes.forEach(node => {
+          // Track resources to free
+          let cpuToFree = 0;
+          let memoryToFree = 0;
+
+          // Remove mapper containers
+          job.mappers.forEach(mapper => {
+            const containerIndex = node.containers.findIndex(c => c.name === mapper.name);
+            if (containerIndex !== -1) {
+              const container = node.containers[containerIndex];
+              cpuToFree += container.cpu;
+              memoryToFree += container.memory;
+              node.containers.splice(containerIndex, 1);
+            }
+          });
+
+          // Remove all reducer containers
+          job.reducers.forEach(reducer => {
+            const reducerIndex = node.containers.findIndex(c => c.name === reducer.name);
+            if (reducerIndex !== -1) {
+              const container = node.containers[reducerIndex];
+              cpuToFree += container.cpu;
+              memoryToFree += container.memory;
+              node.containers.splice(reducerIndex, 1);
+            }
+          });
+
+          // Remove AM container
+          const amIndex = node.containers.findIndex(c => c.isApplicationMaster && c.jobName === job.name);
+          if (amIndex !== -1) {
+            const container = node.containers[amIndex];
+            cpuToFree += container.cpu;
+            memoryToFree += container.memory;
+            node.containers.splice(amIndex, 1);
+          }
+
+          // Free resources
+          node.cpuUsed -= cpuToFree;
+          node.memoryUsed -= memoryToFree;
+        });
+
+        setCluster(prev => ({ ...prev }));
+        showNotification(`🎉 ${job.name} completed successfully!`, 'success');
+      };
+
+      // Simulate node failure
+      const simulateNodeFailure = () => {
+        if (!cluster) return;
+
+        const activeNodes = cluster.nodes.filter(n => !n.failed);
+        if (activeNodes.length === 0) {
+          showNotification('❌ No active nodes to fail!', 'error');
+          return;
+        }
+
+        const randomNode = activeNodes[Math.floor(Math.random() * activeNodes.length)];
+        randomNode.failed = true;
+
+        const remainingNodes = cluster.nodes.filter(n => !n.failed && n.id !== randomNode.id);
+        const affectedJobs = [];
+
+        cluster.mapReduceJobs.forEach(job => {
+          if (job.status !== 'running') return;
+
+          const mappersOnFailedNode = job.mappers.filter(m => m.nodeId === randomNode.id);
+          const reducersOnFailedNode = job.reducers.filter(r => r.nodeId === randomNode.id);
+
+          if (mappersOnFailedNode.length === 0 && reducersOnFailedNode.length === 0) return;
+
+          let mapperRestarts = 0;
+          let mapperQueued = 0;
+          let reducerRestarts = 0;
+          let reducerQueued = 0;
+          let mapperRetryExceeded = false;
+          let reducerRetryExceeded = false;
+
+          mappersOnFailedNode.forEach(mapper => {
+            const containerIndex = randomNode.containers.findIndex(c => c.name === mapper.name);
+            if (containerIndex !== -1) {
+              const container = randomNode.containers[containerIndex];
+              randomNode.cpuUsed -= container.cpu;
+              randomNode.memoryUsed -= container.memory;
+              randomNode.containers.splice(containerIndex, 1);
+            }
+
+            mapper.nodeId = null;
+            mapper.startedAt = null;
+            mapper.endedAt = null;
+            mapper.progress = 0;
+            mapper.retryCount = (mapper.retryCount || 0) + 1;
+            mapper.needsReschedule = true;
+
+            if ((mapper.retryCount || 0) >= MAX_TASK_RETRIES) {
+              mapperRetryExceeded = true;
+              return;
+            }
+
+            const allocated = allocateMapperTask(mapper, remainingNodes);
+            if (allocated) {
+              mapperRestarts++;
+            } else {
+              mapperQueued++;
+            }
+          });
+
+          reducersOnFailedNode.forEach(reducer => {
+            const containerIndex = randomNode.containers.findIndex(c => c.name === reducer.name);
+            if (containerIndex !== -1) {
+              const container = randomNode.containers[containerIndex];
+              randomNode.cpuUsed -= container.cpu;
+              randomNode.memoryUsed -= container.memory;
+              randomNode.containers.splice(containerIndex, 1);
+            }
+
+            reducer.nodeId = null;
+            reducer.startedAt = null;
+            reducer.endedAt = null;
+            reducer.progress = 0;
+            reducer.retryCount = (reducer.retryCount || 0) + 1;
+            reducer.needsReschedule = true;
+
+            if ((reducer.retryCount || 0) >= MAX_TASK_RETRIES) {
+              reducerRetryExceeded = true;
+              return;
+            }
+
+            const allocated = allocateReducerTask(reducer, job.name, remainingNodes);
+            if (allocated) {
+              reducerRestarts++;
+            } else {
+              reducerQueued++;
+            }
+          });
+
+          let summary = `${job.name}:`;
+          if (mappersOnFailedNode.length > 0) {
+            summary += ` ${mappersOnFailedNode.length} mapper(s) lost`;
+            if (mapperRestarts > 0) summary += `, ${mapperRestarts} restarted`;
+            if (mapperQueued > 0) summary += `, ${mapperQueued} waiting`;
+          }
+          if (reducersOnFailedNode.length > 0) {
+            summary += `${mappersOnFailedNode.length > 0 ? ' |' : ''} ${reducersOnFailedNode.length} reducer(s) lost`;
+            if (reducerRestarts > 0) summary += `, ${reducerRestarts} restarted`;
+            if (reducerQueued > 0) summary += `, ${reducerQueued} waiting`;
+          }
+          affectedJobs.push(summary.trim());
+
+          if (mapperRetryExceeded || reducerRetryExceeded) {
+            job.status = 'failed';
+          } else {
+            if (mapperQueued > 0 && !job.pendingMapperRetry) {
+              job.pendingMapperRetry = true;
+              scheduleMapperRetry(job.name);
+            }
+            if (reducerQueued > 0 && !job.pendingReducerRetry) {
+              job.pendingReducerRetry = true;
+              scheduleReducerRetry(job.name);
+            }
+          }
+
+          const amIndex = randomNode.containers.findIndex(c => c.isApplicationMaster && c.jobName === job.name);
+          if (amIndex !== -1) {
+            const am = randomNode.containers[amIndex];
+            randomNode.cpuUsed -= am.cpu;
+            randomNode.memoryUsed -= am.memory;
+            randomNode.containers.splice(amIndex, 1);
+
+            const reallocated = allocateApplicationMaster(job.name, job);
+            if (!reallocated) {
+              job.status = 'failed';
+            }
+          }
+        });
+
+        setCluster(prev => ({ ...prev }));
+
+        if (affectedJobs.length > 0) {
+          showNotification(`💥 ${randomNode.name} failed! Jobs affected: ${affectedJobs.join(' | ')}`, 'error');
+        } else {
+          showNotification(`💥 ${randomNode.name} failed! HDFS re-replicating...`, 'warning');
+        }
+
+        setTimeout(() => reReplicateBlocks(randomNode), 2000);
+      };
+
+      // Re-replicate blocks
+      const reReplicateBlocks = (failedNode) => {
+        if (!cluster) return;
+
+        const activeNodes = cluster.nodes.filter(n => !n.failed && n.id !== failedNode.id);
+
+        if (activeNodes.length === 0) {
+          showNotification('❌ No active nodes for re-replication!', 'error');
+          return;
+        }
+
+        const blockReplicationStatus = {};
+
+        cluster.nodes.forEach(node => {
+          node.blocks.forEach(block => {
+            if (!blockReplicationStatus[block.id]) {
+              blockReplicationStatus[block.id] = {
+                block,
+                replicaCount: 0,
+                sourceNodes: [],
+                wasOnFailedNode: false
+              };
+            }
+
+            if (!node.failed) {
+              blockReplicationStatus[block.id].replicaCount++;
+              blockReplicationStatus[block.id].sourceNodes.push(node);
+            } else if (node.id === failedNode.id) {
+              blockReplicationStatus[block.id].wasOnFailedNode = true;
+            }
+          });
+        });
+
+        let reReplicated = 0;
+        let underReplicated = 0;
+        let totalLost = 0;
+
+        for (const [blockId, status] of Object.entries(blockReplicationStatus)) {
+          if (status.replicaCount === 0) {
+            totalLost++;
+            continue;
+          }
+
+          if (status.replicaCount < REPLICATION_FACTOR) {
+            underReplicated++;
+
+            const sourceNode = status.sourceNodes[0];
+            const candidateNodes = activeNodes
+              .filter(node => !node.blocks.some(b => b.id === blockId))
+              .sort((a, b) => {
+                const aSpace = a.storageTotal - a.storageUsed;
+                const bSpace = b.storageTotal - b.storageUsed;
+                return bSpace - aSpace;
+              });
+
+            if (candidateNodes.length > 0) {
+              const targetNode = candidateNodes[0];
+              const availableSpaceGB = targetNode.storageTotal - targetNode.storageUsed;
+              const blockSizeGB = status.block.size / 1024;
+
+              if (availableSpaceGB >= blockSizeGB) {
+                targetNode.storageUsed += blockSizeGB;
+                targetNode.blocks.push({ ...status.block, isReplica: true });
+                reReplicated++;
+              }
+            }
+          }
+        }
+
+        setCluster(prev => ({ ...prev }));
+
+        if (totalLost > 0) {
+          showNotification(`❌ CRITICAL: ${totalLost} blocks LOST! Data corruption!`, 'error');
+        } else if (underReplicated > 0) {
+          showNotification(`✅ Re-replication complete! ${reReplicated} replicas added`, 'success');
+        } else {
+          showNotification(`✅ No re-replication needed (RF=${REPLICATION_FACTOR})`, 'success');
+        }
+      };
+
+      // Reset cluster
+      const resetCluster = () => {
+        setColorIndex(0);
+        initializeCluster();
+        showNotification('🔄 Cluster reset!', 'info');
+      };
+
+      // Add new node
+      const addNode = () => {
+        if (!cluster) return;
+
+        const newNode = {
+          id: nextNodeId,
+          name: `Node-${nextNodeId}`,
+          cpuTotal: 16,
+          cpuUsed: 0,
+          memoryTotal: 32,
+          memoryUsed: 0,
+          storageTotal: 100,
+          storageUsed: 0,
+          blocks: [],
+          containers: [],
+          failed: false
+        };
+
+        setCluster(prev => ({
+          ...prev,
+          nodes: [...prev.nodes, newNode]
+        }));
+        setNextNodeId(prev => prev + 1);
+        showNotification(`✅ ${newNode.name} added to cluster!`, 'success');
+
+        // Trigger rebalancing after a short delay
+        setTimeout(() => {
+          rebalanceCluster(newNode);
+        }, 1000);
+      };
+
+      // Rebalance cluster storage
+      const rebalanceCluster = (newNode) => {
+        if (!cluster) return;
+
+        const activeNodes = cluster.nodes.filter(n => !n.failed);
+
+        if (activeNodes.length <= 1) {
+          showNotification('ℹ️ No rebalancing needed (only 1 active node)', 'info');
+          return;
+        }
+
+        // Calculate average storage usage
+        const totalStorageUsed = activeNodes.reduce((sum, n) => sum + n.storageUsed, 0);
+        const avgStorageUsed = totalStorageUsed / activeNodes.length;
+
+        // Find nodes with above-average storage (potential donors)
+        const overloadedNodes = activeNodes.filter(n => 
+          n.id !== newNode.id && n.storageUsed > avgStorageUsed * 1.2
+        ).sort((a, b) => b.storageUsed - a.storageUsed);
+
+        if (overloadedNodes.length === 0) {
+          showNotification('✅ Cluster storage already balanced', 'success');
+          return;
+        }
+
+        let blocksMovedCount = 0;
+        let totalBlocksSizeGB = 0;
+
+        // Track which blocks have been moved to avoid duplicates
+        const movedBlockIds = new Set();
+
+        // Try to move blocks from overloaded nodes to the new node
+        for (const sourceNode of overloadedNodes) {
+          // Only move if new node has space and source node is still overloaded
+          while (newNode.storageUsed < avgStorageUsed * 0.8 && 
+                 sourceNode.storageUsed > avgStorageUsed * 1.2 &&
+                 sourceNode.blocks.length > 0) {
+
+            // Find a block that can be moved (must maintain RF=3)
+            let blockToMove = null;
+
+            for (const block of sourceNode.blocks) {
+              // Skip if already moved
+              if (movedBlockIds.has(block.id)) continue;
+
+              // Count replicas of this block across all active nodes
+              const replicaCount = activeNodes.reduce((count, node) => {
+                return count + (node.blocks.some(b => b.id === block.id) ? 1 : 0);
+              }, 0);
+
+              // Only move if we have more than RF replicas OR if new node doesn't have it
+              const newNodeHasBlock = newNode.blocks.some(b => b.id === block.id);
+
+              if (replicaCount > REPLICATION_FACTOR || (!newNodeHasBlock && replicaCount === REPLICATION_FACTOR)) {
+                blockToMove = block;
+                break;
+              }
+            }
+
+            if (!blockToMove) break; // No suitable block found
+
+            const blockSizeGB = blockToMove.size / 1024;
+
+            // Check if new node has enough space
+            if (newNode.storageTotal - newNode.storageUsed < blockSizeGB) break;
+
+            // Move the block
+            const blockIndex = sourceNode.blocks.findIndex(b => b.id === blockToMove.id);
+
+            if (blockIndex !== -1) {
+              // Remove from source (if it's a replica and we still have RF copies)
+              const replicasAfterRemoval = activeNodes.reduce((count, node) => {
+                if (node.id === sourceNode.id) return count;
+                return count + (node.blocks.some(b => b.id === blockToMove.id) ? 1 : 0);
+              }, 0);
+
+              if (replicasAfterRemoval >= REPLICATION_FACTOR - 1) {
+                sourceNode.blocks.splice(blockIndex, 1);
+                sourceNode.storageUsed -= blockSizeGB;
+              }
+
+              // Add to new node (always as replica)
+              newNode.blocks.push({
+                ...blockToMove,
+                isReplica: true
+              });
+              newNode.storageUsed += blockSizeGB;
+
+              blocksMovedCount++;
+              totalBlocksSizeGB += blockSizeGB;
+              movedBlockIds.add(blockToMove.id);
+            }
+          }
+        }
+
+        setCluster(prev => ({ ...prev }));
+
+        if (blocksMovedCount > 0) {
+          showNotification(
+            `⚖️ Rebalancing complete! Moved ${blocksMovedCount} block(s) (${totalBlocksSizeGB.toFixed(1)} GB) to ${newNode.name}`,
+            'success'
+          );
+        } else {
+          showNotification('✅ No rebalancing needed - cluster already balanced', 'success');
+        }
+      };
+
+      // Remove node
+      const removeNode = () => {
+        if (!cluster) return;
+
+        if (cluster.nodes.length <= 1) {
+          showNotification('❌ Cannot remove the last node!', 'error');
+          return;
+        }
+
+        // Find a node to remove (prefer failed nodes first, then idle nodes)
+        const failedNodes = cluster.nodes.filter(n => n.failed);
+        const idleNodes = cluster.nodes.filter(n => !n.failed && n.containers.length === 0 && n.blocks.length === 0);
+        const busyIdleNodes = cluster.nodes.filter(n => !n.failed && n.containers.length === 0);
+
+        let nodeToRemove;
+
+        if (failedNodes.length > 0) {
+          nodeToRemove = failedNodes[failedNodes.length - 1];
+        } else if (idleNodes.length > 0) {
+          nodeToRemove = idleNodes[idleNodes.length - 1];
+        } else if (busyIdleNodes.length > 0) {
+          nodeToRemove = busyIdleNodes[busyIdleNodes.length - 1];
+        } else {
+          // Remove last node even if busy
+          nodeToRemove = cluster.nodes[cluster.nodes.length - 1];
+        }
+
+        // Check if node has blocks or containers
+        if (nodeToRemove.blocks.length > 0 || nodeToRemove.containers.length > 0) {
+          const hasBlocks = nodeToRemove.blocks.length > 0;
+          const hasContainers = nodeToRemove.containers.length > 0;
+
+          if (hasContainers) {
+            // Try to reschedule containers
+            const activeNodes = cluster.nodes.filter(n => !n.failed && n.id !== nodeToRemove.id);
+
+            // Fail any running jobs on this node
+            cluster.mapReduceJobs.forEach(job => {
+              if (job.status === 'running') {
+                const mappersOnNode = job.mappers.filter(m => m.nodeId === nodeToRemove.id);
+                if (mappersOnNode.length > 0) {
+                  job.status = 'failed';
+                  showNotification(`❌ ${job.name} failed due to node removal`, 'error');
+                }
+              }
+            });
+          }
+
+          if (hasBlocks) {
+            showNotification(`⚠️ Removing ${nodeToRemove.name} with ${nodeToRemove.blocks.length} blocks - re-replication will occur`, 'warning');
+          }
+        }
+
+        setCluster(prev => ({
+          ...prev,
+          nodes: prev.nodes.filter(n => n.id !== nodeToRemove.id)
+        }));
+
+        showNotification(`🗑️ ${nodeToRemove.name} removed from cluster`, 'info');
+
+        // Trigger re-replication if the node had blocks
+        if (nodeToRemove.blocks.length > 0) {
+          setTimeout(() => {
+            reReplicateBlocks(nodeToRemove);
+          }, 1000);
+        }
+      };
+
+      // Calculate statistics
+      // Calculate statistics
+      const getStats = () => {
+        if (!cluster) return {};
+
+        const activeNodes = cluster.nodes.filter(n => !n.failed);
+        const totalCpu = cluster.nodes.reduce((sum, n) => sum + n.cpuTotal, 0);
+        const usedCpu = cluster.nodes.reduce((sum, n) => sum + n.cpuUsed, 0);
+        const totalMemory = cluster.nodes.reduce((sum, n) => sum + n.memoryTotal, 0);
+        const usedMemory = cluster.nodes.reduce((sum, n) => sum + n.memoryUsed, 0);
+        const totalStorage = cluster.nodes.reduce((sum, n) => sum + n.storageTotal, 0);
+        const usedStorage = cluster.nodes.reduce((sum, n) => sum + n.storageUsed, 0);
+
+        return {
+          activeNodes: activeNodes.length,
+          totalNodes: cluster.nodes.length,
+          cpuUsage: `${usedCpu}/${totalCpu} cores`,
+          memoryUsage: `${usedMemory.toFixed(1)}/${totalMemory} GB`,
+          storageUsage: `${usedStorage.toFixed(1)}/${totalStorage} GB`,
+          totalFiles: cluster.files.length,
+          runningJobs: cluster.mapReduceJobs.filter(j => j.status === 'running').length,
+          completedJobs: cluster.mapReduceJobs.filter(j => j.status === 'completed').length
+        };
+      };
+
+      if (!cluster) return <div className="loading">Loading...</div>;
+
+      const stats = getStats();
+
+      return (
+        <div className="hadoop-container">
+          <style>{`
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+
+            body {
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            }
+
+            .hadoop-container {
+              background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+              min-height: 100vh;
+              padding: 20px;
+              color: #333;
+            }
+
+            .header {
+              text-align: center;
+              color: white;
+              margin-bottom: 20px;
+            }
+
+            .header h1 {
+              font-size: 2.5em;
+              text-shadow: 3px 3px 6px rgba(0,0,0,0.3);
+              margin-bottom: 10px;
+            }
+
+            .header p {
+              font-size: 1.2em;
+              opacity: 0.9;
+            }
+
+            .main-container {
+              max-width: 1600px;
+              margin: 0 auto;
+              display: grid;
+              grid-template-columns: 250px 1fr;
+              gap: 20px;
+            }
+
+            .sidebar {
+              background: white;
+              border-radius: 15px;
+              padding: 20px;
+              box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+              height: fit-content;
+            }
+
+            .sidebar h2 {
+              color: #1e3c72;
+              margin-bottom: 15px;
+              border-bottom: 3px solid #1e3c72;
+              padding-bottom: 10px;
+              font-size: 1.2em;
+            }
+
+            .btn {
+              width: 100%;
+              padding: 10px;
+              margin: 6px 0;
+              border: none;
+              border-radius: 8px;
+              font-size: 0.95em;
+              font-weight: bold;
+              cursor: pointer;
+              transition: all 0.3s;
+              box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            }
+
+            .btn-hdfs {
+              background: #11998e;
+              color: white;
+            }
+
+            .btn-hdfs:hover {
+              background: #0d7a70;
+              transform: translateY(-2px);
+            }
+
+            .btn-yarn {
+              background: #667eea;
+              color: white;
+            }
+
+            .btn-yarn:hover {
+              background: #5568d3;
+              transform: translateY(-2px);
+            }
+
+            .btn-mapreduce {
+              background: #f6ad55;
+              color: white;
+            }
+
+            .btn-mapreduce:hover {
+              background: #ed8936;
+              transform: translateY(-2px);
+            }
+
+            .btn-danger {
+              background: #f56565;
+              color: white;
+            }
+
+            .btn-danger:hover {
+              background: #e53e3e;
+              transform: translateY(-2px);
+            }
+
+            .stats-section {
+              margin: 15px 0;
+              padding: 10px;
+              background: #f7fafc;
+              border-radius: 8px;
+            }
+
+            .stat-item {
+              margin: 8px 0;
+              font-size: 0.9em;
+              display: flex;
+              justify-content: space-between;
+            }
+
+            .stat-label {
+              font-weight: bold;
+              color: #1e3c72;
+            }
+
+            .stat-value {
+              color: #333;
+            }
+
+            .content-area {
+              display: flex;
+              flex-direction: column;
+              gap: 20px;
+            }
+
+            .cluster-panel {
+              background: white;
+              border-radius: 15px;
+              padding: 25px;
+              box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+            }
+
+            .panel-header {
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              margin-bottom: 20px;
+              padding-bottom: 15px;
+              border-bottom: 3px solid #e2e8f0;
+            }
+
+            .panel-header h2 {
+              font-size: 1.5em;
+              color: #2d3748;
+            }
+
+            .panel-icon {
+              font-size: 2em;
+            }
+
+            .nodes-container {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+              gap: 15px;
+            }
+
+            .node {
+              background: linear-gradient(135deg, #f6f8fb 0%, #e9ecef 100%);
+              border: 3px solid #dee2e6;
+              border-radius: 12px;
+              padding: 15px;
+              transition: all 0.3s;
+              position: relative;
+            }
+
+            .node:hover {
+              transform: translateY(-3px);
+              box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+            }
+
+            .node.data-locality {
+              border-color: #48bb78;
+              background: linear-gradient(135deg, #e6fffa 0%, #c6f6d5 100%);
+              box-shadow: 0 0 20px rgba(72, 187, 120, 0.4);
+            }
+
+            .node.data-locality::after {
+              content: '⚡ Data Locality';
+              position: absolute;
+              top: -12px;
+              right: 10px;
+              background: #48bb78;
+              color: white;
+              padding: 4px 12px;
+              border-radius: 12px;
+              font-size: 0.75em;
+              font-weight: bold;
+            }
+
+            .node.busy {
+              border-color: #f6ad55;
+              background: linear-gradient(135deg, #fffaf0 0%, #feebc8 100%);
+            }
+
+            .node.failed {
+              border-color: #fc8181;
+              background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%);
+              opacity: 0.6;
+            }
+
+            .node.rebalancing {
+              border-color: #9f7aea;
+              background: linear-gradient(135deg, #faf5ff 0%, #e9d8fd 100%);
+              animation: pulse 2s ease-in-out infinite;
+            }
+
+            .node.shuffle-source {
+              border-color: #f39c12;
+              box-shadow: 0 0 20px rgba(243, 156, 18, 0.5);
+              animation: shuffleSourcePulse 1s ease-in-out infinite;
+            }
+
+            .node.shuffle-source::before {
+              content: '📤';
+              position: absolute;
+              top: -12px;
+              left: 10px;
+              background: #f39c12;
+              color: white;
+              padding: 4px 12px;
+              border-radius: 12px;
+              font-size: 0.75em;
+              font-weight: bold;
+            }
+
+            .node.shuffle-target {
+              border-color: #e67e22;
+              box-shadow: 0 0 20px rgba(230, 126, 34, 0.6);
+              animation: shuffleTargetPulse 1s ease-in-out infinite;
+            }
+
+            .node.shuffle-target::before {
+              content: '📥 Receiving';
+              position: absolute;
+              top: -12px;
+              left: 10px;
+              background: #e67e22;
+              color: white;
+              padding: 4px 12px;
+              border-radius: 12px;
+              font-size: 0.75em;
+              font-weight: bold;
+            }
+
+            @keyframes shuffleSourcePulse {
+              0%, 100% {
+                box-shadow: 0 0 15px rgba(243, 156, 18, 0.4);
+              }
+              50% {
+                box-shadow: 0 0 30px rgba(243, 156, 18, 0.8);
+              }
+            }
+
+            @keyframes shuffleTargetPulse {
+              0%, 100% {
+                box-shadow: 0 0 15px rgba(230, 126, 34, 0.4);
+              }
+              50% {
+                box-shadow: 0 0 30px rgba(230, 126, 34, 0.8);
+              }
+            }
+
+            @keyframes pulse {
+              0%, 100% {
+                box-shadow: 0 0 20px rgba(159, 122, 234, 0.4);
+              }
+              50% {
+                box-shadow: 0 0 40px rgba(159, 122, 234, 0.7);
+              }
+            }
+
+            .node-header {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 12px;
+            }
+
+            .node-name {
+              font-weight: bold;
+              font-size: 1.1em;
+              color: #2d3748;
+            }
+
+            .node-status {
+              padding: 4px 10px;
+              border-radius: 12px;
+              font-size: 0.8em;
+              font-weight: bold;
+            }
+
+            .status-active {
+              background: #48bb78;
+              color: white;
+            }
+
+            .status-failed {
+              background: #f56565;
+              color: white;
+            }
+
+            .node-resources {
+              margin-bottom: 10px;
+              font-size: 0.85em;
+            }
+
+            .resource-bar {
+              height: 6px;
+              background: #e2e8f0;
+              border-radius: 3px;
+              margin: 4px 0;
+              overflow: hidden;
+            }
+
+            .resource-fill {
+              height: 100%;
+              transition: width 0.3s;
+              border-radius: 3px;
+            }
+
+            .cpu-fill { background: #4299e1; }
+            .memory-fill { background: #48bb78; }
+            .storage-fill { background: #ed8936; }
+
+            .blocks-section, .containers-section {
+              margin-top: 10px;
+            }
+
+            .section-title {
+              font-size: 0.85em;
+              font-weight: bold;
+              color: #4a5568;
+              margin-bottom: 6px;
+            }
+
+            .block-list, .container-list {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 4px;
+            }
+
+            .block-item {
+              padding: 4px 8px;
+              border-radius: 6px;
+              font-size: 0.75em;
+              font-weight: bold;
+              color: white;
+              position: relative;
+            }
+
+            .block-item.replica {
+              opacity: 0.7;
+              border: 2px dashed rgba(255, 255, 255, 0.6);
+            }
+
+            .block-item.replica::after {
+              content: '📋';
+              position: absolute;
+              top: -8px;
+              right: -8px;
+              font-size: 0.8em;
+            }
+
+            .container-item {
+              padding: 4px 8px;
+              border-radius: 6px;
+              font-size: 0.75em;
+              background: #667eea;
+              color: white;
+            }
+
+            .container-item.am {
+              background: #f6ad55;
+            }
+
+            .container-item.reducer {
+              background: #48bb78;
+            }
+
+            .files-list {
+              display: grid;
+              gap: 10px;
+            }
+
+            .file-item {
+              background: #f7fafc;
+              padding: 12px;
+              border-radius: 8px;
+              border-left: 4px solid;
+            }
+
+            .file-header {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 8px;
+            }
+
+            .file-name {
+              font-weight: bold;
+            }
+
+            .file-size {
+              color: #718096;
+              font-size: 0.9em;
+            }
+
+            .file-blocks {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 4px;
+            }
+
+            .jobs-list {
+              display: grid;
+              gap: 15px;
+            }
+
+            .job-item {
+              background: #f7fafc;
+              padding: 15px;
+              border-radius: 8px;
+              border-left: 4px solid;
+            }
+
+            .job-header {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 10px;
+            }
+
+            .job-actions {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+            }
+
+            .job-toggle {
+              background: white;
+              border: 1px solid #cbd5e0;
+              border-radius: 999px;
+              padding: 4px 12px;
+              font-size: 0.8em;
+              font-weight: 600;
+              color: #2d3748;
+              cursor: pointer;
+              transition: background 0.2s ease, color 0.2s ease;
+            }
+
+            .job-toggle:hover,
+            .job-toggle:focus-visible {
+              background: #edf2f7;
+            }
+
+            .job-toggle:focus-visible {
+              outline: 2px solid #667eea;
+              outline-offset: 2px;
+            }
+
+            .job-name {
+              font-weight: bold;
+              font-size: 1.1em;
+            }
+
+            .job-body {
+              margin-top: 10px;
+            }
+
+            .job-body.collapsed {
+              display: none;
+            }
+
+            .job-status {
+              padding: 4px 12px;
+              border-radius: 12px;
+              font-size: 0.85em;
+              font-weight: bold;
+            }
+
+            .status-pending { background: #cbd5e0; color: #2d3748; }
+            .status-running { background: #667eea; color: white; }
+            .status-completed { background: #48bb78; color: white; }
+            .status-failed { background: #f56565; color: white; }
+
+            .mappers-container {
+              margin-top: 10px;
+            }
+
+            .mapper-item {
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              margin: 6px 0;
+              font-size: 0.9em;
+            }
+
+            .mapper-name {
+              min-width: 100px;
+              font-weight: 500;
+            }
+
+            .progress-bar {
+              flex: 1;
+              height: 20px;
+              background: #e2e8f0;
+              border-radius: 10px;
+              overflow: hidden;
+              position: relative;
+            }
+
+            .progress-fill {
+              height: 100%;
+              background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+              transition: width 0.3s;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              color: white;
+              font-size: 0.75em;
+              font-weight: bold;
+            }
+
+            .reducers-container {
+              margin-top: 10px;
+              padding: 10px;
+              background: white;
+              border-radius: 8px;
+              border: 1px solid #e2e8f0;
+            }
+
+            .reducer-item {
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              margin: 6px 0;
+              font-size: 0.9em;
+            }
+
+            .shuffle-phase {
+              margin-top: 10px;
+              padding: 15px;
+              background: linear-gradient(135deg, #fef5e7 0%, #fdebd0 100%);
+              border-radius: 8px;
+              border: 2px solid #f39c12;
+              animation: shufflePulse 1.5s ease-in-out infinite;
+            }
+
+            @keyframes shufflePulse {
+              0%, 100% {
+                box-shadow: 0 0 10px rgba(243, 156, 18, 0.3);
+              }
+              50% {
+                box-shadow: 0 0 20px rgba(243, 156, 18, 0.6);
+              }
+            }
+
+            .shuffle-fill {
+              background: linear-gradient(90deg, #f39c12 0%, #e67e22 100%) !important;
+            }
+
+            /* GANTT STYLES */
+            .gantt-container {
+              margin-top: 12px;
+              padding: 14px;
+              background: linear-gradient(145deg, #f8fafc 0%, #edf2f7 100%);
+              border-radius: 12px;
+              border: 1px solid #cbd5e0;
+              box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
+            }
+
+            .gantt-body {
+              display: flex;
+              flex-direction: column;
+              gap: 8px;
+            }
+
+            .gantt-legend {
+              display: flex;
+              align-items: center;
+              flex-wrap: wrap;
+              gap: 12px;
+              font-size: 0.85em;
+              color: #4a5568;
+            }
+
+            .legend-swatch {
+              width: 14px;
+              height: 14px;
+              border-radius: 4px;
+              display: inline-block;
+              margin-right: 6px;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            }
+
+            .legend-swatch.map { background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); }
+            .legend-swatch.reduce { background: linear-gradient(90deg, #38b2ac 0%, #319795 100%); }
+            .legend-swatch.shuffle { background: linear-gradient(90deg, #ed8936 0%, #dd6b20 100%); }
+
+            .gantt-vis-wrapper {
+              min-height: 220px;
+              max-height: none;
+              background: white;
+              border-radius: 10px;
+              border: 1px solid #e2e8f0;
+              padding: 6px;
+              overflow: visible;
+            }
+
+            .vis-item.gantt-map {
+              background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+              border-color: #667eea;
+              color: white;
+            }
+
+            .vis-item.gantt-reduce {
+              background: linear-gradient(90deg, #38b2ac 0%, #319795 100%);
+              border-color: #319795;
+              color: white;
+            }
+
+            .vis-item.gantt-shuffle {
+              background: linear-gradient(90deg, #ed8936 0%, #dd6b20 100%);
+              border-color: #dd6b20;
+              color: white;
+            }
+
+            .vis-item {
+              border-radius: 8px;
+              box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+              font-size: 0.8em;
+            }
+
+            .vis-time-axis .vis-text {
+              color: #4a5568;
+            }
+
+            .gantt-empty {
+              font-size: 0.9em;
+              color: #718096;
+              padding: 8px 0;
+            }
+
+            .gantt-metrics {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 10px;
+              margin-bottom: 12px;
+            }
+
+            .gantt-metric {
+              background: rgba(255, 255, 255, 0.9);
+              border: 1px solid #e2e8f0;
+              border-radius: 8px;
+              padding: 6px 12px;
+              font-size: 0.8em;
+              color: #4a5568;
+              display: flex;
+              flex-direction: column;
+              gap: 2px;
+              min-width: 140px;
+            }
+
+            .gantt-metric span {
+              font-size: 0.75em;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+            }
+
+            .gantt-metric strong {
+              color: #2d3748;
+            }
+
+            .notification {
+              position: fixed;
+              bottom: 20px;
+              right: 20px;
+              padding: 15px 20px;
+              border-radius: 8px;
+              color: white;
+              font-weight: bold;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+              animation: slideIn 0.3s ease-out;
+              z-index: 1000;
+              max-width: 400px;
+            }
+
+            @keyframes slideIn {
+              from {
+                transform: translateX(400px);
+                opacity: 0;
+              }
+              to {
+                transform: translateX(0);
+                opacity: 1;
+              }
+            }
+
+            .notification.success { background: #48bb78; }
+            .notification.error { background: #f56565; }
+            .notification.warning { background: #f6ad55; }
+            .notification.info { background: #4299e1; }
+
+            .loading {
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              height: 100vh;
+              font-size: 2em;
+              color: white;
+            }
+
+            @media (max-width: 768px) {
+              .main-container {
+                grid-template-columns: 1fr;
+              }
+            }
+          `}</style>
+
+          <div className="header">
+            <h1>🐘 Hadoop Ecosystem Simulator</h1>
+            <p>Interactive HDFS + YARN + MapReduce Visualization</p>
+          </div>
+
+          <div className="main-container">
+            <SidebarControls
+              cluster={cluster}
+              uploadFile={uploadFile}
+              submitMapReduceJob={submitMapReduceJob}
+              addNode={addNode}
+              removeNode={removeNode}
+              rebalanceCluster={rebalanceCluster}
+              simulateNodeFailure={simulateNodeFailure}
+              resetCluster={resetCluster}
+              stats={stats}
+            />
+
+            <div className="content-area">
+              <NodeGrid cluster={cluster} />
+              <FilesPanel files={cluster.files} />
+              <JobsPanel cluster={cluster} toggleJobVisibility={toggleJobVisibility} />
+            </div>
+          </div>
+
+          <NotificationToaster notifications={notifications} />
+        </div>
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<HadoopEcosystem />);
+  </script>
+</body>
+</html>

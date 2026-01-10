@@ -1,0 +1,1814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hadoop Map Task Internal Pipeline Simulator</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #f8fafc;
+      color: #1e293b;
+      display: flex;
+      justify-content: center;
+      min-height: 100vh;
+    }
+
+    .app {
+      max-width: 1200px;
+      width: 100%;
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 20px 24px 28px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08), 0 0 1px rgba(0,0,0,0.1);
+      border: 1px solid #e2e8f0;
+    }
+
+    h1 {
+      font-size: 24px;
+      margin: 0 0 6px;
+      color: #0f172a;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: #475569;
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border-radius: 8px;
+      padding: 8px 18px;
+      font-size: 14px;
+      border: none;
+      cursor: pointer;
+      background: #16a34a;
+      color: #ffffff;
+      font-weight: 600;
+      box-shadow: 0 2px 8px rgba(22,163,74,0.3);
+      transition: all 0.15s ease;
+    }
+
+    button:hover:not(:disabled) {
+      background: #15803d;
+      box-shadow: 0 4px 12px rgba(22,163,74,0.4);
+      transform: translateY(-1px);
+    }
+
+    button.secondary {
+      background: #f1f5f9;
+      color: #334155;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      border: 1px solid #cbd5e1;
+    }
+
+    button.secondary:hover:not(:disabled) {
+      background: #e2e8f0;
+      border-color: #94a3b8;
+    }
+
+    button.pause {
+      background: #ea580c;
+      color: #ffffff;
+    }
+
+    button.pause:hover:not(:disabled) {
+      background: #c2410c;
+    }
+
+    button:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .speed-control {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #475569;
+      margin-left: auto;
+    }
+
+    .speed-control input[type="range"] {
+      width: 140px;
+      cursor: pointer;
+    }
+
+    /* Metrics Panel */
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+      padding: 16px;
+      background: #f8fafc;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .metric {
+      text-align: center;
+    }
+
+    .metric-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #16a34a;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .metric-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748b;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1.6fr 1.2fr;
+      gap: 18px;
+      margin-top: 16px;
+    }
+
+    @media (max-width: 968px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .timeline {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+      font-size: 11px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .timeline-step {
+      flex: 1;
+      min-width: 80px;
+      padding: 6px 8px;
+      border-radius: 8px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: all 0.2s ease;
+      cursor: help;
+      color: #475569;
+    }
+
+    .timeline-step:hover {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+    }
+
+    .timeline-step.active {
+      background: linear-gradient(135deg, #16a34a, #15803d);
+      border-color: #16a34a;
+      color: #ffffff;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(22,163,74,0.3);
+    }
+
+    .timeline-step.completed {
+      background: #e2e8f0;
+      border-color: #cbd5e1;
+      color: #64748b;
+      opacity: 0.8;
+    }
+
+    .pipeline {
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      border-radius: 12px;
+      padding: 12px;
+      border: 1px solid #e2e8f0;
+      min-height: 580px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .row-label {
+      width: 100px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #475569;
+      font-weight: 600;
+    }
+
+    .row-box {
+      flex: 1;
+      border-radius: 10px;
+      border: 1px dashed #cbd5e1;
+      background: rgba(255,255,255,0.8);
+      padding: 4px 6px;
+      min-height: 110px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.3s ease;
+    }
+
+    /* Give the circular buffer extra headroom for more rows of records */
+    #bufferBox {
+      min-height: 160px;
+    }
+
+    .row-box.active {
+      border-color: #16a34a;
+      border-style: solid;
+      box-shadow: 0 0 20px rgba(22,163,74,0.15);
+      background: rgba(240,253,244,0.9);
+    }
+
+    /* InputFormat / Splits / RecordReaders */
+    .input-flow {
+      position: absolute;
+      inset: 22px 10px 10px 10px;
+      display: grid;
+      grid-template-columns: auto 24px 1fr 24px 1fr;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .input-format,
+    .split-box,
+    .reader-box {
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: linear-gradient(135deg, #e0f2fe, #f8fafc);
+      border: 1px solid #bfdbfe;
+      color: #0f172a;
+      font-weight: 700;
+      font-size: 12px;
+      text-align: center;
+      box-shadow: 0 2px 10px rgba(59,130,246,0.2);
+    }
+
+    .split-group,
+    .reader-group {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+      gap: 8px;
+    }
+
+    .reader-box {
+      background: linear-gradient(135deg, #dcfce7, #f0fdf4);
+      border-color: #bbf7d0;
+      box-shadow: 0 2px 10px rgba(34,197,94,0.2);
+      font-size: 11px;
+    }
+
+    .split-box.active,
+    .reader-box.active,
+    .input-format.active {
+      border-color: #16a34a;
+      box-shadow: 0 0 14px rgba(22,163,74,0.35);
+      transform: translateY(-1px);
+    }
+
+    .split-box.inactive,
+    .reader-box.inactive {
+      opacity: 0.35;
+    }
+
+    .flow-arrow {
+      text-align: center;
+      color: #475569;
+      font-weight: 800;
+      font-size: 16px;
+    }
+
+    .input-note {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #475569;
+    }
+
+    .input-layout {
+      display: grid;
+      grid-template-columns: 140px 24px 1fr;
+      gap: 10px;
+      align-items: center;
+      margin-top: 10px;
+    }
+
+    .reader-layout {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .row-title {
+      position: absolute;
+      top: 4px;
+      left: 8px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #64748b;
+      font-weight: 600;
+    }
+
+    .buffer-inner {
+      position: absolute;
+      inset: 20px 6px 6px 6px;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+      background: rgba(255,255,255,0.95);
+      overflow: hidden;
+    
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      align-content: flex-start;
+    }
+
+    .buffer-capacity {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(22,163,74,0.08), transparent 50%);
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
+    .buffer-fill {
+      position: absolute;
+      inset: auto 0 0 0;
+      height: 0;
+      background: linear-gradient(to top, rgba(22,163,74,0.25), rgba(22,163,74,0.05));
+      transition: height 0.25s ease-out;
+      pointer-events: none;
+      border-top: 1px solid rgba(22,163,74,0.5);
+    }
+
+    .buffer-percentage {
+      margin-top: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #16a34a;
+      text-shadow: 0 0 6px rgba(22,163,74,0.3);
+      pointer-events: none;
+      display: block;
+    }
+
+    .kv-record {
+      position: relative;
+      min-width: 60px;
+      height: 20px;
+      padding: 0 6px;
+      border-radius: 5px;
+      background: #16a34a;
+      box-shadow: 0 2px 8px rgba(22,163,74,0.4);
+      opacity: 0;
+      font-size: 10px;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      font-weight: 700;
+      margin: 2px;
+      transition: all 0.2s ease;
+    }
+
+    .kv-record.buffer {
+      background: #22c55e;
+      box-shadow: 0 2px 8px rgba(34,197,94,0.4);
+    }
+
+    .kv-record.spill {
+      background: #0ea5e9;
+      box-shadow: 0 2px 8px rgba(14,165,233,0.4);
+    }
+
+    .kv-record.final {
+      background: #ea580c;
+      box-shadow: 0 2px 8px rgba(234,88,12,0.4);
+    }
+
+    .kv-record.reducer {
+      background: #9333ea;
+      box-shadow: 0 2px 10px rgba(147,51,234,0.5);
+      color: #ffffff;
+      font-weight: 700;
+    }
+
+    .spill-files {
+      position: absolute;
+      inset: 20px 6px 6px 6px;
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+      justify-content: center;
+    }
+
+    .spill-slot {
+      flex: 1;
+      min-height: 82px;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+      background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      align-content: flex-start;
+    }
+
+    .spill-label {
+      position: absolute;
+      top: 4px;
+      left: 8px;
+      font-size: 9px;
+      text-transform: uppercase;
+      color: #64748b;
+      letter-spacing: 0.1em;
+      font-weight: 600;
+    }
+
+    .spill-highlight {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      border: 2px solid rgba(14,165,233,0.6);
+      box-shadow: 0 0 20px rgba(14,165,233,0.3), inset 0 0 20px rgba(14,165,233,0.1);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .final-output {
+      position: absolute;
+      inset: 26px 10px 8px 10px;
+      border-radius: 8px;
+      border: 1px dashed #cbd5e1;
+      background: linear-gradient(135deg, rgba(234,88,12,0.08) 0%, rgba(255,255,255,0.9) 60%);
+      overflow: hidden;
+      transition: all 0.3s ease;
+    
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      align-content: flex-start;
+    }
+
+    .final-label {
+      position: absolute;
+      top: 5px;
+      left: 10px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #ea580c;
+      font-weight: 600;
+    }
+
+    .reducers-inner {
+      position: absolute;
+      inset: 20px 6px 6px 6px;
+      display: flex;
+      gap: 8px;
+    }
+
+    .reducer-box {
+      flex: 1;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+      background: linear-gradient(135deg, #faf5ff 0%, #ffffff 60%);
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      align-content: flex-start;
+    }
+
+    .reducer-box.active {
+      border-color: #9333ea;
+      box-shadow: 0 0 20px rgba(147,51,234,0.25);
+    }
+
+    .reducer-label {
+      position: absolute;
+      top: 4px;
+      left: 8px;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #9333ea;
+      font-weight: 600;
+    }
+
+    .hdfs-inner {
+      position: absolute;
+      inset: 20px 6px 6px 6px;
+      display: flex;
+      gap: 8px;
+    }
+
+    .hdfs-box {
+      flex: 1;
+      border-radius: 8px;
+      border: 1px dashed #cbd5e1;
+      background: linear-gradient(135deg, rgba(16,185,129,0.1) 0%, #ffffff 70%);
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      align-content: flex-start;
+    }
+
+    .hdfs-box.active {
+      border-color: #16a34a;
+      box-shadow: 0 0 20px rgba(22,163,74,0.2);
+    }
+
+    /* Log Panel */
+    .log {
+      background: #f8fafc;
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .log-section {
+      padding: 12px;
+      border-radius: 8px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+    }
+
+    .log-section.current {
+      border-color: #16a34a;
+      background: rgba(240,253,244,0.6);
+    }
+
+    .log-section h3 {
+      margin: 0 0 8px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748b;
+      font-weight: 600;
+    }
+
+    .log-section.current h3 {
+      color: #16a34a;
+    }
+
+    .log-section p {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #334155;
+    }
+
+    .log-section strong {
+      color: #0f172a;
+      font-weight: 600;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 12px;
+      padding: 12px;
+      background: #ffffff;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #475569;
+    }
+
+    .legend-box {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      box-shadow: 0 0 8px currentColor;
+    }
+
+    .legend-box.buffer { background: #22c55e; color: rgba(34,197,94,0.5); }
+    .legend-box.spill { background: #0ea5e9; color: rgba(14,165,233,0.5); }
+    .legend-box.final { background: #ea580c; color: rgba(234,88,12,0.5); }
+    .legend-box.reducer { background: #9333ea; color: rgba(147,51,234,0.5); }
+
+    /* Tooltip */
+    .tooltip {
+      position: absolute;
+      background: #1e293b;
+      color: #f8fafc;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      z-index: 1000;
+      border: 1px solid #334155;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      max-width: 250px;
+      line-height: 1.4;
+    }
+
+    /* Progress indicator */
+    .progress-bar {
+      height: 4px;
+      background: #e2e8f0;
+      border-radius: 2px;
+      overflow: hidden;
+      margin: 16px 0 8px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #16a34a, #15803d);
+      width: 0%;
+      transition: width 0.3s ease;
+      box-shadow: 0 0 10px rgba(22,163,74,0.4);
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>Hadoop Map Task Internal Pipeline Simulator</h1>
+    <p class="subtitle">
+      Interactive visualization of the internal data flow in a Hadoop Map Task. Watch how key-value pairs 
+      (like &lt;cat,1&gt;, &lt;dog,1&gt;, &lt;ant,1&gt;) flow through the circular buffer, get partitioned by key hash, 
+      sorted within partitions during spills, merged, and distributed to the correct reducers.
+    </p>
+
+    <div class="controls">
+      <button id="startBtn">▶ Start Simulation</button>
+      <button id="pauseBtn" class="pause" disabled>⏸ Pause</button>
+      <button id="resetBtn" class="secondary">↻ Reset</button>
+      <div class="speed-control">
+        <label for="speedSlider">Speed:</label>
+        <input type="range" id="speedSlider" min="0.5" max="3" step="0.25" value="1" />
+        <span id="speedLabel">1×</span>
+      </div>
+    </div>
+
+    <!-- Metrics Dashboard -->
+    <div class="metrics">
+      <div class="metric">
+        <span class="metric-value" id="recordsProcessed">0</span>
+        <span class="metric-label">Records Processed</span>
+      </div>
+      <div class="metric">
+        <span class="metric-value" id="bufferUsage">0%</span>
+        <span class="metric-label">Buffer Usage</span>
+      </div>
+      <div class="metric">
+        <span class="metric-value" id="spillCount">0</span>
+        <span class="metric-label">Spills Created</span>
+      </div>
+      <div class="metric">
+        <span class="metric-value" id="recordsRead">0</span>
+        <span class="metric-label">Records Read</span>
+      </div>
+      <div class="metric">
+        <span class="metric-value" id="splitCount">3</span>
+        <span class="metric-label">Input Splits</span>
+      </div>
+      <div class="metric">
+        <span class="metric-value" id="currentPhase">Idle</span>
+        <span class="metric-label">Current Phase</span>
+      </div>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+
+    <div class="layout">
+      <!-- Left: Pipeline Visualization -->
+      <div>
+        <!-- Timeline -->
+        <div class="timeline" id="timeline">
+          <div class="timeline-step" title="InputFormat splits the input into logical segments">InputFormat</div>
+          <div class="timeline-step" title="RecordReaders pull from splits and emit key/value pairs">RecordReaders</div>
+          <div class="timeline-step" title="Map function processes input records">Map Phase 1</div>
+          <div class="timeline-step" title="First spill to disk when buffer threshold reached">Spill 0</div>
+          <div class="timeline-step" title="Continue processing remaining input">Map Phase 2</div>
+          <div class="timeline-step" title="Second spill to disk">Spill 1</div>
+          <div class="timeline-step" title="Merge all spill files into single sorted output">Merge</div>
+          <div class="timeline-step" title="Reducers fetch their partitions">Shuffle</div>
+          <div class="timeline-step" title="Final outputs are written to HDFS">Write to HDFS</div>
+        </div>
+
+        <!-- Pipeline -->
+        <div class="pipeline">
+          <!-- Input chain -->
+          <div class="row">
+            <div class="row-label">Input</div>
+            <div class="row-box" id="inputBox">
+              <div class="row-title">InputFormat &amp; Splits</div>
+              <div class="input-layout">
+                <div class="input-format" id="inputFormatBox">InputFormat</div>
+                <div class="flow-arrow">➜</div>
+                <div class="split-group" id="splitGroup">
+                  <div class="split-box" id="split0">Split 0</div>
+                  <div class="split-box" id="split1">Split 1</div>
+                  <div class="split-box" id="split2">Split 2</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RecordReaders -->
+          <div class="row">
+            <div class="row-label">RecordReaders</div>
+            <div class="row-box" id="readerRowBox">
+              <div class="row-title">RecordReaders by split (only RR0 feeds this map)</div>
+              <div class="reader-layout">
+                <div class="reader-group" id="readerGroup">
+                  <div class="reader-box" id="reader0">RecordReader 0</div>
+                  <div class="reader-box" id="reader1">RecordReader 1</div>
+                  <div class="reader-box" id="reader2">RecordReader 2</div>
+                </div>
+                <div class="input-note">Only Split 0 → RR0 feeds <em>this</em> map task; other splits/RRs belong to different maps but light up before shuffle to show parallelism.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Circular Buffer -->
+          <div class="row">
+            <div class="row-label">
+              Buffer
+              <div class="buffer-percentage" id="bufferPercentage">0%</div>
+            </div>
+            <div class="row-box" id="bufferBox">
+              <div class="row-title">Circular Buffer (in-memory)</div>
+              <div class="buffer-inner" id="bufferInner">
+                <div class="buffer-capacity"></div>
+                <div class="buffer-fill" id="bufferFill"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Spill Files -->
+          <div class="row">
+            <div class="row-label">Spill Files</div>
+            <div class="row-box" id="spillBox">
+              <div class="row-title">Intermediate Files on Disk</div>
+              <div class="spill-files">
+                <div class="spill-slot" id="spill0Slot">
+                  <div class="spill-label">Spill 0</div>
+                  <div class="spill-highlight" id="spill0Highlight"></div>
+                </div>
+                <div class="spill-slot" id="spill1Slot">
+                  <div class="spill-label">Spill 1</div>
+                  <div class="spill-highlight" id="spill1Highlight"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Final Output -->
+          <div class="row">
+            <div class="row-label">Final Output</div>
+            <div class="row-box" id="finalBox">
+              <div class="row-title">Merged &amp; partitioned map output (sorted by partition, key)</div>
+              <div class="final-output" id="finalOutput">
+                <div class="final-label">map_0.out (partitioned &amp; sorted)</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Reducers -->
+          <div class="row">
+            <div class="row-label">Reducers</div>
+            <div class="row-box" id="reducersBox">
+              <div class="row-title">Shuffle Phase - Data Distribution</div>
+              <div class="reducers-inner">
+                <div class="reducer-box" id="reducer0">
+                  <div class="reducer-label">R0</div>
+                </div>
+                <div class="reducer-box" id="reducer1">
+                  <div class="reducer-label">R1</div>
+                </div>
+                <div class="reducer-box" id="reducer2">
+                  <div class="reducer-label">R2</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- HDFS -->
+          <div class="row">
+            <div class="row-label">HDFS</div>
+            <div class="row-box" id="hdfsBox">
+              <div class="row-title">Write reducer outputs to HDFS (replicated blocks)</div>
+              <div class="hdfs-inner">
+                <div class="hdfs-box" id="hdfs0">
+                  <div class="reducer-label">R0 ➜ HDFS</div>
+                </div>
+                <div class="hdfs-box" id="hdfs1">
+                  <div class="reducer-label">R1 ➜ HDFS</div>
+                </div>
+                <div class="hdfs-box" id="hdfs2">
+                  <div class="reducer-label">R2 ➜ HDFS</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="legend">
+          <div class="legend-item">
+            <div class="legend-box" style="background: #8b5cf6;"></div>
+            <span>Partition 0 (R0): cat, car, cup</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-box" style="background: #ec4899;"></div>
+            <span>Partition 1 (R1): dog, day, data, door</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-box" style="background: #f59e0b;"></div>
+            <span>Partition 2 (R2): ant, arm, art, ask</span>
+          </div>
+        </div>
+        
+        <p style="font-size: 12px; color: #475569; margin-top: 12px; line-height: 1.5;">
+          <strong style="color: #0f172a;">How it works:</strong> Each block shows a specific key like 'cat', 'dog', or 'ant'. 
+          Keys are colored by their target reducer partition: <strong style="color: #8b5cf6;">purple</strong> for partition 0 
+          (keys: cat, car, cup), <strong style="color: #ec4899;">pink</strong> for partition 1 
+          (keys: dog, day, data, door), and <strong style="color: #f59e0b;">orange</strong> for partition 2 
+          (keys: ant, arm, art, ask). Watch how keys get sorted alphabetically within each partition during spills, 
+          then merged and distributed to the correct reducer.
+        </p>
+      </div>
+
+      <!-- Right: Log/Description -->
+      <div class="log">
+        <div class="log-section current">
+          <h3>Current Step</h3>
+          <p id="logCurrent">Click "Start Simulation" to begin the Map Task pipeline visualization.</p>
+        </div>
+
+        <div class="log-section">
+          <h3>Next Step</h3>
+          <p id="logNext">The simulation will guide you through each phase of the Map Task internal processing.</p>
+        </div>
+
+        <div class="log-section">
+          <h3>Details & Insights</h3>
+          <p id="logHint">This simulator demonstrates how Hadoop MapReduce handles memory management, 
+          disk spilling, and data distribution to reducers. Watch how the circular buffer fills up and triggers 
+          spill operations to maintain efficient memory usage.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // Grab UI elements
+  const startBtn = document.getElementById("startBtn");
+  const pauseBtn = document.getElementById("pauseBtn");
+  const resetBtn = document.getElementById("resetBtn");
+  const speedSlider = document.getElementById("speedSlider");
+  const speedLabel = document.getElementById("speedLabel");
+  const timeline = document.getElementById("timeline");
+  const bufferBox = document.getElementById("bufferBox");
+  const bufferInner = document.getElementById("bufferInner");
+  const bufferFill = document.getElementById("bufferFill");
+  const bufferPercentage = document.getElementById("bufferPercentage");
+  const spillBox = document.getElementById("spillBox");
+  const spill0Slot = document.getElementById("spill0Slot");
+  const spill1Slot = document.getElementById("spill1Slot");
+  const spill0Highlight = document.getElementById("spill0Highlight");
+  const spill1Highlight = document.getElementById("spill1Highlight");
+  const finalBox = document.getElementById("finalBox");
+  const finalOutput = document.getElementById("finalOutput");
+  const inputBox = document.getElementById("inputBox");
+  const inputFormatBox = document.getElementById("inputFormatBox");
+  const splitGroup = document.getElementById("splitGroup");
+  const readerGroup = document.getElementById("readerGroup");
+  const readerRowBox = document.getElementById("readerRowBox");
+  const reducersBox = document.getElementById("reducersBox");
+  const reducer0 = document.getElementById("reducer0");
+  const reducer1 = document.getElementById("reducer1");
+  const reducer2 = document.getElementById("reducer2");
+  const hdfsBox = document.getElementById("hdfsBox");
+  const hdfs0 = document.getElementById("hdfs0");
+  const hdfs1 = document.getElementById("hdfs1");
+  const hdfs2 = document.getElementById("hdfs2");
+  const progressFill = document.getElementById("progressFill");
+  const logCurrent = document.getElementById("logCurrent");
+  const logNext = document.getElementById("logNext");
+  const logHint = document.getElementById("logHint");
+  const recordsProcessed = document.getElementById("recordsProcessed");
+  const bufferUsage = document.getElementById("bufferUsage");
+  const spillCount = document.getElementById("spillCount");
+  const recordsRead = document.getElementById("recordsRead");
+  const splitCount = document.getElementById("splitCount");
+  const currentPhase = document.getElementById("currentPhase");
+
+  const TOTAL_SPLITS = 3;
+  const splitBoxes = [...splitGroup.querySelectorAll(".split-box")];
+  const readerBoxes = [...readerGroup.querySelectorAll(".reader-box")];
+
+  // Simulation steps and timing
+  const steps = [
+    {
+      id: "inputfmt",
+      label: "InputFormat",
+      duration: 1200,
+      narrative: [
+        "InputFormat inspects the source file and produces logical input splits.",
+        "Splits define byte ranges the RecordReaders will scan.",
+        "Custom InputFormats control how data is chunked and filtered before mapping."
+      ]
+    },
+    {
+      id: "readers",
+      label: "RecordReaders",
+      duration: 1400,
+      narrative: [
+        "RecordReaders iterate each split, decoding key/value pairs for the mapper.",
+        "Multiple RecordReaders can run in parallel, feeding the circular buffer.",
+        "They handle parsing (e.g., lines, sequence files) while respecting split boundaries."
+      ]
+    },
+    {
+      id: "map1",
+      label: "Map Phase 1",
+      duration: 2200,
+      narrative: [
+        "Mapper writes key-value pairs into the circular buffer until it nears the spill threshold.",
+        "Mapper continues emitting records; buffer approaches spill trigger.",
+        "In Hadoop, a background thread monitors the buffer usage to start spilling when thresholds are reached."
+      ]
+    },
+    {
+      id: "spill0",
+      label: "Spill 0",
+      duration: 1600,
+      narrative: [
+        "Buffer is flushed to disk: records are partitioned by reducer, sorted, and optionally combined.",
+        "Spill file is written per partition; combiner reduces duplicate keys locally.",
+        "Real spill threads sort by partition and key before writing to disk."
+      ]
+    },
+    {
+      id: "map2",
+      label: "Map Phase 2",
+      duration: 2000,
+      narrative: [
+        "Mapper resumes filling the buffer with remaining input split records.",
+        "Buffer fills again; another spill will occur when safe thresholds are exceeded.",
+        "Map outputs are still partitioned in-memory so the next spill produces sorted runs."
+      ]
+    },
+    {
+      id: "spill1",
+      label: "Spill 1",
+      duration: 1600,
+      narrative: [
+        "Second spill writes another sorted run per partition, applying combiner on-the-fly.",
+        "Spill threads ensure each partition is sorted by key to speed up the merge.",
+        "Multiple spills are merged later into a single map output file per task."
+      ]
+    },
+    {
+      id: "merge",
+      label: "Merge",
+      duration: 1800,
+      narrative: [
+        "Spill files are merged into a single partitioned map output, recombining identical keys.",
+        "Merge manager produces one final sorted segment per partition.",
+        "The final map output file exposes index information reducers will use to fetch their ranges."
+      ]
+    },
+    {
+      id: "shuffle",
+      label: "Shuffle",
+      duration: 1800,
+      narrative: [
+        "Reducers fetch their partitions from the mapper via HTTP, staging data locally.",
+        "Data transfer is partition-aware so each reducer only pulls its slice.",
+        "Shuffle overlaps with map completion in real clusters to hide latency."
+      ]
+    },
+    {
+      id: "hdfs",
+      label: "Write to HDFS",
+      duration: 1500,
+      narrative: [
+        "Reducer outputs are committed to HDFS as final task segments.",
+        "Each reducer writes its partition to durable replicated blocks on HDFS.",
+        "Persistent storage completes the map task lifecycle; reducers can proceed to reduce."
+      ]
+    }
+  ];
+
+  // Runtime state
+  let keySequence = [];
+  let keyIndex = 0;
+  let allRecords = { buffer: [], spill0: [], spill1: [], final: [], reducer: [], hdfs: [] };
+  let metrics = { totalRecords: 0, currentBuffer: 0, spillsCreated: 0, recordsRead: 0 };
+  let speedFactor = 1;
+  let started = false;
+  let paused = false;
+  let currentStepIndex = 0;
+  let stepStartTime = null;
+  let pausedTime = 0;
+  let animationId = null;
+
+  // ============================================================================
+  // KEY GENERATION AND PARTITIONING
+  // ============================================================================
+
+  /**
+   * Realistic keys for WordCount example
+   * These will be distributed to reducers based on hash partitioning
+   */
+  const WORD_KEYS = [
+    // Keys that hash to reducer 0 (partition 0)
+    { key: "cat", partition: 0, color: "#8b5cf6" },
+    { key: "car", partition: 0, color: "#8b5cf6" },
+
+    // Keys that hash to reducer 1 (partition 1)
+    { key: "dog", partition: 1, color: "#ec4899" },
+    { key: "data", partition: 1, color: "#ec4899" },
+
+    // Keys that hash to reducer 2 (partition 2)
+    { key: "ant", partition: 2, color: "#f59e0b" },
+    { key: "art", partition: 2, color: "#f59e0b" }
+  ];
+
+  /**
+   * Generate a shuffled sequence of keys for map output
+   * Simulates realistic map function output order
+   */
+  function generateKeySequence() {
+    // Longer explicit pattern so Spill 1 gets enough elements
+    const pattern = [
+      // Partition 0
+      WORD_KEYS[0], WORD_KEYS[0], WORD_KEYS[0], // cat x3
+      WORD_KEYS[1], WORD_KEYS[1],               // car x2
+
+      // Partition 1
+      WORD_KEYS[2], WORD_KEYS[2], WORD_KEYS[2], // dog x3
+      WORD_KEYS[3],                             // data x1
+
+      // Partition 2
+      WORD_KEYS[4], WORD_KEYS[4], WORD_KEYS[4], // ant x3
+      WORD_KEYS[5],                             // art x1
+
+      // Repeat pattern to ensure 2nd spill has >=3 items
+      WORD_KEYS[0], WORD_KEYS[2], WORD_KEYS[4], // cat, dog, ant
+      WORD_KEYS[1], WORD_KEYS[3], WORD_KEYS[5], // car, data, art
+      WORD_KEYS[0], WORD_KEYS[2], WORD_KEYS[4]  // cat, dog, ant
+    ];
+
+    const sequence = [];
+    pattern.forEach((wordData, i) => {
+      sequence.push({
+        key: wordData.key,
+        value: 1,
+        partition: wordData.partition,
+        color: wordData.color,
+        id: i
+      });
+    });
+    return sequence;
+  }
+
+  /**
+   * Update metrics display
+   */
+  function updateMetrics() {
+    recordsProcessed.textContent = metrics.totalRecords;
+    const bufferCapacity = Math.max(1, keySequence.length || 1);
+    bufferUsage.textContent = Math.round((metrics.currentBuffer / bufferCapacity) * 100) + "%";
+    spillCount.textContent = metrics.spillsCreated;
+    recordsRead.textContent = metrics.recordsRead;
+    splitCount.textContent = TOTAL_SPLITS;
+    
+    const step = steps[currentStepIndex];
+    if (step) {
+      currentPhase.textContent = step.label;
+    } else {
+      currentPhase.textContent = "Complete";
+    }
+  }
+
+  /**
+   * Reset the entire simulation state
+   */
+  function resetState() {
+    cancelAnimationFrame(animationId);
+    animationId = null;
+    started = false;
+    paused = false;
+    currentStepIndex = 0;
+    stepStartTime = null;
+    pausedTime = 0;
+
+    // Reset metrics
+    metrics = {
+      totalRecords: 0,
+      currentBuffer: 0,
+      spillsCreated: 0,
+      recordsRead: 0
+    };
+
+    // Regenerate key sequence
+    keySequence = generateKeySequence();
+    keyIndex = 0;
+
+    // Clear visual state
+    allRecords.buffer = [];
+    allRecords.spill0 = [];
+    allRecords.spill1 = [];
+    allRecords.final = [];
+    allRecords.reducer = [];
+    allRecords.hdfs = [];
+
+    // Remove all record DOM elements
+    [bufferInner, spill0Slot, spill1Slot, finalOutput, reducer0, reducer1, reducer2, hdfs0, hdfs1, hdfs2].forEach(container => {
+      [...container.querySelectorAll(".kv-record")].forEach(n => n.remove());
+    });
+
+    // Reset visual effects
+    bufferFill.style.height = "0%";
+    bufferPercentage.textContent = "0%";
+    spill0Highlight.style.opacity = 0;
+    spill1Highlight.style.opacity = 0;
+    progressFill.style.width = "0%";
+
+    // Remove active classes
+    [inputBox, readerRowBox, bufferBox, spillBox, finalBox, reducersBox, hdfsBox].forEach(box => box.classList.remove("active"));
+    [reducer0, reducer1, reducer2, hdfs0, hdfs1, hdfs2, inputFormatBox, ...splitBoxes, ...readerBoxes].forEach(r => r.classList.remove("active"));
+
+    updateTimelineHighlight();
+    updateLogTexts();
+    updateMetrics();
+
+    startBtn.disabled = false;
+    pauseBtn.disabled = true;
+    resetBtn.disabled = false;
+  }
+
+  /**
+   * Update timeline visual state
+   */
+  function updateTimelineHighlight() {
+    const nodes = timeline.querySelectorAll(".timeline-step");
+    nodes.forEach((node, idx) => {
+      node.classList.remove("active", "completed");
+      
+      if (idx === currentStepIndex && started && !paused) {
+        node.classList.add("active");
+      } else if (idx < currentStepIndex) {
+        node.classList.add("completed");
+      }
+    });
+
+    // Update progress bar
+    const progress = ((currentStepIndex) / steps.length) * 100;
+    progressFill.style.width = progress + "%";
+  }
+
+  /**
+   * Update log text content
+   */
+  function updateLogTexts() {
+    const step = steps[currentStepIndex];
+    const nextStep = steps[currentStepIndex + 1];
+
+    if (!step) {
+      logCurrent.innerHTML = "<strong>Simulation Complete</strong><br>The Map Task has successfully processed all input, created spill files, merged them into a final sorted output, and distributed partitions to reducers.";
+      logNext.innerHTML = "<strong>Next:</strong> In a real Hadoop cluster, reducers would now process their partitions and write final results to HDFS.";
+      logHint.innerHTML = "This visualization demonstrated the internal pipeline of a single Map Task. In production, hundreds or thousands of these tasks run in parallel across the cluster, with the shuffle phase overlapping map execution for improved performance.";
+      return;
+    }
+
+    logCurrent.innerHTML = "<strong>" + step.label + "</strong><br>" + step.narrative[0];
+    logNext.innerHTML = nextStep
+      ? "<strong>Next:</strong> " + nextStep.label
+      : "<strong>Next:</strong> Simulation will complete.";
+    logHint.innerHTML = step.narrative[2];
+  }
+
+  /**
+   * Create a visual record element in a container
+   * Each record represents a key-value pair being processed
+   */
+  function createRecordElement(type, container, keyData = null) {
+    const el = document.createElement("div");
+    el.className = "kv-record " + type;
+    
+    // Use actual key data if provided
+    if (keyData) {
+      const value = (typeof keyData.count === 'number' ? keyData.count : 1);
+      el.textContent = "(" + keyData.key + ", " + value + ")";
+      el.dataset.key = keyData.key;
+      el.dataset.partition = keyData.partition;
+      el.dataset.id = keyData.id;
+      
+      // Color based on partition for buffer, spill and final merged output
+      if (type === "buffer" || type === "spill" || type === "final") {
+        el.style.background = keyData.color;
+      }
+    } else {
+      el.textContent = "(k, 1)";
+    }
+    
+    el.style.opacity = "0";
+
+    const rect = container.getBoundingClientRect();
+    const padding = 8;
+    const cols = 5;
+    const idx = container.querySelectorAll(".kv-record").length;
+    const col = idx % cols;
+    const rows = Math.max(3, Math.ceil((idx + 1) / cols));
+    const row = Math.floor(idx / cols);
+
+    const cellW = (rect.width - padding * 2 - 24) / (cols || 1);
+    const cellH = (rect.height - padding * 2 - 24) / (rows || 1);
+
+    const x = padding + col * cellW;
+    const y = padding + row * cellH;
+
+
+    container.appendChild(el);
+
+    requestAnimationFrame(() => {
+      el.style.opacity = "1";
+    });
+
+    return el;
+  }
+
+  /**
+   * Move records from one container to another with visual transition
+   * Represents the physical movement of key-value pairs between pipeline stages
+   * For spills, records are sorted by partition then by key
+   */
+  function moveRecords(fromArray, toArray, fromContainer, toContainer, newType, shouldSort = false) {
+    // Sort if this is a spill operation
+    let recordsToMove = fromArray;
+    if (shouldSort) {
+      recordsToMove = sortRecords(fromArray);
+    }
+    
+    recordsToMove.forEach((record, newIdx) => {
+      if (!record.el || !record.el.parentElement) return;
+
+      const oldEl = record.el;
+      const newEl = document.createElement("div");
+      newEl.className = "kv-record " + newType;
+      
+      // Preserve key data
+      const keyData = {
+        key: oldEl.dataset.key || oldEl.textContent,
+        partition: parseInt(oldEl.dataset.partition) || 0,
+        id: parseInt(oldEl.dataset.id) || 0
+      };
+      
+      const currentCount = (typeof record.count === 'number' ? record.count : 1);
+      newEl.textContent = "(" + keyData.key + ", " + currentCount + ")";
+      newEl.dataset.key = keyData.key;
+      newEl.dataset.partition = keyData.partition;
+      newEl.dataset.id = keyData.id;
+      
+      // Apply partition color for spill and final types
+      if (newType === "spill" || newType === "final") {
+        const wordData = WORD_KEYS.find(w => w.key === keyData.key);
+        if (wordData) {
+          newEl.style.background = wordData.color;
+        }
+      }
+
+      const rectTo = toContainer.getBoundingClientRect();
+      const padding = 8;
+      const cols = 5;
+      const rows = Math.max(3, Math.ceil((newIdx + 1) / cols));
+      const col = newIdx % cols;
+      const row = Math.floor(newIdx / cols);
+
+      const cellW = (rectTo.width - padding * 2 - 24) / (cols || 1);
+      const cellH = (rectTo.height - padding * 2 - 24) / (rows || 1);
+
+      const x = padding + col * cellW;
+      const y = padding + row * cellH;
+
+      newEl.style.opacity = "0";
+
+      toContainer.appendChild(newEl);
+      oldEl.style.opacity = "0.1";
+
+      requestAnimationFrame(() => {
+        newEl.style.opacity = "1";
+      });
+
+      toArray.push({ 
+        el: newEl,
+        key: keyData.key,
+        partition: keyData.partition,
+        id: keyData.id,
+        count: (typeof record.count === 'number' ? record.count : 1)
+      });
+    });
+
+    
+    fromArray.length = 0;
+  }
+
+  /**
+   * Sort records by partition then key to mimic Hadoop spill ordering.
+   */
+  function sortRecords(records) {
+    return [...records].sort((a, b) => {
+      if (a.partition !== b.partition) {
+        return a.partition - b.partition;
+      }
+      return String(a.key).localeCompare(String(b.key));
+    });
+  }
+
+  /**
+   * Apply combiner logic: group records by (partition, key) and sum counts.
+   * Keeps a single visible block per key and updates its (k, count) text.
+   */
+  function applyCombinerToSpill(recordsArray, container) {
+    const groups = new Map();
+
+    recordsArray.forEach(rec => {
+      const key = rec.key;
+      const partition = rec.partition;
+      const count = (typeof rec.count === 'number' ? rec.count : 1);
+      const groupKey = partition + "|" + key;
+
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, { key, partition, count: 0, records: [] });
+      }
+      const g = groups.get(groupKey);
+      g.count += count;
+      g.records.push(rec);
+    });
+
+    const newRecords = [];
+
+    groups.forEach(group => {
+      const [first, ...rest] = group.records;
+
+      // Update the surviving DOM element with aggregated count
+      if (first.el) {
+        first.el.textContent = "(" + first.key + ", " + group.count + ")";
+      }
+      first.count = group.count;
+
+      // Remove other DOM elements (combined away by the combiner)
+      rest.forEach(r => {
+        if (r.el && r.el.parentElement) {
+          r.el.parentElement.removeChild(r.el);
+        }
+      });
+
+      newRecords.push(first);
+    });
+
+    // Replace array content with aggregated records
+    recordsArray.length = 0;
+    newRecords.forEach(r => recordsArray.push(r));
+  }
+
+  /**
+
+   * Get reducer container by index
+   */
+  function getReducerContainer(idx) {
+    if (idx === 0) return reducer0;
+    if (idx === 1) return reducer1;
+    return reducer2;
+  }
+
+  /**
+   * Get HDFS container by index
+   */
+  function getHdfsContainer(idx) {
+    if (idx === 0) return hdfs0;
+    if (idx === 1) return hdfs1;
+    return hdfs2;
+  }
+
+  /**
+   * Highlight split/reader pairing: either only the primary (Split0/RR0) or all.
+   */
+  function setSplitReaderState({ showAll = false, readerActive = true } = {}) {
+    inputBox.classList.add("active");
+    readerRowBox.classList.add("active");
+
+    splitBoxes.forEach((s, idx) => {
+      s.classList.remove("active", "inactive");
+      if (showAll) {
+        s.classList.add("active");
+      } else if (idx === 0) {
+        s.classList.add("active");
+      } else {
+        s.classList.add("inactive");
+      }
+    });
+
+    readerBoxes.forEach((r, idx) => {
+      r.classList.remove("active", "inactive");
+      if (!readerActive) {
+        r.classList.add("inactive");
+        return;
+      }
+      if (showAll) {
+        r.classList.add("active");
+      } else if (idx === 0) {
+        r.classList.add("active");
+      } else {
+        r.classList.add("inactive");
+      }
+    });
+  }
+
+  // ============================================================================
+  // ANIMATION LOOP
+  // ============================================================================
+
+  /**
+   * Main animation step function
+   */
+  function animateStep(timestamp) {
+    if (paused) {
+      animationId = requestAnimationFrame(animateStep);
+      return;
+    }
+
+    if (!stepStartTime) stepStartTime = timestamp;
+    
+    const step = steps[currentStepIndex];
+    if (!step) {
+      started = false;
+      updateTimelineHighlight();
+      updateLogTexts();
+      startBtn.disabled = false;
+      pauseBtn.disabled = true;
+      return;
+    }
+
+    const elapsed = (timestamp - stepStartTime - pausedTime) * speedFactor;
+    const progress = Math.min(1, elapsed / step.duration);
+
+    // Update visual effects based on current step
+    updateStepVisuals(step, progress);
+
+    // Check if step is complete
+    if (progress >= 1) {
+      currentStepIndex++;
+      stepStartTime = null;
+      pausedTime = 0;
+      updateTimelineHighlight();
+      updateLogTexts();
+    }
+
+    if (started) {
+      animationId = requestAnimationFrame(animateStep);
+    }
+  }
+
+  /**
+   * Update visuals for the current step
+   */
+  function updateStepVisuals(step, progress) {
+    // Remove all active states first
+    [inputBox, readerRowBox, bufferBox, spillBox, finalBox, reducersBox, hdfsBox].forEach(box => box.classList.remove("active"));
+    [inputFormatBox, reducer0, reducer1, reducer2, hdfs0, hdfs1, hdfs2, ...splitBoxes, ...readerBoxes].forEach(r => {
+      r.classList.remove("active");
+      r.classList.remove("inactive");
+    });
+
+    switch (step.id) {
+      case "inputfmt":
+        inputBox.classList.add("active");
+        inputFormatBox.classList.add("active");
+        setSplitReaderState({ showAll: false, readerActive: false });
+        break;
+
+      case "readers":
+        inputFormatBox.classList.add("active");
+        setSplitReaderState({ showAll: false, readerActive: true });
+        break;
+
+      case "map1":
+      case "map2":
+        setSplitReaderState({ showAll: false, readerActive: true });
+        bufferBox.classList.add("active");
+        
+        // Fill buffer gradually with actual keys
+        const targetRecords = step.id === "map1" ? 12 : 10;
+        const existing = allRecords.buffer.length;
+        const expected = Math.floor(targetRecords * progress);
+        
+        const fillPercentage = Math.min(85, progress * 85);
+        bufferFill.style.height = fillPercentage + "%";
+        bufferPercentage.textContent = Math.round(fillPercentage) + "%";
+
+        for (let i = existing; i < expected; i++) {
+          if (keyIndex < keySequence.length) {
+            const keyData = keySequence[keyIndex];
+            const el = createRecordElement("buffer", bufferInner, keyData);
+            allRecords.buffer.push({ 
+              el, 
+              key: keyData.key, 
+              partition: keyData.partition,
+              id: keyData.id,
+              count: 1
+            });
+            metrics.totalRecords++;
+            metrics.recordsRead++;
+            metrics.currentBuffer++;
+            keyIndex++;
+          }
+        }
+        
+        updateMetrics();
+        break;
+
+      case "spill0":
+        setSplitReaderState({ showAll: false, readerActive: true });
+        spillBox.classList.add("active");
+        spill0Highlight.style.opacity = progress > 0.15 ? 1 : 0;
+        
+        if (progress > 0.3 && allRecords.buffer.length > 0 && allRecords.spill0.length === 0) {
+          // Sort by partition then by key during spill
+          moveRecords(allRecords.buffer, allRecords.spill0, bufferInner, spill0Slot, "spill", true);
+
+          // Apply combiner locally on this spill (grouping identical keys)
+          applyCombinerToSpill(allRecords.spill0, spill0Slot);
+
+          bufferFill.style.height = "0%";
+          bufferPercentage.textContent = "0%";
+          metrics.currentBuffer = 0;
+          metrics.spillsCreated++;
+          updateMetrics();
+        }
+        break;
+
+      case "spill1":
+        setSplitReaderState({ showAll: false, readerActive: true });
+        spillBox.classList.add("active");
+        spill1Highlight.style.opacity = progress > 0.15 ? 1 : 0;
+        
+        if (progress > 0.3 && allRecords.buffer.length > 0 && allRecords.spill1.length === 0) {
+          // Sort by partition then by key during spill
+          moveRecords(allRecords.buffer, allRecords.spill1, bufferInner, spill1Slot, "spill", true);
+
+          // Apply combiner locally on this second spill as well
+          applyCombinerToSpill(allRecords.spill1, spill1Slot);
+
+          bufferFill.style.height = "0%";
+          bufferPercentage.textContent = "0%";
+          metrics.currentBuffer = 0;
+          metrics.spillsCreated++;
+          updateMetrics();
+        }
+        break;
+
+      case "merge":
+        setSplitReaderState({ showAll: false, readerActive: true });
+        finalBox.classList.add("active");
+        spill0Highlight.style.opacity = 0;
+        spill1Highlight.style.opacity = 0;
+
+        if (progress > 0.2 && allRecords.final.length === 0) {
+          // Merge spills into final output and apply combiner across spills.
+          // This simulates the merge manager aggregating values for identical keys.
+          const temp = [...allRecords.spill0, ...allRecords.spill1];
+          allRecords.spill0.length = 0;
+          allRecords.spill1.length = 0;
+
+          // Group by (partition, key) and sum counts coming from different spills
+          const mergeGroups = new Map();
+          temp.forEach(record => {
+            const key = record.key;
+            const partition = record.partition;
+            const count = (typeof record.count === 'number' ? record.count : 1);
+            const groupKey = partition + "|" + key;
+
+            if (!mergeGroups.has(groupKey)) {
+              mergeGroups.set(groupKey, { key, partition, count: 0 });
+            }
+            mergeGroups.get(groupKey).count += count;
+
+            // Dim original spill elements
+            if (record.el && record.el.parentElement) {
+              record.el.style.opacity = "0.15";
+            }
+          });
+
+          // Create one final record per key, with the total count
+          const groupedArray = Array.from(mergeGroups.values());
+          groupedArray.sort((a, b) => {
+            if (a.partition !== b.partition) {
+              return a.partition - b.partition;
+            }
+            return a.key.localeCompare(b.key);
+          });
+
+          groupedArray.forEach((g, idx) => {
+            // Recover a stable color for this key/partition so that
+            // the final merged output still reflects partition coloring.
+            const wordData = WORD_KEYS.find(w => w.key === g.key && w.partition === g.partition) 
+                           || WORD_KEYS.find(w => w.key === g.key) 
+                           || WORD_KEYS[0];
+
+            const keyData = {
+              key: g.key,
+              partition: g.partition,
+              id: idx,
+              color: wordData ? wordData.color : undefined
+            };
+
+            const el = createRecordElement("final", finalOutput, keyData);
+            el.textContent = "(" + g.key + ", " + g.count + ")";
+
+            allRecords.final.push({ 
+              el, 
+              key: keyData.key, 
+              partition: keyData.partition,
+              id: keyData.id,
+              count: g.count 
+            });
+          });
+        }
+        break;
+
+      case "shuffle":
+        // Before shuffle, show other splits/RR lighting up to hint parallel maps elsewhere
+        setSplitReaderState({ showAll: true, readerActive: true });
+        reducersBox.classList.add("active");
+        [reducer0, reducer1, reducer2].forEach(r => r.classList.add("active"));
+        
+        if (progress > 0.2 && allRecords.reducer.length === 0) {
+          // Distribute records to reducers based on partition
+          allRecords.final.forEach((record, idx) => {
+            if (!record.el || !record.el.parentElement) return;
+            record.el.style.opacity = "0.08";
+
+            const partition = record.partition;
+            const target = getReducerContainer(partition);
+            
+            const keyData = {
+              key: record.key,
+              partition: record.partition,
+              id: record.id,
+              count: record.count
+            };
+            
+            const el = createRecordElement("reducer", target, keyData);
+            
+            // Color based on partition
+            const wordData = WORD_KEYS.find(w => w.key === keyData.key);
+            if (wordData) {
+              el.style.background = wordData.color;
+            }
+
+            allRecords.reducer.push({ el, key: keyData.key, partition: keyData.partition, count: keyData.count || 1 });
+          });
+        }
+        break;
+
+      case "hdfs":
+        hdfsBox.classList.add("active");
+        [hdfs0, hdfs1, hdfs2].forEach(r => r.classList.add("active"));
+        
+        if (progress > 0.25 && allRecords.hdfs.length === 0) {
+          // Persist reducer outputs into HDFS blocks (visual copy)
+          allRecords.reducer.forEach((record, idx) => {
+            if (!record.el || !record.el.parentElement) return;
+            record.el.style.opacity = "0.08";
+
+            const partition = record.partition;
+            const target = getHdfsContainer(partition);
+
+            const keyData = {
+              key: record.key,
+              partition: record.partition,
+              id: record.id,
+              count: record.count || 1
+            };
+
+            const el = createRecordElement("final", target, keyData);
+            el.textContent = "(" + keyData.key + ", " + keyData.count + ")";
+
+            const wordData = WORD_KEYS.find(w => w.key === keyData.key);
+            if (wordData) {
+              el.style.background = wordData.color;
+            }
+
+            allRecords.hdfs.push({ el, key: keyData.key, partition: keyData.partition, count: keyData.count });
+          });
+        }
+        break;
+    }
+  }
+
+  // ============================================================================
+  // EVENT HANDLERS
+  // ============================================================================
+
+  startBtn.addEventListener("click", () => {
+    if (started) return;
+    started = true;
+    paused = false;
+    startBtn.disabled = true;
+    pauseBtn.disabled = false;
+    resetBtn.disabled = false;
+    updateTimelineHighlight();
+    updateLogTexts();
+    animationId = requestAnimationFrame(animateStep);
+  });
+
+  pauseBtn.addEventListener("click", () => {
+    paused = !paused;
+    pauseBtn.textContent = paused ? "▶ Resume" : "⏸ Pause";
+    pauseBtn.classList.toggle("pause", !paused);
+    pauseBtn.classList.toggle("secondary", paused);
+    
+    if (!paused && stepStartTime) {
+      pausedTime = 0;
+    }
+  });
+
+  resetBtn.addEventListener("click", () => {
+    resetState();
+  });
+
+  speedSlider.addEventListener("input", (e) => {
+    speedFactor = parseFloat(e.target.value);
+    speedLabel.textContent = speedFactor.toFixed(2).replace(/\.00$/, "") + "×";
+  });
+
+  // ============================================================================
+  // INITIALIZATION
+  // ============================================================================
+
+  resetState();
+</script>
+</body>
+</html>

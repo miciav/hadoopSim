@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Hadoop Map Task Internal Pipeline Simulator</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #0f172a;
+      color: #e5e7eb;
+      display: flex;
+      justify-content: center;
+    }
+
+    .app {
+      max-width: 1100px;
+      width: 100%;
+      background: #020617;
+      border-radius: 16px;
+      padding: 20px 24px 28px;
+      box-shadow: 0 22px 60px rgba(0,0,0,0.6);
+      border: 1px solid #1f2937;
+    }
+
+    h1 {
+      font-size: 22px;
+      margin: 0 0 6px;
+      color: #f9fafb;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #9ca3af;
+      margin-bottom: 14px;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border-radius: 999px;
+      padding: 6px 16px;
+      font-size: 13px;
+      border: none;
+      cursor: pointer;
+      background: #22c55e;
+      color: #022c22;
+      font-weight: 600;
+      box-shadow: 0 8px 20px rgba(34,197,94,0.35);
+      transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.1s ease;
+    }
+
+    button.secondary {
+      background: #111827;
+      color: #e5e7eb;
+      box-shadow: none;
+      border: 1px solid #374151;
+    }
+
+    button:active {
+      transform: translateY(1px);
+      box-shadow: 0 4px 12px rgba(34,197,94,0.18);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: default;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .speed-control {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #9ca3af;
+      margin-left: auto;
+    }
+
+    .speed-control input[type="range"] {
+      width: 120px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1.6fr 1.2fr;
+      gap: 18px;
+      margin-top: 12px;
+    }
+
+    .timeline {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 8px;
+      font-size: 11px;
+    }
+
+    .timeline-step {
+      flex: 1;
+      padding: 4px 6px;
+      border-radius: 999px;
+      background: #020617;
+      border: 1px solid #111827;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .timeline-step.active {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      border-color: #22c55e;
+      color: #022c22;
+      font-weight: 600;
+    }
+
+    .pipeline {
+      background: radial-gradient(circle at top, #111827 0, #020617 55%);
+      border-radius: 12px;
+      padding: 10px 10px 14px;
+      border: 1px solid #111827;
+      min-height: 330px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .row-label {
+      width: 90px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #9ca3af;
+    }
+
+    .row-box {
+      flex: 1;
+      border-radius: 10px;
+      border: 1px dashed #1f2937;
+      background: rgba(15,23,42,0.7);
+      padding: 4px 6px;
+      min-height: 40px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .row-title {
+      position: absolute;
+      top: 4px;
+      left: 6px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #6b7280;
+    }
+
+    .buffer-inner {
+      position: absolute;
+      inset: 18px 6px 6px 6px;
+      border-radius: 8px;
+      border: 1px solid #1f2937;
+      background: rgba(15,23,42,0.9);
+      overflow: hidden;
+    }
+
+    .buffer-capacity {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(34,197,94,0.16), transparent 40%);
+      opacity: 0.1;
+      pointer-events: none;
+    }
+
+    .buffer-fill {
+      position: absolute;
+      inset: auto 0 0 0;
+      height: 0;
+      background: linear-gradient(to top, rgba(34,197,94,0.28), rgba(34,197,94,0.04));
+      transition: height 0.2s ease-out;
+      pointer-events: none;
+    }
+
+    .kv-record {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      border-radius: 4px;
+      background: #22c55e;
+      box-shadow: 0 0 10px rgba(34,197,94,0.5);
+      opacity: 0;
+      font-size: 9px;
+      color: #022c22;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+
+    .kv-record.buffer {
+      background: #4ade80;
+    }
+
+    .kv-record.spill {
+      background: #38bdf8;
+      box-shadow: 0 0 10px rgba(56,189,248,0.45);
+    }
+
+    .kv-record.final {
+      background: #f97316;
+      box-shadow: 0 0 10px rgba(249,115,22,0.5);
+    }
+
+    .kv-record.reducer {
+      background: #a855f7;
+      box-shadow: 0 0 10px rgba(168,85,247,0.6);
+      color: #0f172a;
+    }
+
+    .spill-files {
+      position: absolute;
+      inset: 18px 6px 6px 6px;
+      display: flex;
+      gap: 6px;
+      align-items: flex-end;
+      justify-content: center;
+    }
+
+    .spill-slot {
+      flex: 1;
+      min-height: 46px;
+      border-radius: 8px;
+      border: 1px solid #1f2937;
+      background: radial-gradient(circle at top, #0b1120 0, #020617 65%);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .spill-label {
+      position: absolute;
+      top: 4px;
+      left: 6px;
+      font-size: 9px;
+      text-transform: uppercase;
+      color: #6b7280;
+      letter-spacing: 0.08em;
+    }
+
+    .spill-highlight {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      border: 1px solid rgba(56,189,248,0.7);
+      box-shadow: 0 0 14px rgba(56,189,248,0.4);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease-out;
+    }
+
+    .final-output {
+      position: absolute;
+      inset: 24px 10px 8px 10px;
+      border-radius: 8px;
+      border: 1px dashed #374151;
+      background: radial-gradient(circle at top left, rgba(249,115,22,0.3), #020617 65%);
+      overflow: hidden;
+    }
+
+    .final-label {
+      position: absolute;
+      top: 4px;
+      left: 8px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #f97316;
+    }
+
+    .reducers-inner {
+      position: absolute;
+      inset: 18px 6px 6px 6px;
+      display: flex;
+      gap: 6px;
+    }
+
+    .reducer-box {
+      flex: 1;
+      border-radius: 8px;
+      border: 1px solid #1f2937;
+      background: radial-gradient(circle at top, #0b1120 0, #020617 65%);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .reducer-label {
+      position: absolute;
+      top: 4px;
+      left: 6px;
+      font-size: 9px;
+      text-transform: uppercase;
+      color: #a855f7;
+      letter-spacing: 0.08em;
+    }
+
+    .arrows {
+      position: absolute;
+      inset: auto 0 6px 0;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 24px;
+      font-size: 10px;
+      color: #6b7280;
+      pointer-events: none;
+    }
+
+    .arrows span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      opacity: 0.75;
+    }
+
+    .arrows span::before {
+      content: "➜";
+      font-size: 12px;
+      opacity: 0.7;
+    }
+
+    .log-panel {
+      background: #020617;
+      border-radius: 12px;
+      border: 1px solid #111827;
+      padding: 10px;
+      font-size: 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-height: 180px;
+    }
+
+    .log-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #9ca3af;
+      margin-bottom: 2px;
+    }
+
+    .log-item {
+      padding: 4px 6px;
+      border-radius: 8px;
+      background: rgba(15,23,42,0.85);
+      border: 1px solid #111827;
+      color: #d1d5db;
+    }
+
+    .log-item strong {
+      color: #22c55e;
+      font-weight: 600;
+    }
+
+    .log-item.dim strong {
+      color: #9ca3af;
+    }
+
+    .legend {
+      margin-top: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      font-size: 10px;
+      color: #9ca3af;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 6px;
+      border-radius: 999px;
+      border: 1px solid #111827;
+      background: #020617;
+    }
+
+    .legend-color {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+    }
+
+    .legend-color.buffer { background: #4ade80; }
+    .legend-color.spill { background: #38bdf8; }
+    .legend-color.final { background: #f97316; }
+    .legend-color.reducer { background: #a855f7; }
+
+    @media (max-width: 900px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .speed-control {
+        margin-left: 0;
+        width: 100%;
+        justify-content: flex-start;
+        margin-top: 4px;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <h1>Map Task Internal Pipeline Simulator</h1>
+  <div class="subtitle">
+    Visualizza buffer, spill, merge finale e shuffle verso i reducer. Usa <em>Start</em> e il cursore della velocità per esplorare.
+  </div>
+
+  <div class="controls">
+    <button id="startBtn">Start</button>
+    <button id="resetBtn" class="secondary">Reset</button>
+
+    <div class="speed-control">
+      <span>Speed</span>
+      <input id="speedSlider" type="range" min="0.5" max="2.0" step="0.25" value="1" />
+      <span id="speedLabel">1×</span>
+    </div>
+  </div>
+
+  <div class="timeline" id="timeline">
+    <div class="timeline-step" data-step="map1">Map: fill buffer</div>
+    <div class="timeline-step" data-step="spill0">Spill 0: sort + combiner</div>
+    <div class="timeline-step" data-step="map2">Map continues</div>
+    <div class="timeline-step" data-step="spill1">Spill 1</div>
+    <div class="timeline-step" data-step="merge">Final merge</div>
+    <div class="timeline-step" data-step="shuffle">Shuffle to reducers</div>
+  </div>
+
+  <div class="layout">
+    <div>
+      <div class="pipeline" id="pipeline">
+        <!-- MAP & BUFFER -->
+        <div class="row">
+          <div class="row-label">Mapper</div>
+          <div class="row-box" id="mapRow">
+            <div class="row-title">User map(key, value) → context.write()</div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="row-label">Buffer</div>
+          <div class="row-box">
+            <div class="row-title">In-memory sort buffer</div>
+            <div class="buffer-inner" id="bufferInner">
+              <div class="buffer-capacity"></div>
+              <div class="buffer-fill" id="bufferFill"></div>
+              <!-- kv-records appear here -->
+            </div>
+          </div>
+        </div>
+
+        <!-- SPILLS -->
+        <div class="row">
+          <div class="row-label">Spills</div>
+          <div class="row-box">
+            <div class="row-title">spill files on local disk</div>
+            <div class="spill-files">
+              <div class="spill-slot" id="spill0Slot">
+                <div class="spill-label">Spill 0</div>
+                <div class="spill-highlight" id="spill0Highlight"></div>
+              </div>
+              <div class="spill-slot" id="spill1Slot">
+                <div class="spill-label">Spill 1</div>
+                <div class="spill-highlight" id="spill1Highlight"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FINAL OUTPUT -->
+        <div class="row">
+          <div class="row-label">Final out</div>
+          <div class="row-box">
+            <div class="row-title">Merged map output</div>
+            <div class="final-output" id="finalOutput">
+              <div class="final-label">map_0.out (sorted, partitioned)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- REDUCERS -->
+        <div class="row">
+          <div class="row-label">Reducers</div>
+          <div class="row-box">
+            <div class="row-title">Shuffle &amp; fetch</div>
+            <div class="reducers-inner">
+              <div class="reducer-box" id="reducer0">
+                <div class="reducer-label">Reducer 0</div>
+              </div>
+              <div class="reducer-box" id="reducer1">
+                <div class="reducer-label">Reducer 1</div>
+              </div>
+              <div class="reducer-box" id="reducer2">
+                <div class="reducer-label">Reducer 2</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="arrows">
+          <span>Map → Buffer</span>
+          <span>Spill (sort + combiner)</span>
+          <span>Final merge</span>
+          <span>Shuffle → Reducers</span>
+        </div>
+      </div>
+
+      <div class="legend">
+        <div class="legend-item">
+          <div class="legend-color buffer"></div> <span>Record in buffer</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color spill"></div> <span>Record in spill file</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color final"></div> <span>Final merged output</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color reducer"></div> <span>Fetched by reducer</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="log-panel">
+      <div class="log-title">Execution narrative</div>
+      <div class="log-item" id="logCurrent"></div>
+      <div class="log-item dim" id="logNext"></div>
+      <div class="log-item dim" id="logHint"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // --- CONFIGURATION ---
+  const steps = [
+    {
+      id: "map1",
+      label: "Map: filling buffer until spill threshold",
+      duration: 5000,
+      narrative: [
+        "I mapper leggo l'input split e chiamano context.write(key, value).",
+        "Le coppie (k, v) vengono serializzate nell'In-Memory Sort Buffer.",
+        "Il Partitioner assegna ciascuna key a una partizione (reducer)."
+      ]
+    },
+    {
+      id: "spill0",
+      label: "Spill 0: sort + (optional) combiner → spill_0.out",
+      duration: 3500,
+      narrative: [
+        "La memoria supera la soglia: si attiva lo spill thread.",
+        "I record congelati vengono ordinati per (partition, key).",
+        "Il combiner, se definito, riduce localmente i valori."
+      ]
+    },
+    {
+      id: "map2",
+      label: "Map continua, riempiendo di nuovo il buffer",
+      duration: 4000,
+      narrative: [
+        "Il mapper continua ad emettere output in parallelo allo spill.",
+        "Nuove coppie (k, v) riempiono il buffer da capo.",
+        "Potrebbe generarsi un nuovo spill se necessario."
+      ]
+    },
+    {
+      id: "spill1",
+      label: "Spill 1: secondo file di spill",
+      duration: 3500,
+      narrative: [
+        "La soglia viene superata di nuovo: si crea spill_1.out.",
+        "Ancora sort per (partition, key) e optional combiner.",
+        "Ora esistono più spill file sul disco locale."
+      ]
+    },
+    {
+      id: "merge",
+      label: "Final merge: multi-way merge di tutti gli spill",
+      duration: 4500,
+      narrative: [
+        "A fine input, il Map Task non genera più record.",
+        "Il Merge Manager fa un multi-way merge dei vari spill.",
+        "Si ottiene un unico file finale map_0.out, ordinato e partizionato."
+      ]
+    },
+    {
+      id: "shuffle",
+      label: "Shuffle: i reducer fetcheano le partizioni",
+      duration: 4500,
+      narrative: [
+        "I reducer contattano il TaskTracker/NodeManager del mapper.",
+        "Per ogni reducer viene letta solo la partizione di interesse.",
+        "Lo shuffle può essere sovrapposto ai map task su nodi diversi."
+      ]
+    }
+  ];
+
+  const startBtn = document.getElementById("startBtn");
+  const resetBtn = document.getElementById("resetBtn");
+  const speedSlider = document.getElementById("speedSlider");
+  const speedLabel = document.getElementById("speedLabel");
+  const bufferInner = document.getElementById("bufferInner");
+  const bufferFill = document.getElementById("bufferFill");
+  const spill0Slot = document.getElementById("spill0Slot");
+  const spill1Slot = document.getElementById("spill1Slot");
+  const spill0Highlight = document.getElementById("spill0Highlight");
+  const spill1Highlight = document.getElementById("spill1Highlight");
+  const finalOutput = document.getElementById("finalOutput");
+  const reducer0 = document.getElementById("reducer0");
+  const reducer1 = document.getElementById("reducer1");
+  const reducer2 = document.getElementById("reducer2");
+  const timeline = document.getElementById("timeline");
+  const logCurrent = document.getElementById("logCurrent");
+  const logNext = document.getElementById("logNext");
+  const logHint = document.getElementById("logHint");
+
+  let animationId = null;
+  let started = false;
+  let currentStepIndex = 0;
+  let stepStartTime = null;
+  let speedFactor = 1;
+
+  let allRecords = {
+    buffer: [],
+    spill0: [],
+    spill1: [],
+    final: [],
+    reducer: []
+  };
+
+  function clearChildren(el) {
+    while (el.firstChild) {
+      el.removeChild(el.firstChild);
+    }
+  }
+
+  function resetState() {
+    cancelAnimationFrame(animationId);
+    animationId = null;
+    started = false;
+    currentStepIndex = 0;
+    stepStartTime = null;
+
+    // Clear visuals
+    allRecords.buffer = [];
+    allRecords.spill0 = [];
+    allRecords.spill1 = [];
+    allRecords.final = [];
+    allRecords.reducer = [];
+
+    // Remove record DOMs
+    [...bufferInner.querySelectorAll(".kv-record")].forEach(n => n.remove());
+    [...spill0Slot.querySelectorAll(".kv-record")].forEach(n => n.remove());
+    [...spill1Slot.querySelectorAll(".kv-record")].forEach(n => n.remove());
+    [...finalOutput.querySelectorAll(".kv-record")].forEach(n => n.remove());
+    [...reducer0.querySelectorAll(".kv-record")].forEach(n => n.remove());
+    [...reducer1.querySelectorAll(".kv-record")].forEach(n => n.remove());
+    [...reducer2.querySelectorAll(".kv-record")].forEach(n => n.remove());
+
+    bufferFill.style.height = "0%";
+    spill0Highlight.style.opacity = 0;
+    spill1Highlight.style.opacity = 0;
+
+    updateTimelineHighlight();
+    updateLogTexts();
+
+    startBtn.disabled = false;
+  }
+
+  function updateTimelineHighlight() {
+    const nodes = timeline.querySelectorAll(".timeline-step");
+    nodes.forEach((node, idx) => {
+      if (idx === currentStepIndex && started) {
+        node.classList.add("active");
+      } else {
+        node.classList.remove("active");
+      }
+    });
+  }
+
+  function updateLogTexts() {
+    const step = steps[currentStepIndex];
+    const nextStep = steps[currentStepIndex + 1];
+
+    if (!step) {
+      logCurrent.textContent = "Simulazione terminata. Il map task ha prodotto il file finale e i reducer hanno completato lo shuffle.";
+      logNext.textContent = "";
+      logHint.textContent = "";
+      return;
+    }
+
+    logCurrent.innerHTML = "<strong>" + step.label + "</strong><br>" + step.narrative[0];
+    logNext.innerHTML = nextStep
+      ? "<strong>Prossimo:</strong> " + nextStep.label
+      : "<strong>Prossimo:</strong> fine pipeline per questo Map Task.";
+    logHint.innerHTML = step.narrative[1] + "<br>" + step.narrative[2];
+  }
+
+  function createRecordElement(type, container) {
+    const el = document.createElement("div");
+    el.className = "kv-record " + type;
+    el.textContent = "k";
+    el.style.opacity = "0";
+
+    const rect = container.getBoundingClientRect();
+    // local positioning inside container (approx grid)
+    const padding = 6;
+    const cols = 6;
+    const rows = 3;
+    const idx = container.querySelectorAll(".kv-record").length;
+    const col = idx % cols;
+    const row = Math.floor(idx / cols) % rows;
+
+    const cellW = (rect.width - padding * 2 - 14) / (cols || 1);
+    const cellH = (rect.height - padding * 2 - 14) / (rows || 1);
+
+    const x = padding + col * cellW;
+    const y = padding + row * cellH;
+
+    el.style.left = x + "px";
+    el.style.top = y + "px";
+
+    container.appendChild(el);
+
+    requestAnimationFrame(() => {
+      el.style.opacity = "1";
+    });
+
+    return el;
+  }
+
+  function moveRecords(fromArray, toArray, fromContainer, toContainer, newType) {
+    fromArray.forEach((record) => {
+      if (!record.el || !record.el.parentElement) return;
+
+      const oldEl = record.el;
+      const newEl = document.createElement("div");
+      newEl.className = "kv-record " + newType;
+      newEl.textContent = oldEl.textContent || "k";
+
+      const rectTo = toContainer.getBoundingClientRect();
+      const padding = 6;
+      const cols = 6;
+      const rows = 3;
+      const idx = toContainer.querySelectorAll(".kv-record").length;
+      const col = idx % cols;
+      const row = Math.floor(idx / cols) % rows;
+
+      const cellW = (rectTo.width - padding * 2 - 14) / (cols || 1);
+      const cellH = (rectTo.height - padding * 2 - 14) / (rows || 1);
+
+      const x = padding + col * cellW;
+      const y = padding + row * cellH;
+
+      newEl.style.left = x + "px";
+      newEl.style.top = y + "px";
+      newEl.style.opacity = "0";
+
+      toContainer.appendChild(newEl);
+      oldEl.style.opacity = "0.1";
+
+      requestAnimationFrame(() => {
+        newEl.style.opacity = "1";
+      });
+
+      toArray.push({ el: newEl });
+    });
+
+    fromArray.length = 0;
+  }
+
+  function getReducerContainer(idx) {
+    if (idx === 0) return reducer0;
+    if (idx === 1) return reducer1;
+    return reducer2;
+  }
+
+  function animateStep(timestamp) {
+    if (!stepStartTime) stepStartTime = timestamp;
+    const step = steps[currentStepIndex];
+    if (!step) {
+      started = false;
+      updateTimelineHighlight();
+      updateLogTexts();
+      startBtn.disabled = false;
+      return;
+    }
+
+    const elapsed = (timestamp - stepStartTime) * (1 / speedFactor);
+    const progress = Math.min(1, elapsed / step.duration);
+
+    // Per-step behaviors
+    if (step.id === "map1" || step.id === "map2") {
+      // Fill buffer gradually
+      const targetRecords = step.id === "map1" ? 12 : 10;
+      const existing = allRecords.buffer.length;
+      const expected = Math.floor(targetRecords * progress);
+      bufferFill.style.height = (progress * 85) + "%";
+
+      for (let i = existing; i < expected; i++) {
+        const el = createRecordElement("buffer", bufferInner);
+        allRecords.buffer.push({ el });
+      }
+    }
+
+    if (step.id === "spill0") {
+      spill0Highlight.style.opacity = progress > 0.15 ? 1 : 0;
+      if (progress > 0.3 && allRecords.buffer.length > 0 && allRecords.spill0.length === 0) {
+        moveRecords(allRecords.buffer, allRecords.spill0, bufferInner, spill0Slot, "spill");
+        bufferFill.style.height = "0%";
+      }
+    }
+
+    if (step.id === "spill1") {
+      spill1Highlight.style.opacity = progress > 0.15 ? 1 : 0;
+      if (progress > 0.3 && allRecords.buffer.length > 0 && allRecords.spill1.length === 0) {
+        moveRecords(allRecords.buffer, allRecords.spill1, bufferInner, spill1Slot, "spill");
+        bufferFill.style.height = "0%";
+      }
+    }
+
+    if (step.id === "merge") {
+      spill0Highlight.style.opacity = 0;
+      spill1Highlight.style.opacity = 0;
+
+      if (progress > 0.2 && allRecords.final.length === 0) {
+        // Merge spills into final output
+        const temp = [...allRecords.spill0, ...allRecords.spill1];
+        allRecords.spill0.length = 0;
+        allRecords.spill1.length = 0;
+
+        temp.forEach((record, idx) => {
+          if (!record.el || !record.el.parentElement) return;
+          record.el.style.opacity = "0.15";
+
+          const el = createRecordElement("final", finalOutput);
+          allRecords.final.push({ el });
+        });
+      }
+    }
+
+    if (step.id === "shuffle") {
+      if (progress > 0.2 && allRecords.reducer.length === 0) {
+        // "Fetch" records from final to reducers
+        allRecords.final.forEach((record, idx) => {
+          if (!record.el || !record.el.parentElement) return;
+          record.el.style.opacity = "0.08";
+
+          const reducerIdx = idx % 3;
+          const target = getReducerContainer(reducerIdx);
+          const el = createRecordElement("reducer", target);
+          el.textContent = "R" + reducerIdx;
+          allRecords.reducer.push({ el });
+        });
+      }
+    }
+
+    if (progress >= 1) {
+      // next step
+      currentStepIndex++;
+      stepStartTime = null;
+      updateTimelineHighlight();
+      updateLogTexts();
+    }
+
+    if (started) {
+      animationId = requestAnimationFrame(animateStep);
+    }
+  }
+
+  // --- EVENT HANDLERS ---
+  startBtn.addEventListener("click", () => {
+    if (started) return;
+    started = true;
+    startBtn.disabled = true;
+    resetBtn.disabled = false;
+    updateTimelineHighlight();
+    updateLogTexts();
+    animationId = requestAnimationFrame(animateStep);
+  });
+
+  resetBtn.addEventListener("click", () => {
+    resetState();
+  });
+
+  speedSlider.addEventListener("input", (e) => {
+    speedFactor = parseFloat(e.target.value);
+    speedLabel.textContent = speedFactor.toFixed(2).replace(/\.00$/, "") + "×";
+  });
+
+  // Initialize
+  resetState();
+</script>
+</body>
+</html>

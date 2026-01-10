@@ -1,0 +1,1923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hadoop Map Task Internal Pipeline Simulator</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #f8fafc;
+      color: #1e293b;
+      display: flex;
+      justify-content: center;
+      min-height: 100vh;
+    }
+
+    .app {
+      max-width: 1200px;
+      width: 100%;
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 20px 24px 28px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08), 0 0 1px rgba(0,0,0,0.1);
+      border: 1px solid #e2e8f0;
+    }
+
+    h1 {
+      font-size: 24px;
+      margin: 0 0 6px;
+      color: #0f172a;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: #475569;
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border-radius: 8px;
+      padding: 8px 18px;
+      font-size: 14px;
+      border: none;
+      cursor: pointer;
+      background: #16a34a;
+      color: #ffffff;
+      font-weight: 600;
+      box-shadow: 0 2px 8px rgba(22,163,74,0.3);
+      transition: all 0.15s ease;
+    }
+
+    button:hover:not(:disabled) {
+      background: #15803d;
+      box-shadow: 0 4px 12px rgba(22,163,74,0.4);
+      transform: translateY(-1px);
+    }
+
+    button.secondary {
+      background: #f1f5f9;
+      color: #334155;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      border: 1px solid #cbd5e1;
+    }
+
+    button.secondary:hover:not(:disabled) {
+      background: #e2e8f0;
+      border-color: #94a3b8;
+    }
+
+    button.pause {
+      background: #ea580c;
+      color: #ffffff;
+    }
+
+    button.pause:hover:not(:disabled) {
+      background: #c2410c;
+    }
+
+    button:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .speed-control {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #475569;
+      margin-left: auto;
+    }
+
+    .speed-control input[type="range"] {
+      width: 140px;
+      cursor: pointer;
+    }
+
+    /* Metrics Panel */
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+      padding: 16px;
+      background: #f8fafc;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .metric {
+      text-align: center;
+    }
+
+    .metric-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #16a34a;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .metric-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748b;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1.85fr 1fr;
+      gap: 18px;
+      margin-top: 16px;
+    }
+
+    @media (max-width: 968px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .timeline {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+      font-size: 11px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .timeline-step {
+      flex: 1;
+      min-width: 80px;
+      padding: 6px 8px;
+      border-radius: 8px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: all 0.2s ease;
+      cursor: help;
+      color: #475569;
+    }
+
+    .timeline-step:hover {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+    }
+
+    .timeline-step.active {
+      background: linear-gradient(135deg, #16a34a, #15803d);
+      border-color: #16a34a;
+      color: #ffffff;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(22,163,74,0.3);
+    }
+
+    .timeline-step.completed {
+      background: #e2e8f0;
+      border-color: #cbd5e1;
+      color: #64748b;
+      opacity: 0.8;
+    }
+
+    .pipeline {
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      border-radius: 12px;
+      padding: 12px;
+      border: 1px solid #e2e8f0;
+      min-height: 580px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .row-label {
+      width: 100px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #475569;
+      font-weight: 600;
+    }
+
+    .row-box {
+      flex: 1;
+      border-radius: 10px;
+      border: 1px dashed #cbd5e1;
+      background: rgba(255,255,255,0.8);
+      padding: 32px 14px 14px;
+      min-height: 110px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.3s ease;
+    }
+
+    #reducersBox,
+    #hdfsBox {
+      overflow: visible;
+    }
+
+    /* Give the circular buffer extra headroom for more rows of records */
+    #bufferBox {
+      min-height: 160px;
+    }
+
+    .row-box.active {
+      border-color: #16a34a;
+      border-style: solid;
+      box-shadow: 0 0 20px rgba(22,163,74,0.15);
+      background: rgba(240,253,244,0.9);
+    }
+
+    /* InputFormat / Splits / RecordReaders */
+    .input-flow {
+      position: absolute;
+      inset: 22px 10px 10px 10px;
+      display: grid;
+      grid-template-columns: auto 24px 1fr 24px 1fr;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .input-format,
+    .split-box,
+    .reader-box {
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: linear-gradient(135deg, #e0f2fe, #f8fafc);
+      border: 1px solid #bfdbfe;
+      color: #0f172a;
+      font-weight: 700;
+      font-size: 12px;
+      text-align: center;
+      box-shadow: 0 2px 10px rgba(59,130,246,0.2);
+    }
+
+    .split-group,
+    .reader-group {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+      gap: 8px;
+    }
+
+    .reader-box {
+      background: linear-gradient(135deg, #dcfce7, #f0fdf4);
+      border-color: #bbf7d0;
+      box-shadow: 0 2px 10px rgba(34,197,94,0.2);
+      font-size: 11px;
+    }
+
+    .split-box.active,
+    .reader-box.active,
+    .input-format.active {
+      border-color: #16a34a;
+      box-shadow: 0 0 14px rgba(22,163,74,0.35);
+      transform: translateY(-1px);
+    }
+
+    .split-box.inactive,
+    .reader-box.inactive {
+      opacity: 0.35;
+    }
+
+    .flow-arrow {
+      text-align: center;
+      color: #475569;
+      font-weight: 800;
+      font-size: 16px;
+    }
+
+    .input-note {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #475569;
+    }
+
+    .input-layout {
+      display: grid;
+      grid-template-columns: 140px 24px 1fr;
+      gap: 10px;
+      align-items: center;
+      margin-top: 10px;
+    }
+
+    .reader-layout {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .dual-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .mapper-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(320px, 1fr));
+      gap: 18px;
+    }
+
+    .mapper-card {
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+      position: relative;
+      padding: 18px 18px 22px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.05);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 220px;
+    }
+
+    .mapper-header {
+      font-size: 13px;
+      font-weight: 700;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+
+    .mapper-meta {
+      font-size: 11px;
+      color: #475569;
+    }
+
+    .mapper-percentage {
+      display: inline-block;
+      margin-top: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #16a34a;
+    }
+
+    .row-title {
+      position: absolute;
+      top: 10px;
+      left: 12px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #64748b;
+      font-weight: 600;
+    }
+
+    .buffer-inner {
+      position: relative;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+      background: rgba(255,255,255,0.95);
+      overflow: hidden;
+      min-height: 170px;
+      padding: 26px 12px 12px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      align-content: flex-start;
+      margin-top: 0;
+      flex: 1;
+    }
+
+    .buffer-capacity {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(22,163,74,0.08), transparent 50%);
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
+    .buffer-fill {
+      position: absolute;
+      inset: auto 0 0 0;
+      height: 0;
+      background: linear-gradient(to top, rgba(22,163,74,0.25), rgba(22,163,74,0.05));
+      transition: height 0.25s ease-out;
+      pointer-events: none;
+      border-top: 1px solid rgba(22,163,74,0.5);
+    }
+
+    .buffer-percentage {
+      margin-top: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #16a34a;
+      text-shadow: 0 0 6px rgba(22,163,74,0.3);
+      pointer-events: none;
+      display: block;
+    }
+
+    .kv-record {
+      position: relative;
+      min-width: 60px;
+      height: 20px;
+      padding: 0 6px;
+      border-radius: 5px;
+      background: #16a34a;
+      box-shadow: 0 2px 8px rgba(22,163,74,0.4);
+      opacity: 0;
+      font-size: 10px;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      font-weight: 700;
+      margin: 2px;
+      transition: all 0.2s ease;
+    }
+
+    .kv-record.buffer {
+      background: #22c55e;
+      box-shadow: 0 2px 8px rgba(34,197,94,0.4);
+    }
+
+    .kv-record.spill {
+      background: #0ea5e9;
+      box-shadow: 0 2px 8px rgba(14,165,233,0.4);
+    }
+
+    .kv-record.final {
+      background: #ea580c;
+      box-shadow: 0 2px 8px rgba(234,88,12,0.4);
+    }
+
+    .kv-record.reducer {
+      background: #9333ea;
+      box-shadow: 0 2px 10px rgba(147,51,234,0.5);
+      color: #ffffff;
+      font-weight: 700;
+    }
+
+    .kv-record.combiner-pending {
+      opacity: 0.25;
+      transform: translateY(-4px) scale(0.96);
+      filter: blur(1px);
+      box-shadow: 0 0 0 2px rgba(14,165,233,0.25);
+      transition: opacity 0.5s ease, transform 0.5s ease, filter 0.5s ease;
+    }
+
+    .kv-record.processed-blur {
+      opacity: 0.4;
+      filter: blur(1px);
+    }
+      margin: 0 0 8px;
+    }
+
+    .spill-files {
+      position: relative;
+      margin-top: 10px;
+      padding: 12px 8px 6px;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+      background: rgba(248,250,252,0.8);
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      justify-content: center;
+    }
+
+    .spill-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+    }
+
+    .spill-column {
+      position: relative;
+      padding-top: 22px;
+      padding-bottom: 6px;
+    }
+
+    .spill-title {
+      position: absolute;
+      top: 0;
+      left: 0;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #475569;
+      font-weight: 700;
+    }
+
+    .spill-column::before {
+      content: "";
+      position: absolute;
+      top: 10px;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: #e2e8f0;
+    }
+
+    .spill-slot {
+      flex: 1;
+      min-height: 120px;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+      background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      align-content: flex-start;
+      padding: 28px 10px 12px;
+      margin-top: 16px;
+    }
+
+    .spill-label {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 9px;
+      text-transform: uppercase;
+      color: #64748b;
+      letter-spacing: 0.1em;
+      font-weight: 600;
+    }
+
+    .spill-highlight {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      border: 2px solid rgba(14,165,233,0.6);
+      box-shadow: 0 0 20px rgba(14,165,233,0.3), inset 0 0 20px rgba(14,165,233,0.1);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .final-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 16px;
+      margin-top: 10px;
+    }
+
+    .final-card {
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      background: linear-gradient(180deg, #ffffff 0%, #fff7ed 100%);
+      padding: 14px 14px 16px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.05);
+      position: relative;
+    }
+
+    .final-output {
+      position: relative;
+      border-radius: 8px;
+      border: 1px dashed #cbd5e1;
+      background: linear-gradient(135deg, rgba(234,88,12,0.08) 0%, rgba(255,255,255,0.9) 60%);
+      overflow: hidden;
+      transition: all 0.3s ease;
+      min-height: 150px;
+      padding: 32px 12px 12px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      align-content: flex-start;
+      margin-top: 8px;
+    }
+
+    .final-label {
+      position: absolute;
+      top: 5px;
+      left: 10px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #ea580c;
+      font-weight: 600;
+    }
+
+    .reducers-inner {
+      position: relative;
+      display: flex;
+      gap: 12px;
+      margin-top: 18px;
+      padding: 0 6px 6px;
+    }
+
+    .reducer-box {
+      flex: 1;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+      background: linear-gradient(135deg, #faf5ff 0%, #ffffff 60%);
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      align-content: flex-start;
+      padding: 32px 12px 12px;
+      min-height: 170px;
+    }
+
+    .reducer-box.active {
+      border-color: #9333ea;
+      box-shadow: 0 0 20px rgba(147,51,234,0.25);
+    }
+
+    .reducer-box.reducing {
+      box-shadow: 0 0 24px rgba(147,51,234,0.35);
+      background: linear-gradient(135deg, rgba(147,51,234,0.15) 0%, #ffffff 70%);
+    }
+
+    .reducer-label {
+      position: absolute;
+      top: 8px;
+      left: 10px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #9333ea;
+      font-weight: 600;
+    }
+
+    .hdfs-inner {
+      position: relative;
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .hdfs-box {
+      flex: 1;
+      border-radius: 10px;
+      border: 1px dashed #cbd5e1;
+      background: linear-gradient(135deg, rgba(16,185,129,0.12) 0%, #ffffff 70%);
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+      padding: 36px 14px 14px;
+      min-height: 190px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      align-content: flex-start;
+    }
+
+    .hdfs-box.active {
+      border-color: #16a34a;
+      box-shadow: 0 0 20px rgba(22,163,74,0.2);
+    }
+
+    .kv-record.reducer-output {
+      box-shadow: 0 0 10px rgba(99,102,241,0.35);
+      border: 1px solid rgba(255,255,255,0.85);
+    }
+
+    /* Log Panel */
+    .log {
+      background: #f8fafc;
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .log-section {
+      padding: 12px;
+      border-radius: 8px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+    }
+
+    .log-section.current {
+      border-color: #16a34a;
+      background: rgba(240,253,244,0.6);
+    }
+
+    .log-section h3 {
+      margin: 0 0 8px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748b;
+      font-weight: 600;
+    }
+
+    .log-section.current h3 {
+      color: #16a34a;
+    }
+
+    .log-section p {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #334155;
+    }
+
+    .log-section strong {
+      color: #0f172a;
+      font-weight: 600;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 12px;
+      padding: 12px;
+      background: #ffffff;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #475569;
+    }
+
+    .legend-box {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      box-shadow: 0 0 8px currentColor;
+    }
+
+    .legend-box.buffer { background: #22c55e; color: rgba(34,197,94,0.5); }
+    .legend-box.spill { background: #0ea5e9; color: rgba(14,165,233,0.5); }
+    .legend-box.final { background: #ea580c; color: rgba(234,88,12,0.5); }
+    .legend-box.reducer { background: #9333ea; color: rgba(147,51,234,0.5); }
+
+    /* Tooltip */
+    .tooltip {
+      position: absolute;
+      background: #1e293b;
+      color: #f8fafc;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      z-index: 1000;
+      border: 1px solid #334155;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      max-width: 250px;
+      line-height: 1.4;
+    }
+
+    /* Progress indicator */
+    .progress-bar {
+      height: 4px;
+      background: #e2e8f0;
+      border-radius: 2px;
+      overflow: hidden;
+      margin: 16px 0 8px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #16a34a, #15803d);
+      width: 0%;
+      transition: width 0.3s ease;
+      box-shadow: 0 0 10px rgba(22,163,74,0.4);
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>Hadoop Map Task Internal Pipeline Simulator</h1>
+    <p class="subtitle">
+      Interactive visualization of two parallel Hadoop Map Tasks. Watch how key-value pairs 
+      (like &lt;cat,1&gt;, &lt;dog,1&gt;, &lt;ant,1&gt;) flow through independent buffers, spill at different times, 
+      merge locally per mapper, and are then shuffled together to the correct reducers.
+    </p>
+
+    <div class="controls">
+      <button id="startBtn">▶ Start Simulation</button>
+      <button id="pauseBtn" class="pause" disabled>⏸ Pause</button>
+      <button id="resetBtn" class="secondary">↻ Reset</button>
+      <div class="speed-control">
+        <label for="speedSlider">Speed:</label>
+        <input type="range" id="speedSlider" min="0.5" max="3" step="0.25" value="1" />
+        <span id="speedLabel">1×</span>
+      </div>
+    </div>
+
+    <!-- Metrics Dashboard -->
+    <div class="metrics">
+      <div class="metric">
+        <span class="metric-value" id="recordsProcessed">0</span>
+        <span class="metric-label">Records Processed</span>
+      </div>
+      <div class="metric">
+        <span class="metric-value" id="bufferUsage">0%</span>
+        <span class="metric-label">Buffer Usage</span>
+      </div>
+      <div class="metric">
+        <span class="metric-value" id="spillCount">0</span>
+        <span class="metric-label">Spills Created</span>
+      </div>
+      <div class="metric">
+        <span class="metric-value" id="recordsRead">0</span>
+        <span class="metric-label">Records Read</span>
+      </div>
+      <div class="metric">
+        <span class="metric-value" id="splitCount">2</span>
+        <span class="metric-label">Input Splits</span>
+      </div>
+      <div class="metric">
+        <span class="metric-value" id="currentPhase">Idle</span>
+        <span class="metric-label">Current Phase</span>
+      </div>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+
+    <div class="layout">
+      <!-- Left: Pipeline Visualization -->
+      <div>
+        <!-- Timeline -->
+        <div class="timeline" id="timeline">
+          <div class="timeline-step" title="InputFormat splits the input into logical segments">InputFormat</div>
+          <div class="timeline-step" title="RecordReaders pull from different splits">RecordReaders</div>
+          <div class="timeline-step" title="Two independent mappers fill their buffers at different speeds">Parallel Mappers & Spills</div>
+          <div class="timeline-step" title="All mapper outputs merge into a combined map output">Merge</div>
+          <div class="timeline-step" title="Reducers fetch partitions from both mappers">Shuffle</div>
+          <div class="timeline-step" title="Final outputs are written to HDFS">Write to HDFS</div>
+        </div>
+
+        <!-- Pipeline -->
+        <div class="pipeline">
+          <!-- Input chain -->
+          <div class="row">
+            <div class="row-label">Input</div>
+            <div class="row-box" id="inputBox">
+              <div class="row-title">InputFormat &amp; Splits</div>
+              <div class="input-layout">
+                <div class="input-format" id="inputFormatBox">InputFormat</div>
+                <div class="flow-arrow">➜</div>
+                <div class="split-group" id="splitGroup">
+                  <div class="split-box" id="split0">Split 0</div>
+                  <div class="split-box" id="split1">Split 1</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RecordReaders -->
+          <div class="row">
+            <div class="row-label">RecordReaders</div>
+            <div class="row-box" id="readerRowBox">
+              <div class="row-title">RecordReaders by split (one per mapper)</div>
+              <div class="reader-layout">
+                <div class="reader-group dual-grid" id="readerGroup">
+                  <div class="reader-box" id="reader0">RecordReader 0</div>
+                  <div class="reader-box" id="reader1">RecordReader 1</div>
+                </div>
+                <div class="input-note">Split 0 → RR0 → Mapper A, Split 1 → RR1 → Mapper B. They march independently to show real parallelism.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Parallel Mappers & Buffers -->
+          <div class="row">
+            <div class="row-label">Mappers</div>
+            <div class="row-box" id="bufferBox">
+              <div class="row-title">Two mapper tasks in parallel, each with its own circular buffer</div>
+              <div class="mapper-grid">
+                <div class="mapper-card" id="mapperCard0">
+                  <div class="mapper-header">
+                    <span>Mapper A</span>
+                    <span class="mapper-meta">Split 0 • RR0</span>
+                  </div>
+                  <div class="buffer-inner" id="bufferInner0">
+                    <div class="buffer-capacity"></div>
+                    <div class="buffer-fill" id="bufferFill0"></div>
+                  </div>
+                  <div class="mapper-percentage" id="bufferPercentage0">0%</div>
+                </div>
+                <div class="mapper-card" id="mapperCard1">
+                  <div class="mapper-header">
+                    <span>Mapper B</span>
+                    <span class="mapper-meta">Split 1 • RR1</span>
+                  </div>
+                  <div class="buffer-inner" id="bufferInner1">
+                    <div class="buffer-capacity"></div>
+                    <div class="buffer-fill" id="bufferFill1"></div>
+                  </div>
+                  <div class="mapper-percentage" id="bufferPercentage1">0%</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Spill Files -->
+          <div class="row">
+            <div class="row-label">Spill Files</div>
+            <div class="row-box" id="spillBox">
+              <div class="row-title">Intermediate files on disk (mapper-local)</div>
+              <div class="spill-grid">
+                <div class="spill-column">
+                  <div class="spill-title">Mapper A</div>
+                  <div class="spill-files">
+                    <div class="spill-slot" id="spill0A">
+                      <div class="spill-label">Spill A0</div>
+                      <div class="spill-highlight" id="spill0AHighlight"></div>
+                    </div>
+                    <div class="spill-slot" id="spill1A">
+                      <div class="spill-label">Spill A1</div>
+                      <div class="spill-highlight" id="spill1AHighlight"></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="spill-column">
+                  <div class="spill-title">Mapper B</div>
+                  <div class="spill-files">
+                    <div class="spill-slot" id="spill0B">
+                      <div class="spill-label">Spill B0</div>
+                      <div class="spill-highlight" id="spill0BHighlight"></div>
+                    </div>
+                    <div class="spill-slot" id="spill1B">
+                      <div class="spill-label">Spill B1</div>
+                      <div class="spill-highlight" id="spill1BHighlight"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Final Output -->
+      <div class="row">
+        <div class="row-label">Final Output</div>
+        <div class="row-box" id="finalBox">
+          <div class="row-title">Each mapper merges its own spills into a map output (one file per mapper)</div>
+          <div class="final-grid">
+            <div class="final-card">
+              <div class="mapper-header">
+                <span>Mapper A</span>
+                <span class="mapper-meta">Spill A0 + A1 merged</span>
+              </div>
+              <div class="final-output" id="finalOutputA">
+                <div class="final-label">map_0.out</div>
+              </div>
+            </div>
+            <div class="final-card">
+              <div class="mapper-header">
+                <span>Mapper B</span>
+                <span class="mapper-meta">Spill B0 + B1 merged</span>
+              </div>
+              <div class="final-output" id="finalOutputB">
+                <div class="final-label">map_1.out</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+          <!-- Reducers -->
+          <div class="row">
+            <div class="row-label">Reducers</div>
+            <div class="row-box" id="reducersBox">
+              <div class="row-title">Shuffle Phase - Data Distribution</div>
+              <div class="reducers-inner">
+                <div class="reducer-box" id="reducer0">
+                  <div class="reducer-label">R0</div>
+                </div>
+                <div class="reducer-box" id="reducer1">
+                  <div class="reducer-label">R1</div>
+                </div>
+                <div class="reducer-box" id="reducer2">
+                  <div class="reducer-label">R2</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- HDFS -->
+          <div class="row">
+            <div class="row-label">HDFS</div>
+            <div class="row-box" id="hdfsBox">
+              <div class="row-title">Write reducer outputs to HDFS (replicated blocks)</div>
+              <div class="hdfs-inner">
+                <div class="hdfs-box" id="hdfs0">
+                  <div class="reducer-label">R0 ➜ HDFS</div>
+                </div>
+                <div class="hdfs-box" id="hdfs1">
+                  <div class="reducer-label">R1 ➜ HDFS</div>
+                </div>
+                <div class="hdfs-box" id="hdfs2">
+                  <div class="reducer-label">R2 ➜ HDFS</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="legend">
+          <div class="legend-item">
+            <div class="legend-box" style="background: #8b5cf6;"></div>
+            <span>Partition 0 (R0): cat, car, cup</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-box" style="background: #ec4899;"></div>
+            <span>Partition 1 (R1): dog, day, data, door</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-box" style="background: #f59e0b;"></div>
+            <span>Partition 2 (R2): ant, arm, art, ask</span>
+          </div>
+        </div>
+        
+        <p style="font-size: 12px; color: #475569; margin-top: 12px; line-height: 1.5;">
+          <strong style="color: #0f172a;">How it works:</strong> Each block shows a specific key like 'cat', 'dog', or 'ant'. 
+          Keys are colored by their target reducer partition: <strong style="color: #8b5cf6;">purple</strong> for partition 0 
+          (keys: cat, car, cup), <strong style="color: #ec4899;">pink</strong> for partition 1 
+          (keys: dog, day, data, door), and <strong style="color: #f59e0b;">orange</strong> for partition 2 
+          (keys: ant, arm, art, ask). Watch how keys get sorted alphabetically within each partition during spills, 
+          then merged and distributed to the correct reducer.
+        </p>
+      </div>
+
+      <!-- Right: Log/Description -->
+        <div class="log">
+          <div class="log-section current">
+            <h3>Current Step</h3>
+            <p id="logCurrent">Click "Start Simulation" to watch two map tasks run in parallel.</p>
+          </div>
+
+          <div class="log-section">
+            <h3>Next Step</h3>
+            <p id="logNext">The simulation will guide you through each phase of the dual map task processing.</p>
+          </div>
+
+        <div class="log-section">
+          <h3>Details & Insights</h3>
+          <p id="logHint">This simulator demonstrates how Hadoop MapReduce handles memory management, 
+          disk spilling, and data distribution to reducers across two concurrent map tasks. Watch how each buffer fills at its own pace, 
+          triggers spills independently, then hands off partitions to reducers without any fake synchronization.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const startBtn = document.getElementById("startBtn");
+  const pauseBtn = document.getElementById("pauseBtn");
+  const resetBtn = document.getElementById("resetBtn");
+  const speedSlider = document.getElementById("speedSlider");
+  const speedLabel = document.getElementById("speedLabel");
+  const timeline = document.getElementById("timeline");
+  const bufferBox = document.getElementById("bufferBox");
+  const spillBox = document.getElementById("spillBox");
+  const finalBox = document.getElementById("finalBox");
+  const finalOutputs = [document.getElementById("finalOutputA"), document.getElementById("finalOutputB")];
+  const inputBox = document.getElementById("inputBox");
+  const inputFormatBox = document.getElementById("inputFormatBox");
+  const readerRowBox = document.getElementById("readerRowBox");
+  const reducersBox = document.getElementById("reducersBox");
+  const reducer0 = document.getElementById("reducer0");
+  const reducer1 = document.getElementById("reducer1");
+  const reducer2 = document.getElementById("reducer2");
+  const hdfsBox = document.getElementById("hdfsBox");
+  const hdfs0 = document.getElementById("hdfs0");
+  const hdfs1 = document.getElementById("hdfs1");
+  const hdfs2 = document.getElementById("hdfs2");
+  const progressFill = document.getElementById("progressFill");
+  const logCurrent = document.getElementById("logCurrent");
+  const logNext = document.getElementById("logNext");
+  const logHint = document.getElementById("logHint");
+  const recordsProcessed = document.getElementById("recordsProcessed");
+  const bufferUsage = document.getElementById("bufferUsage");
+  const spillCount = document.getElementById("spillCount");
+  const recordsRead = document.getElementById("recordsRead");
+  const splitCount = document.getElementById("splitCount");
+  const currentPhase = document.getElementById("currentPhase");
+
+  const splitGroup = document.getElementById("splitGroup");
+  const readerGroup = document.getElementById("readerGroup");
+  const splitBoxes = Array.from(splitGroup.querySelectorAll(".split-box"));
+  const readerBoxes = Array.from(readerGroup.querySelectorAll(".reader-box"));
+  const mapperCards = [document.getElementById("mapperCard0"), document.getElementById("mapperCard1")];
+  const bufferInners = [document.getElementById("bufferInner0"), document.getElementById("bufferInner1")];
+  const bufferFills = [document.getElementById("bufferFill0"), document.getElementById("bufferFill1")];
+  const bufferPercentages = [document.getElementById("bufferPercentage0"), document.getElementById("bufferPercentage1")];
+  const spillSlots = [
+    [document.getElementById("spill0A"), document.getElementById("spill1A")],
+    [document.getElementById("spill0B"), document.getElementById("spill1B")]
+  ];
+  const spillHighlights = [
+    [document.getElementById("spill0AHighlight"), document.getElementById("spill1AHighlight")],
+    [document.getElementById("spill0BHighlight"), document.getElementById("spill1BHighlight")]
+  ];
+
+  const reducers = [reducer0, reducer1, reducer2];
+  const hdfsTargets = [hdfs0, hdfs1, hdfs2];
+
+  const steps = [
+    {
+      id: "inputfmt",
+      label: "InputFormat",
+      duration: 1100,
+      narrative: [
+        "InputFormat cuts the file into two logical splits so mappers can run side-by-side.",
+        "Splits are logical slices of the input that align with HDFS blocks when possible.",
+        "Parallelism starts here: each split is scheduled close to its data."
+      ]
+    },
+    {
+      id: "readers",
+      label: "RecordReaders",
+      duration: 1100,
+      narrative: [
+        "Each split has its own RecordReader feeding a different mapper.",
+        "RR0 pulls from Split 0, RR1 from Split 1; they decode raw bytes to key/value pairs.",
+        "Two independent pipelines avoid any fake synchronization between readers."
+      ]
+    },
+    {
+      id: "parallel",
+      label: "Parallel Mappers & Spills",
+      duration: 6600,
+      narrative: [
+        "Mappers process records, filling their buffers. When a buffer is 80% full, it spills to disk.",
+        "Each mapper spills independently, sorting records by partition and key.",
+        "This shows how MapReduce handles memory pressure by using local disk."
+      ]
+    },
+    {
+      id: "merge",
+      label: "Merge",
+      duration: 1500,
+      narrative: [
+        "Each mapper merges its own spills into its map output file.",
+        "Merges run per mapper; outputs stay separate for reducers to fetch.",
+        "Reducers will pull one partition segment from every map output, not a global pre-merge."
+      ]
+    },
+    {
+      id: "shuffle",
+      label: "Shuffle",
+      duration: 1500,
+      narrative: [
+        "Reducers fetch their partitions from both mapper outputs.",
+        "Shuffle transfers only the needed partition slice per reducer.",
+        "Each reducer merges the segments it downloads from every mapper."
+      ]
+    },
+    {
+      id: "hdfs",
+      label: "Write to HDFS",
+      duration: 1500,
+      narrative: [
+        "Reducers write their outputs to HDFS, completing the job.",
+        "Each reducer commits its partition as a replicated HDFS block.",
+        "The full map side pipeline hands off durable data for reduce."
+      ]
+    }
+  ];
+
+  const CONFIG = {
+    TOTAL_SPLITS: 2,
+    MAPPERS: [
+      { id: 0, label: "Mapper A", delay: 0, speed: 1.05 },
+      { id: 1, label: "Mapper B", delay: 0.12, speed: 1.3 }
+    ],
+    BUFFER_CAPACITY: 16,
+    BUFFER_TRIGGER_RATIO: 0.8,
+    WORD_KEYS: [
+      { key: "cat", partition: 0, color: "#8b5cf6" },
+      { key: "car", partition: 0, color: "#8b5cf6" },
+      { key: "cup", partition: 0, color: "#8b5cf6" },
+      { key: "dog", partition: 1, color: "#ec4899" },
+      { key: "data", partition: 1, color: "#ec4899" },
+      { key: "door", partition: 1, color: "#ec4899" },
+      { key: "ant", partition: 2, color: "#f59e0b" },
+      { key: "art", partition: 2, color: "#f59e0b" },
+      { key: "ask", partition: 2, color: "#f59e0b" }
+    ],
+    COMBINE_DELAY: 1200,
+    COMBINE_FLASH_DELAY: 220,
+  };
+
+  function buildSequence(pattern) {
+    return pattern.map((wordData, idx) => ({
+      key: wordData.key,
+      value: 1,
+      partition: wordData.partition,
+      color: wordData.color,
+      id: idx
+    }));
+  }
+
+  const mapperSequences = [
+    buildSequence([
+      CONFIG.WORD_KEYS[0], CONFIG.WORD_KEYS[3], CONFIG.WORD_KEYS[6], CONFIG.WORD_KEYS[1],
+      CONFIG.WORD_KEYS[4], CONFIG.WORD_KEYS[0], CONFIG.WORD_KEYS[5], CONFIG.WORD_KEYS[7],
+      CONFIG.WORD_KEYS[2], CONFIG.WORD_KEYS[6], CONFIG.WORD_KEYS[3], CONFIG.WORD_KEYS[0],
+      CONFIG.WORD_KEYS[8], CONFIG.WORD_KEYS[1], CONFIG.WORD_KEYS[7], CONFIG.WORD_KEYS[3]
+    ]),
+    buildSequence([
+      CONFIG.WORD_KEYS[4], CONFIG.WORD_KEYS[1], CONFIG.WORD_KEYS[6], CONFIG.WORD_KEYS[7],
+      CONFIG.WORD_KEYS[5], CONFIG.WORD_KEYS[2], CONFIG.WORD_KEYS[3], CONFIG.WORD_KEYS[8],
+      CONFIG.WORD_KEYS[0], CONFIG.WORD_KEYS[4], CONFIG.WORD_KEYS[6], CONFIG.WORD_KEYS[5],
+      CONFIG.WORD_KEYS[7], CONFIG.WORD_KEYS[3], CONFIG.WORD_KEYS[1]
+    ])
+  ];
+
+  let simulationState = {};
+
+  function getInitialState() {
+    return {
+      mapperStates: [],
+      reducerRecords: [],
+      reducerOutputs: [[], [], []],
+      reducersHydrated: false,
+      hdfsRecords: [],
+      stageOnceLog: new Set(),
+      metrics: { totalRecords: 0, spillsCreated: 0, recordsRead: 0 },
+      speedFactor: 1,
+      started: false,
+      paused: false,
+      currentStepIndex: 0,
+      stepStartTime: null,
+      pausedTime: 0,
+      animationId: null,
+    };
+  }
+
+
+  function formatRecordForLog(record) {
+    if (!record) return "";
+    const count = typeof record.count === "number"
+      ? record.count
+      : (typeof record.value === "number" ? record.value : 1);
+    return "(" + record.key + ", " + count + ")[P" + record.partition + "]";
+  }
+
+  function logStageEvent(stage, message, tuples = []) {
+    const list = Array.isArray(tuples) ? tuples : [tuples];
+    const payload = list.filter(Boolean);
+    if (payload.length === 0) {
+      console.log("[" + stage + "] " + message);
+      return;
+    }
+    console.log("[" + stage + "] " + message + ": " + payload.map(formatRecordForLog).join(", "));
+  }
+
+  function logStageOnce(key, callback) {
+    if (simulationState.stageOnceLog.has(key)) return;
+    simulationState.stageOnceLog.add(key);
+    callback();
+  }
+
+  function updateMetrics() {
+    recordsProcessed.textContent = simulationState.metrics.totalRecords;
+    const totalBufferNow = simulationState.mapperStates.reduce((sum, m) => sum + m.buffer.length, 0);
+    const totalBufferCapacity = CONFIG.BUFFER_CAPACITY * CONFIG.MAPPERS.length;
+    const totalBufferUsage = totalBufferCapacity > 0 ? Math.round((totalBufferNow / totalBufferCapacity) * 100) : 0;
+    bufferUsage.textContent = totalBufferUsage + "%";
+    spillCount.textContent = simulationState.metrics.spillsCreated;
+    recordsRead.textContent = simulationState.metrics.recordsRead;
+    splitCount.textContent = CONFIG.TOTAL_SPLITS;
+
+    const step = steps[simulationState.currentStepIndex];
+    currentPhase.textContent = step ? step.label : "Complete";
+  }
+
+  function resetState() {
+    if (simulationState.animationId) {
+      cancelAnimationFrame(simulationState.animationId);
+    }
+    simulationState = getInitialState();
+    
+    simulationState.mapperStates = CONFIG.MAPPERS.map(() => ({
+      buffer: [],
+      spills: [[], []],
+      spilled: [false, false],
+      recordsRead: 0,
+      final: [],
+      finished: false
+    }));
+
+    logStageEvent("Reset", "Simulation state reset.");
+
+    [bufferInners[0], bufferInners[1],
+      spillSlots[0][0], spillSlots[0][1],
+      spillSlots[1][0], spillSlots[1][1],
+      ...finalOutputs, reducer0, reducer1, reducer2, hdfs0, hdfs1, hdfs2
+    ].forEach(container => {
+      container.querySelectorAll(".kv-record").forEach(el => el.remove());
+    });
+
+    bufferFills.forEach(fill => fill.style.height = "0%");
+    bufferPercentages.forEach(pct => pct.textContent = "0%");
+    spillHighlights.flat().forEach(h => h.style.opacity = 0);
+    reducers.forEach(box => box.classList.remove("reducing"));
+    progressFill.style.width = "0%";
+
+    [inputBox, readerRowBox, bufferBox, spillBox, finalBox, reducersBox, hdfsBox].forEach(box => box.classList.remove("active"));
+    [...splitBoxes, ...readerBoxes, ...mapperCards, ...reducers, ...hdfsTargets, inputFormatBox].forEach(el => {
+      el.classList.remove("active");
+      el.classList.remove("inactive");
+    });
+
+    updateTimelineHighlight();
+    updateLogTexts();
+    updateMetrics();
+
+    startBtn.disabled = false;
+    pauseBtn.disabled = true;
+    resetBtn.disabled = false;
+  }
+
+  function updateTimelineHighlight() {
+    const nodes = timeline.querySelectorAll(".timeline-step");
+    nodes.forEach((node, idx) => {
+      node.classList.remove("active", "completed");
+      if (idx === simulationState.currentStepIndex && simulationState.started && !simulationState.paused) {
+        node.classList.add("active");
+      } else if (idx < simulationState.currentStepIndex) {
+        node.classList.add("completed");
+      }
+    });
+    const progress = (simulationState.currentStepIndex / steps.length) * 100;
+    progressFill.style.width = progress + "%";
+  }
+
+  function updateLogTexts() {
+    const step = steps[simulationState.currentStepIndex];
+    const nextStep = steps[simulationState.currentStepIndex + 1];
+
+    if (!step) {
+      logCurrent.innerHTML = "<strong>Simulation Complete</strong><br>Both mappers drained their splits, spilled independently, merged outputs, shuffled to reducers, and wrote to HDFS.";
+      logNext.innerHTML = "<strong>Next:</strong> In a real cluster reducers now run their reduce functions.";
+      logHint.innerHTML = "Notice how unsynchronized buffers and spills still converge into a single shuffle. That parallelism is key to MapReduce scalability.";
+      return;
+    }
+
+    logCurrent.innerHTML = "<strong>" + step.label + "</strong><br>" + step.narrative[0];
+    logNext.innerHTML = nextStep ? "<strong>Next:</strong> " + nextStep.label : "<strong>Next:</strong> Simulation will complete.";
+    logHint.innerHTML = step.narrative[2];
+  }
+
+  function setSplitReaderState({ showAll = false, readerActive = false }) {
+    splitBoxes.forEach((box, idx) => {
+      box.classList.remove("active", "inactive");
+      if (showAll || idx < CONFIG.TOTAL_SPLITS) {
+        box.classList.add("active");
+      }
+    });
+
+    readerBoxes.forEach((box, idx) => {
+      box.classList.remove("active", "inactive");
+      if (readerActive && idx < CONFIG.TOTAL_SPLITS) {
+        box.classList.add("active");
+      }
+    });
+  }
+
+  function createRecordElement(type, container, keyData = null) {
+    const el = document.createElement("div");
+    el.className = "kv-record " + type;
+    if (keyData) {
+      const value = typeof keyData.count === "number" ? keyData.count : 1;
+      el.textContent = "(" + keyData.key + ", " + value + ")";
+      if (type === "buffer" || type === "spill" || type === "final") {
+        el.style.background = keyData.color;
+      }
+      el.dataset.partition = keyData.partition;
+      el.dataset.key = keyData.key;
+    } else {
+      el.textContent = "(k, 1)";
+    }
+    el.style.opacity = "0";
+    container.appendChild(el);
+    requestAnimationFrame(() => {
+      el.style.opacity = "1";
+    });
+    return el;
+  }
+
+  function moveRecords(fromArray, toArray, fromContainer, toContainer, newType, shouldSort = false) {
+    let records = [...fromArray];
+    fromArray.length = 0;
+    if (shouldSort) {
+      records.sort((a, b) => {
+        if (a.partition !== b.partition) return a.partition - b.partition;
+        return a.key.localeCompare(b.key);
+      });
+    }
+
+    records.forEach(record => {
+      if (!record.el || !record.el.parentElement) return;
+
+      const keyData = {
+        key: record.key,
+        partition: record.partition,
+        id: record.id,
+        count: record.count || 1,
+        color: record.color
+      };
+
+      const el = createRecordElement(newType, toContainer, keyData);
+      if (newType === "reducer" || newType === "final") {
+        const wordData = CONFIG.WORD_KEYS.find(w => w.key === keyData.key);
+        if (wordData) {
+          el.style.background = wordData.color;
+        }
+      }
+
+      toArray.push({ el, key: record.key, partition: record.partition, id: record.id, count: keyData.count, color: record.color });
+
+      // Remove the old visual so records do not linger in the previous stage
+      if (record.el && record.el.parentElement) {
+        record.el.remove();
+      }
+    });
+  }
+
+  function cloneRecord(rec) {
+    return { key: rec.key, partition: rec.partition, count: rec.count || 1, color: rec.color };
+  }
+
+  function combineSpillToContainer(spillArr, container, animate = false, onDone = null) {
+    const fadeOutExisting = () => {
+      container.querySelectorAll(".kv-record").forEach(el => {
+        el.classList.add("combiner-pending");
+      });
+    };
+
+    const performCombine = () => {
+      const groups = new Map();
+      spillArr.forEach(rec => {
+        const k = rec.partition + "|" + rec.key;
+        const count = typeof rec.count === "number" ? rec.count : 1;
+        if (!groups.has(k)) {
+          groups.set(k, { ...rec, count: 0, color: rec.color });
+        }
+        groups.get(k).count += count;
+      });
+
+      container.querySelectorAll(".kv-record").forEach(el => el.remove());
+
+      spillArr.length = 0;
+      Array.from(groups.values()).forEach((g, idx) => {
+        const keyData = {
+          key: g.key,
+          partition: g.partition,
+          id: idx,
+          count: g.count,
+          color: g.color
+        };
+        const el = createRecordElement("spill", container, keyData);
+        el.textContent = "(" + g.key + ", " + g.count + ")";
+        spillArr.push({ el, key: g.key, partition: g.partition, id: idx, count: g.count, color: g.color });
+      });
+
+      if (onDone) {
+        onDone(spillArr.map(cloneRecord));
+      }
+    };
+
+    fadeOutExisting();
+    if (animate) {
+      setTimeout(performCombine, CONFIG.COMBINE_DELAY);
+    } else {
+      setTimeout(performCombine, CONFIG.COMBINE_FLASH_DELAY);
+    }
+  }
+
+  function getReducerContainer(partition) {
+    if (partition === 0) return reducer0;
+    if (partition === 1) return reducer1;
+    return reducer2;
+  }
+
+  function getHdfsContainer(partition) {
+    if (partition === 0) return hdfs0;
+    if (partition === 1) return hdfs1;
+    return hdfs2;
+  }
+
+  function spillBuffer(mapperIndex, spillIndex) {
+    const state = simulationState.mapperStates[mapperIndex];
+    if (!state || state.buffer.length === 0 || state.spilled[spillIndex]) return;
+
+    console.log(`Spill triggered for mapper ${mapperIndex} at buffer usage ${state.buffer.length / CONFIG.BUFFER_CAPACITY}`);
+
+    const targetSlot = spillSlots[mapperIndex][spillIndex];
+    const targetHighlight = spillHighlights[mapperIndex][spillIndex];
+    targetHighlight.style.opacity = 1;
+    const snapshot = state.buffer.map(cloneRecord);
+    logStageEvent("Spill", CONFIG.MAPPERS[mapperIndex].label + " started spill " + spillIndex, snapshot);
+    moveRecords(state.buffer, state.spills[spillIndex], bufferInners[mapperIndex], targetSlot, "spill", true);
+    combineSpillToContainer(state.spills[spillIndex], targetSlot, true, combined => {
+      logStageEvent("Combiner", CONFIG.MAPPERS[mapperIndex].label + " combined spill " + spillIndex, combined);
+    });
+    state.spilled[spillIndex] = true;
+    state.finished = state.spilled[0] && state.spilled[1];
+    bufferFills[mapperIndex].style.height = "0%";
+    bufferPercentages[mapperIndex].textContent = "0%";
+    simulationState.metrics.spillsCreated++;
+
+    // Clear any lingering buffer visuals to avoid confusion after spill
+    bufferInners[mapperIndex].querySelectorAll(".kv-record").forEach(el => el.remove());
+  }
+
+  function updateBufferIndicators(mapperIndex) {
+    const state = simulationState.mapperStates[mapperIndex];
+    if (!state) return;
+    const occupancy = state.buffer.length / CONFIG.BUFFER_CAPACITY;
+    const percent = Math.round(occupancy * 100);
+    bufferFills[mapperIndex].style.height = percent + "%";
+    bufferPercentages[mapperIndex].textContent = percent + "%";
+  }
+
+  function fillMapperBuffer(mapperIndex, progress) {
+    const cfg = CONFIG.MAPPERS[mapperIndex];
+    const state = simulationState.mapperStates[mapperIndex];
+    const seq = mapperSequences[mapperIndex];
+    if (state.finished) {
+      return;
+    }
+    const adjusted = Math.min(1, Math.max(0, (progress - cfg.delay) * cfg.speed));
+    const expected = Math.floor(seq.length * adjusted);
+
+    for (let i = state.recordsRead; i < expected; i++) {
+      const keyData = seq[i];
+      const el = createRecordElement("buffer", bufferInners[mapperIndex], keyData);
+      state.buffer.push({ el, key: keyData.key, partition: keyData.partition, id: keyData.id, count: 1, color: keyData.color });
+      state.recordsRead++;
+      simulationState.metrics.recordsRead++;
+      simulationState.metrics.totalRecords++;
+      logStageEvent("Mapper", CONFIG.MAPPERS[mapperIndex].label + " processed tuple", [keyData]);
+
+      updateBufferIndicators(mapperIndex);
+
+      const bufferUsageRatio = state.buffer.length / CONFIG.BUFFER_CAPACITY;
+      if (bufferUsageRatio >= CONFIG.BUFFER_TRIGGER_RATIO) {
+        const spillIndex = state.spilled.indexOf(false); // Find the next available spill slot
+        if (spillIndex !== -1) {
+          spillBuffer(mapperIndex, spillIndex);
+          updateBufferIndicators(mapperIndex); // Update indicators again after spill
+        }
+      }
+    }
+  }
+
+  function flushRemainingBuffer(mapperIndex) {
+    const state = simulationState.mapperStates[mapperIndex];
+    if (!state || state.buffer.length === 0) return;
+
+    const targetIdx = state.spilled[0] ? 1 : 0;
+    const targetSlot = spillSlots[mapperIndex][targetIdx];
+    const targetHighlight = spillHighlights[mapperIndex][targetIdx];
+    targetHighlight.style.opacity = 1;
+
+    const wasSpilled = state.spilled[targetIdx];
+    const snapshot = state.buffer.map(cloneRecord);
+    logStageEvent("Spill", CONFIG.MAPPERS[mapperIndex].label + " flushed remaining buffer into spill " + targetIdx, snapshot);
+    moveRecords(state.buffer, state.spills[targetIdx], bufferInners[mapperIndex], targetSlot, "spill", true);
+    combineSpillToContainer(state.spills[targetIdx], targetSlot, false, combined => {
+      logStageEvent("Combiner", CONFIG.MAPPERS[mapperIndex].label + " spill " + targetIdx + " after aggregation", combined);
+    });
+    state.spilled[targetIdx] = true;
+    if (!wasSpilled) {
+      simulationState.metrics.spillsCreated++;
+    }
+    bufferFills[mapperIndex].style.height = "0%";
+    bufferPercentages[mapperIndex].textContent = "0%";
+  }
+
+  function mergeMapperOutputs(mapperIndex) {
+    const state = simulationState.mapperStates[mapperIndex];
+    if (!state || state.final.length > 0) return;
+
+    console.log(`Merging spills for mapper ${mapperIndex}`);
+    flushRemainingBuffer(mapperIndex);
+
+    const mergeGroups = new Map();
+    [...state.spills[0], ...state.spills[1]].forEach(rec => {
+      const key = rec.partition + "|" + rec.key;
+      const count = typeof rec.count === "number" ? rec.count : 1;
+      if (!mergeGroups.has(key)) mergeGroups.set(key, { key: rec.key, partition: rec.partition, count: 0, color: rec.color });
+      mergeGroups.get(key).count += count;
+    });
+
+    const groupedArray = Array.from(mergeGroups.values());
+    groupedArray.sort((a, b) => {
+      if (a.partition !== b.partition) return a.partition - b.partition;
+      return a.key.localeCompare(b.key);
+    });
+
+    const target = finalOutputs[mapperIndex];
+    groupedArray.forEach((g, idx) => {
+      const wordData = CONFIG.WORD_KEYS.find(w => w.key === g.key && w.partition === g.partition) || CONFIG.WORD_KEYS.find(w => w.key === g.key);
+      const keyData = { key: g.key, partition: g.partition, id: idx, count: g.count, color: wordData ? wordData.color : g.color };
+      const el = createRecordElement("final", target, keyData);
+      el.textContent = "(" + g.key + ", " + g.count + ")";
+      state.final.push({ el, ...keyData });
+    });
+
+    // After merge, clear spill visuals for this mapper to avoid leftovers
+    spillSlots[mapperIndex].forEach(slot => {
+      console.log(`Clearing spill slot: ${slot.id}`);
+      slot.querySelectorAll(".kv-record").forEach(el => el.remove());
+    });
+    spillHighlights[mapperIndex].forEach(h => h.style.opacity = 0);
+    
+    state.spills = [[], []];
+
+    logStageEvent("Merge", CONFIG.MAPPERS[mapperIndex].label + " completed map output", state.final.map(cloneRecord));
+  }
+
+  function mergeAllMapperOutputs() {
+    simulationState.mapperStates.forEach((_, idx) => mergeMapperOutputs(idx));
+  }
+
+  function runReducerCombine() {
+    if (simulationState.reducerRecords.length === 0 || simulationState.reducerOutputs.some(arr => arr.length > 0)) {
+      return;
+    }
+
+    reducers.forEach(box => box.classList.add("reducing"));
+
+    const partitionGroups = new Map();
+    simulationState.reducerRecords.forEach(record => {
+      if (!record) return;
+      const part = typeof record.partition === "number" ? record.partition : 0;
+      if (!partitionGroups.has(part)) {
+        partitionGroups.set(part, new Map());
+      }
+      const bucket = partitionGroups.get(part);
+      const key = part + "|" + record.key;
+      const count = typeof record.count === "number" ? record.count : 1;
+      if (!bucket.has(key)) {
+        bucket.set(key, { key: record.key, partition: part, count: 0, color: record.color });
+      }
+      bucket.get(key).count += count;
+      if (record.el && record.el.parentElement) {
+        record.el.remove();
+      }
+    });
+
+    simulationState.reducerRecords = [];
+    simulationState.reducerOutputs = [[], [], []];
+    [0, 1, 2].forEach(partition => {
+      const target = getReducerContainer(partition);
+      target.querySelectorAll(".kv-record").forEach(el => el.remove());
+      const bucket = partitionGroups.get(partition);
+      if (!bucket) {
+        simulationState.reducerOutputs[partition] = [];
+        return;
+      }
+      const combined = [];
+      const sorted = Array.from(bucket.values()).sort((a, b) => a.key.localeCompare(b.key));
+      sorted.forEach((g, idx) => {
+        const wordData = CONFIG.WORD_KEYS.find(w => w.key === g.key && w.partition === g.partition) || CONFIG.WORD_KEYS.find(w => w.key === g.key);
+        const keyData = { key: g.key, partition: g.partition, id: idx, count: g.count, color: wordData ? wordData.color : g.color };
+        const el = createRecordElement("reducer", target, keyData);
+        el.textContent = "(" + g.key + ", " + g.count + ")";
+        if (wordData || keyData.color) {
+          el.style.background = (wordData ? wordData.color : keyData.color);
+        }
+        el.classList.add("reducer-output");
+        el.classList.remove("processed-blur");
+        combined.push({ el, ...keyData });
+      });
+      simulationState.reducerOutputs[partition] = combined;
+      if (combined.length) {
+        logStageEvent("Reduce", "Reducer " + partition + " combined tuples", combined.map(cloneRecord));
+      }
+    });
+  }
+
+  function updateStepVisuals(step, progress) {
+    [inputBox, readerRowBox, bufferBox, spillBox, finalBox, reducersBox, hdfsBox].forEach(box => box.classList.remove("active"));
+    [...splitBoxes, ...readerBoxes, ...mapperCards, ...reducers, ...hdfsTargets, inputFormatBox].forEach(el => el.classList.remove("active"));
+
+    const stepHandlers = {
+      inputfmt: () => {
+        inputBox.classList.add("active");
+        inputFormatBox.classList.add("active");
+        setSplitReaderState({ showAll: true, readerActive: false });
+        logStageOnce("inputfmt", () => {
+          mapperSequences.forEach((seq, idx) => {
+            logStageEvent("InputFormat", "Split " + idx + " assigned to " + (CONFIG.MAPPERS[idx] ? CONFIG.MAPPERS[idx].label : "Mapper " + idx), seq);
+          });
+        });
+      },
+      readers: () => {
+        readerRowBox.classList.add("active");
+        setSplitReaderState({ showAll: true, readerActive: true });
+        logStageOnce("readers", () => {
+          mapperSequences.forEach((seq, idx) => {
+            logStageEvent("RecordReader", "RR" + idx + " feeds " + (CONFIG.MAPPERS[idx] ? CONFIG.MAPPERS[idx].label : "Mapper " + idx), seq);
+          });
+        });
+      },
+      parallel: () => {
+        bufferBox.classList.add("active");
+        spillBox.classList.add("active");
+        mapperCards.forEach(card => card.classList.add("active"));
+        setSplitReaderState({ showAll: true, readerActive: true });
+        fillMapperBuffer(0, progress);
+        fillMapperBuffer(1, progress);
+      },
+      merge: () => {
+        finalBox.classList.add("active");
+        mergeAllMapperOutputs();
+      },
+      shuffle: () => {
+        reducersBox.classList.add("active");
+        reducers.forEach(r => r.classList.add("active"));
+        if (!simulationState.reducersHydrated && progress > 0.15) {
+          const allFinal = simulationState.mapperStates.flatMap(m => m.final);
+          allFinal.forEach(record => {
+            if (!record.el || !record.el.parentElement) return;
+            record.el.style.opacity = "0.08";
+            const target = getReducerContainer(record.partition);
+            const el = createRecordElement("reducer", target, record);
+            const wordData = CONFIG.WORD_KEYS.find(w => w.key === record.key);
+            if (wordData) {
+              el.style.background = wordData.color;
+            }
+            simulationState.reducerRecords.push({ ...record, el });
+          });
+          logStageEvent("Shuffle", "Reducers received their partitions", simulationState.reducerRecords.map(cloneRecord));
+          simulationState.reducersHydrated = true;
+        }
+        if (progress > 0.6) {
+          runReducerCombine();
+        }
+      },
+      hdfs: () => {
+        hdfsBox.classList.add("active");
+        hdfsTargets.forEach(r => r.classList.add("active"));
+        if (simulationState.hdfsRecords.length === 0 && progress > 0.25) {
+          if (simulationState.reducerOutputs.flat().length === 0) {
+            runReducerCombine();
+          }
+          const reduceSource = simulationState.reducerOutputs.flat().length ? simulationState.reducerOutputs.flat() : simulationState.reducerRecords;
+          reduceSource.forEach(record => {
+            if (!record.el || !record.el.parentElement) return;
+            const keyData = { key: record.key, partition: record.partition, count: record.count, color: record.color };
+            const target = getHdfsContainer(record.partition);
+            const el = createRecordElement("final", target, keyData);
+            el.textContent = "(" + record.key + ", " + record.count + ")";
+            const wordData = CONFIG.WORD_KEYS.find(w => w.key === record.key);
+            if (wordData) {
+              el.style.background = wordData.color;
+            }
+            simulationState.hdfsRecords.push({ ...keyData, el });
+            record.el.classList.add("processed-blur");
+            record.el.style.opacity = "0.12";
+          });
+          logStageEvent("HDFS", "Final blocks written to HDFS", simulationState.hdfsRecords.map(cloneRecord));
+        }
+      }
+    };
+
+    const handler = stepHandlers[step.id];
+    if (handler) {
+      handler();
+    }
+
+    updateMetrics();
+  }
+
+  function animateStep(timestamp) {
+    if (!simulationState.started || simulationState.paused) {
+      return;
+    }
+
+    if (!simulationState.stepStartTime) {
+      simulationState.stepStartTime = timestamp - simulationState.pausedTime;
+      simulationState.pausedTime = 0;
+    }
+
+    const step = steps[simulationState.currentStepIndex];
+    if (!step) {
+      cancelAnimationFrame(simulationState.animationId);
+      logStageOnce("complete", () => {
+        logStageEvent("Complete", "All simulation phases finished.");
+      });
+      return;
+    }
+
+    const elapsed = (timestamp - simulationState.stepStartTime) * simulationState.speedFactor;
+    const progress = Math.min(1, elapsed / step.duration);
+
+    updateStepVisuals(step, progress);
+
+    if (progress >= 1) {
+      simulationState.currentStepIndex++;
+      simulationState.stepStartTime = null;
+      simulationState.pausedTime = 0;
+      updateTimelineHighlight();
+      updateLogTexts();
+    }
+
+    simulationState.animationId = requestAnimationFrame(animateStep);
+  }
+
+  startBtn.addEventListener("click", () => {
+    if (simulationState.started) return;
+    simulationState.started = true;
+    simulationState.paused = false;
+    startBtn.disabled = true;
+    pauseBtn.disabled = false;
+    resetBtn.disabled = false;
+    updateTimelineHighlight();
+    updateLogTexts();
+    simulationState.animationId = requestAnimationFrame(animateStep);
+  });
+
+  pauseBtn.addEventListener("click", () => {
+    simulationState.paused = !simulationState.paused;
+    pauseBtn.textContent = simulationState.paused ? "▶ Resume" : "⏸ Pause";
+    pauseBtn.classList.toggle("pause", !simulationState.paused);
+    pauseBtn.classList.toggle("secondary", simulationState.paused);
+    if (!simulationState.paused && simulationState.stepStartTime) {
+      simulationState.pausedTime = 0;
+    }
+  });
+
+  resetBtn.addEventListener("click", () => {
+    resetState();
+  });
+
+  speedSlider.addEventListener("input", (e) => {
+    simulationState.speedFactor = parseFloat(e.target.value);
+    speedLabel.textContent = simulationState.speedFactor.toFixed(2).replace(/\.00$/, "") + "×";
+  });
+
+  function runTests() {
+    console.log("--- Running Simulation State Tests ---");
+    const step = steps[simulationState.currentStepIndex];
+    console.log(`Current Step: ${step ? step.label : 'Complete'}`);
+
+    simulationState.mapperStates.forEach((mapper, idx) => {
+      console.log(`--- Mapper ${CONFIG.MAPPERS[idx].label} ---`);
+      console.log(`Buffer records: ${mapper.buffer.length}`);
+      mapper.spills.forEach((spill, spillIdx) => {
+        const spillSlot = spillSlots[idx][spillIdx];
+        const hasVisibleRecords = spillSlot.querySelectorAll(".kv-record").length > 0;
+        console.log(`Spill ${spillIdx} records (logical): ${spill.length}`);
+        console.log(`Spill ${spillIdx} has visible records (DOM): ${hasVisibleRecords}`);
+      });
+    });
+    console.log("--- End of Test Report ---");
+  }
+
+  resetState();
+</script>
+
+</body>
+</html>
