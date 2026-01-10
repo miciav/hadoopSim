@@ -41,7 +41,15 @@ An interactive, browser-based playground that visualizes how Hadoop HDFS, YARN, 
 - State is fully client-side: hooks drive cluster/files/jobs, and persistence uses localStorage.
 
 ## Testing & Validation
-There is no automated harness yet. After changes, manually verify:
+Automated smoke tests are available via Playwright (not run by default).
+
+```bash
+npm install
+npx playwright install --with-deps
+npm test
+```
+
+After changes, manually verify:
 1. Cluster initialization, file uploads across sizes, and proper replica distribution.
 2. Node addition/removal, failure simulation, and re-replication status messages.
 3. MapReduce lifecycle: mapper allocation, shuffle timing, reducer progress, and Gantt metrics.
