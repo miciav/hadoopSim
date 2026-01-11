@@ -57,7 +57,7 @@ function createRecord(data, count=1) {
 }
 
 function turnActiveToGhosts(container) {
-  if (el('teachingMode').checked && container) {
+  if (container) {
     Array.from(container.querySelectorAll('.kv-record:not(.ghost):not(.persistent)')).forEach(r => {
       r.classList.add('ghost'); r.classList.remove('show');
     });
@@ -65,7 +65,7 @@ function turnActiveToGhosts(container) {
 }
 
 function turnActiveToPersistent(container) {
-  if (el('teachingMode').checked && container) {
+  if (container) {
      Array.from(container.querySelectorAll('.kv-record:not(.ghost):not(.persistent)')).forEach(r => {
        r.classList.add('persistent'); r.classList.remove('show');
      });
@@ -73,7 +73,8 @@ function turnActiveToPersistent(container) {
 }
 
 function clearRamBuffer(container) {
-  if (!el('teachingMode').checked && container) {
+  // RAM buffers are truly transient, so we clear them always when flushed to disk
+  if (container) {
     Array.from(container.querySelectorAll('.kv-record')).forEach(r => r.remove());
   }
 }
@@ -205,7 +206,10 @@ async function runMapper(id, delay, nodeId) {
     const countEl = el('mRecords');
     if(countEl) countEl.innerText = parseInt(countEl.innerText) + 1;
 
-    await flyRecord(`split${id}`, `buf${id}`, rec, delay * 0.4);
+    // Visual effect: Fly COPY from persistent source to RAM
+    // The source record stays in HDFS box (non-destructive read)
+    await flyRecord(`src-${id}-${i}`, `buf${id}`, rec, delay * 0.4);
+    
     if(!state.running) return;
 
     const r = createRecord(rec);
@@ -235,7 +239,7 @@ async function runMapper(id, delay, nodeId) {
       
       if(spillBox) spillBox.classList.remove('active');
       turnActiveToGhosts(bufEl);
-      clearRamBuffer(bufEl);
+      // clearRamBuffer(bufEl); // Removed to keep ghosts in Mapper box
       
       mapper.buffer = [];
       fillEl.style.height = "0%";
@@ -249,13 +253,29 @@ async function runMapper(id, delay, nodeId) {
 async function spill(mapperId, spillIdx, delay) {
   if(!state.running) return;
   const mapper = state.mappers[mapperId];
+  const bufId = `buf${mapperId}`; // Source buffer ID
+  const slotId = `spill${mapperId==0?'A':'B'}${spillIdx}`; // Target slot ID
+  
+  // Animation: Fly records SEQUENTIALLY from Buffer to Spill Slot
+  for (const rec of mapper.buffer) {
+      if(!state.running) return;
+      // Fly and wait a bit for stream effect
+      flyRecord(bufId, slotId, rec, delay * 0.5); 
+      await wait(delay * 0.15); // Stagger the launches
+  }
+  
+  // Wait for all flights to land roughly
+  await wait(delay * 0.5);
+  
+  if(!state.running) return;
+
   const sorted = [...mapper.buffer].sort((a,b) => (a.p - b.p) || a.k.localeCompare(b.k));
   const combined = combine(sorted);
   mapper.spills.push(combined);
   const spillEl = el('mSpills');
   if(spillEl) spillEl.innerText = parseInt(spillEl.innerText) + 1;
 
-  const slotId = `spill${mapperId==0?'A':'B'}${spillIdx}`;
+  // slotId is already defined above
   const slot = el(slotId);
   if (slot) {
     sorted.forEach(rec => {
@@ -267,7 +287,7 @@ async function spill(mapperId, spillIdx, delay) {
     if(!state.running) return;
 
     turnActiveToGhosts(slot);
-    if(!el('teachingMode').checked) Array.from(slot.querySelectorAll('.kv-record')).forEach(r => r.remove());
+    // Explicit removal removed to support CSS-only toggling
     
     combined.forEach(rec => {
       const r = createRecord(rec, rec.count);
@@ -280,10 +300,32 @@ async function spill(mapperId, spillIdx, delay) {
 async function runMerge(mapperId, tick) {
   if(!state.running) return;
   const mapper = state.mappers[mapperId];
-  const target = el(`final${mapperId==0?'A':'B'}`);
-  let all = [];
-  mapper.spills.forEach(s => all.push(...s));
+  const targetId = `final${mapperId==0?'A':'B'}`;
+  const target = el(targetId);
+  const labelA = mapperId===0 ? 'A' : 'B';
   
+  let all = [];
+  
+  // Animation: Fly from all spills to target
+  const mergeFlights = [];
+  
+  mapper.spills.forEach((spillData, spillIdx) => {
+      const sourceId = `spill${labelA}${spillIdx}`;
+      spillData.forEach(rec => {
+          all.push(rec);
+          // Fly with slight stagger for effect
+          const p = async () => {
+              await wait(Math.random() * tick * 0.5);
+              await flyRecord(sourceId, targetId, rec, tick * 0.6);
+          };
+          mergeFlights.push(p());
+      });
+  });
+  
+  await Promise.all(mergeFlights);
+  if(!state.running) return;
+  
+  // Show merged result (transient step before final sort/combine)
   all.forEach(rec => {
     const r = createRecord(rec, rec.count);
     target.appendChild(r);
@@ -293,9 +335,9 @@ async function runMerge(mapperId, tick) {
   if(!state.running) return;
   
   turnActiveToGhosts(target);
-  if(!el('teachingMode').checked) Array.from(target.querySelectorAll('.kv-record')).forEach(r => r.remove());
+  // Explicit removal removed to support CSS-only toggling
   
-  const labelA = mapperId===0 ? 'A' : 'B';
+  // labelA is already defined at the top
   for(let i=0; i<mapper.spills.length; i++) {
       const s = el(`spill${labelA}${i}`);
       if(s) turnActiveToPersistent(s);
@@ -384,7 +426,7 @@ async function runReduce(tick) {
       const rawRecs = state.reducers[p] || [];
 
       turnActiveToGhosts(box);
-      if(!el('teachingMode').checked) Array.from(box.querySelectorAll('.kv-record:not(.persistent)')).forEach(r => r.remove());
+      // Explicit removal removed to support CSS-only toggling
       await wait(tick);
       if(!state.running) return;
 
@@ -431,6 +473,42 @@ function resetUI() {
   if(el('pct0')) { el('pct0').innerText='0%'; el('fill0').style.height='0%'; }
   if(el('pct1')) { el('pct1').innerText='0%'; el('fill1').style.height='0%'; }
 
+  // Populate Inputs with Persistent HDFS Records
+  const input0 = el('boxInput0');
+  const input1 = el('boxInput1');
+  
+  if(input0) {
+    input0.innerHTML = ''; // Clear generic label
+    // Create flex container for records
+    const div = document.createElement('div');
+    div.style.display = 'flex'; div.style.flexWrap = 'wrap'; div.style.justifyContent = 'center';
+    input0.appendChild(div);
+    
+    state.mappers[0].data.forEach((rec, i) => {
+        // HDFS Input: Show only the word (Key), no count
+        const r = document.createElement('div');
+        r.className = `kv-record ${rec.c} show persistent`;
+        r.id = `src-0-${i}`;
+        r.textContent = rec.k; // Just the word
+        div.appendChild(r);
+    });
+  }
+
+  if(input1) {
+    input1.innerHTML = '';
+    const div = document.createElement('div');
+    div.style.display = 'flex'; div.style.flexWrap = 'wrap'; div.style.justifyContent = 'center';
+    input1.appendChild(div);
+    
+    state.mappers[1].data.forEach((rec, i) => {
+        const r = document.createElement('div');
+        r.className = `kv-record ${rec.c} show persistent`;
+        r.id = `src-1-${i}`;
+        r.textContent = rec.k; // Just the word
+        div.appendChild(r);
+    });
+  }
+
   const containers = [
     'buf0', 'buf1',
     'spillA0', 'spillA1', 'spillB0', 'spillB1',
@@ -458,6 +536,19 @@ function resetUI() {
 document.addEventListener('DOMContentLoaded', () => {
   const startBtn = el('startBtn');
   const resetBtn = el('resetBtn');
+  const teachingCheck = el('teachingMode');
+  const appContainer = document.querySelector('.app');
+
+  // Init Teaching Mode State
+  if(teachingCheck && appContainer) {
+    if(teachingCheck.checked) appContainer.classList.add('teaching-mode-active');
+    
+    teachingCheck.addEventListener('change', (e) => {
+      if(e.target.checked) appContainer.classList.add('teaching-mode-active');
+      else appContainer.classList.remove('teaching-mode-active');
+    });
+  }
+
   if(startBtn && resetBtn) {
     startBtn.addEventListener('click', runSimulation);
     resetBtn.addEventListener('click', () => { 
@@ -466,4 +557,58 @@ document.addEventListener('DOMContentLoaded', () => {
       el('startBtn').disabled=false; 
     });
   }
+  
+  initHeightSync();
 });
+
+/* --- LAYOUT SYNC --- */
+function initHeightSync() {
+  const groups = [
+    // Main Rows
+    ['boxInput0', 'boxInput1'],
+    ['boxMap0', 'boxMap1'],
+    ['boxSpill0', 'boxSpill1'],
+    ['boxMerge0', 'boxMerge1'],
+    // Internal Cards
+    ['spillA0', 'spillB0'],
+    ['spillA1', 'spillB1'],
+    ['finalA', 'finalB'],
+    // Reducers (Sync all 3 together)
+    ['red0', 'red1', 'red2']
+  ];
+
+  let isAdjusting = false;
+
+  const ro = new ResizeObserver(() => {
+    if (isAdjusting) return;
+    
+    window.requestAnimationFrame(() => {
+      isAdjusting = true;
+      
+      groups.forEach(ids => {
+        const elements = ids.map(id => el(id)).filter(e => e !== null);
+        if (elements.length < 2) return;
+
+        // 1. Reset
+        elements.forEach(e => e.style.minHeight = '');
+
+        // 2. Measure natural heights
+        const heights = elements.map(e => e.scrollHeight);
+        
+        // 3. Find max
+        const maxH = Math.max(...heights);
+
+        // 4. Apply
+        elements.forEach(e => e.style.minHeight = `${maxH}px`);
+      });
+
+      isAdjusting = false;
+    });
+  });
+
+  // Start observing all synced elements
+  groups.flat().forEach(id => {
+    const e = el(id);
+    if(e) ro.observe(e);
+  });
+}
