@@ -20,7 +20,8 @@ let state = {
   mappers: [
     { id: 0, buffer: [], spills: [], final: [], data: [...RAW_DATA_A] },
     { id: 1, buffer: [], spills: [], final: [], data: [...RAW_DATA_B] }
-  ]
+  ],
+  reducers: {0: [], 1: [], 2: []}
 };
 
 /* --- HELPERS --- */
@@ -136,10 +137,12 @@ async function runSimulation() {
   const isTeaching = el('teachingMode').checked;
 
   // 1. INPUT
+  if(!state.running) return;
   highlightNodes(['node01', 'node02'], 'Map Phase');
   highlightBox(['boxInput0', 'boxInput1']);
   log("<strong>YARN ResourceManager:</strong> Job accepted. Allocated Containers on Node 01, Node 02.", "SYS");
   await wait(tick);
+  if(!state.running) return;
 
   // 2. MAP & BUFFER
   highlightNodes(['node01', 'node02'], 'Map Processing');
@@ -149,6 +152,7 @@ async function runSimulation() {
   const p1 = runMapper(0, tick, 'node01');
   const p2 = runMapper(1, tick * 1.1, 'node02'); 
   await Promise.all([p1, p2]);
+  if(!state.running) return;
 
   // 3. MERGE
   highlightNodes(['node01', 'node02'], 'Merge Sort');
@@ -156,6 +160,7 @@ async function runSimulation() {
   log("<strong>Merge Phase:</strong> Map tasks finished input. Merging spills...", "DISK");
   await runMerge(0, tick);
   await runMerge(1, tick);
+  if(!state.running) return;
 
   // 4. SHUFFLE (PARALLEL)
   highlightNodes(null, 'Network Shuffle');
@@ -164,6 +169,7 @@ async function runSimulation() {
   log("<strong>Shuffle Phase:</strong> Nodes streaming partitions in parallel via HTTP.", "NET");
   
   await runNetworkShuffle(tick);
+  if(!state.running) return;
   
   el('netPulse').classList.remove('active');
   el('networkLayer').style.borderColor = "#475569";
@@ -173,6 +179,7 @@ async function runSimulation() {
   highlightBox(['boxReduce']);
   log("<strong>Reduce Phase:</strong> Sort/Group & Aggregation started.", "RED");
   await runReduce(tick);
+  if(!state.running) return;
 
   log("<strong>Job Complete.</strong> Output written to HDFS.", "SYS");
   el('mPhase').textContent = "FINISHED";
@@ -182,6 +189,7 @@ async function runSimulation() {
 }
 
 async function runMapper(id, delay, nodeId) {
+  if(!state.running) return;
   const mapper = state.mappers[id];
   const bufEl = el(`buf${id}`);
   const fillEl = el(`fill${id}`);
@@ -191,12 +199,14 @@ async function runMapper(id, delay, nodeId) {
   if (!fillEl) return;
 
   for (let i=0; i<mapper.data.length; i++) {
+    if(!state.running) return;
     const rec = mapper.data[i];
     mapper.buffer.push(rec);
     const countEl = el('mRecords');
     if(countEl) countEl.innerText = parseInt(countEl.innerText) + 1;
 
     await flyRecord(`split${id}`, `buf${id}`, rec, delay * 0.4);
+    if(!state.running) return;
 
     const r = createRecord(rec);
     bufEl.appendChild(r);
@@ -216,9 +226,12 @@ async function runMapper(id, delay, nodeId) {
       const spillBox = el(`boxSpill${id}`);
       if(spillBox) spillBox.classList.add('active');
       await wait(delay); 
+      if(!state.running) return;
+
       if(isTeaching) log(`Node 0${id+1}: <strong>Combiner</strong> running... Writing Spill to Disk.`, "DISK");
       
       await spill(id, mapper.spills.length, delay);
+      if(!state.running) return;
       
       if(spillBox) spillBox.classList.remove('active');
       turnActiveToGhosts(bufEl);
@@ -234,6 +247,7 @@ async function runMapper(id, delay, nodeId) {
 }
 
 async function spill(mapperId, spillIdx, delay) {
+  if(!state.running) return;
   const mapper = state.mappers[mapperId];
   const sorted = [...mapper.buffer].sort((a,b) => (a.p - b.p) || a.k.localeCompare(b.k));
   const combined = combine(sorted);
@@ -250,6 +264,8 @@ async function spill(mapperId, spillIdx, delay) {
         setTimeout(() => r.classList.add('show'), 20);
     });
     await wait(delay * 1.2);
+    if(!state.running) return;
+
     turnActiveToGhosts(slot);
     if(!el('teachingMode').checked) Array.from(slot.querySelectorAll('.kv-record')).forEach(r => r.remove());
     
@@ -262,6 +278,7 @@ async function spill(mapperId, spillIdx, delay) {
 }
 
 async function runMerge(mapperId, tick) {
+  if(!state.running) return;
   const mapper = state.mappers[mapperId];
   const target = el(`final${mapperId==0?'A':'B'}`);
   let all = [];
@@ -273,6 +290,7 @@ async function runMerge(mapperId, tick) {
     setTimeout(()=>r.classList.add('show'), 10);
   });
   await wait(tick);
+  if(!state.running) return;
   
   turnActiveToGhosts(target);
   if(!el('teachingMode').checked) Array.from(target.querySelectorAll('.kv-record')).forEach(r => r.remove());
@@ -295,6 +313,7 @@ async function runMerge(mapperId, tick) {
 }
 
 async function runNetworkShuffle(tick) {
+  if(!state.running) return;
   const m0 = state.mappers[0].final;
   const m1 = state.mappers[1].final;
   const isTeaching = el('teachingMode').checked;
@@ -306,6 +325,7 @@ async function runNetworkShuffle(tick) {
     let currentP = -1;
 
     for (const rec of localQueue) {
+        if(!state.running) break;
         if(isTeaching && rec.p !== currentP) {
             currentP = rec.p;
             await wait(Math.random() * 100);
@@ -313,14 +333,19 @@ async function runNetworkShuffle(tick) {
         }
 
         const packetJourney = async () => {
+            if(!state.running) return;
             await flyRecord(sourceId, 'netHub', rec, tick * 0.5);
             
             const netEl = el('mNet');
             if(netEl) netEl.innerText = parseInt(netEl.innerText) + 1;
 
             await wait((tick * 0.1) + Math.random() * 80); 
+            if(!state.running) return;
 
             const targetId = `red${rec.p}`;
+            // Update state
+            if(state.reducers[rec.p]) state.reducers[rec.p].push(rec);
+
             await flyRecord('netHub', targetId, rec, tick * 0.5);
             
             const targetBox = el(targetId);
@@ -329,6 +354,8 @@ async function runNetworkShuffle(tick) {
             setTimeout(()=>r.classList.add('show'), 10);
         };
 
+        // We don't await the packet journey fully here to allow pipelining,
+        // but we push it to promises list
         nodePromises.push(packetJourney());
         await wait(nicSpeed);
     }
@@ -339,28 +366,32 @@ async function runNetworkShuffle(tick) {
     transmitNodeData(m0, 'finalA', 'Node 01'),
     transmitNodeData(m1, 'finalB', 'Node 02')
   ]);
+  
+  if(!state.running) return;
 
   turnActiveToPersistent(el('finalA')); 
   turnActiveToPersistent(el('finalB')); 
 }
 
 async function runReduce(tick) {
+  if(!state.running) return;
   const partitions = [0,1,2];
   const reducePromises = partitions.map(async (p) => {
+      if(!state.running) return;
       const box = el(`red${p}`);
-      const rawRecs = Array.from(box.querySelectorAll('.kv-record:not(.persistent)')).map(el => {
-         const parts = el.textContent.split(':');
-         return { k: parts[0], count: parseInt(parts[1]) }; 
-      });
+      
+      // Use state instead of DOM parsing
+      const rawRecs = state.reducers[p] || [];
 
       turnActiveToGhosts(box);
       if(!el('teachingMode').checked) Array.from(box.querySelectorAll('.kv-record:not(.persistent)')).forEach(r => r.remove());
       await wait(tick);
+      if(!state.running) return;
 
       const map = new Map();
       rawRecs.forEach(x => {
           const prev = map.get(x.k) || 0;
-          map.set(x.k, prev + x.count);
+          map.set(x.k, prev + (x.count || 1));
       });
       
       Array.from(map.entries()).forEach(([k, v]) => {
@@ -389,6 +420,7 @@ function resetUI() {
       { id: 0, buffer: [], spills: [], final: [], data: [...RAW_DATA_A] },
       { id: 1, buffer: [], spills: [], final: [], data: [...RAW_DATA_B] }
   ];
+  state.reducers = {0: [], 1: [], 2: []};
   
   el('consoleLog').innerHTML = '<div class="log-entry log-sys">> Cluster Daemon Started. Waiting for job...</div>';
   ['mRecords','mSpills','mNet'].forEach(id => el(id).innerText = '0');
@@ -399,26 +431,26 @@ function resetUI() {
   if(el('pct0')) { el('pct0').innerText='0%'; el('fill0').style.height='0%'; }
   if(el('pct1')) { el('pct1').innerText='0%'; el('fill1').style.height='0%'; }
 
-  ['buf0', 'buf1'].forEach(id => {
-    const c = el(id);
-    if(c) Array.from(c.querySelectorAll('.kv-record')).forEach(r => r.remove());
-  });
-
-  const destructiveContainers = [
-    el('spillA0'), el('spillA1'), el('spillB0'), el('spillB1'),
-    el('finalA'), el('finalB'), el('red0'), el('red1'), el('red2')
+  const containers = [
+    'buf0', 'buf1',
+    'spillA0', 'spillA1', 'spillB0', 'spillB1',
+    'finalA', 'finalB', 
+    'red0', 'red1', 'red2'
   ];
-  destructiveContainers.forEach(c => { if(c) c.innerHTML = ''; });
+
+  containers.forEach(id => {
+    const c = el(id);
+    if(c) {
+       Array.from(c.querySelectorAll('.kv-record')).forEach(r => r.remove());
+    }
+  });
   
-  el('spillA0').innerHTML = '<div class="mini-label">Spill 0</div>';
-  el('spillA1').innerHTML = '<div class="mini-label">Spill 1</div>';
-  el('spillB0').innerHTML = '<div class="mini-label">Spill 0</div>';
-  el('spillB1').innerHTML = '<div class="mini-label">Spill 1</div>';
-  el('finalA').innerHTML = '<div class="mini-label" style="color:#f97316">part-m-00000</div>';
-  el('finalB').innerHTML = '<div class="mini-label" style="color:#f97316">part-m-00001</div>';
-  el('red0').innerHTML = '<div class="mini-label" style="color:#8b5cf6; font-size:9px; top:2px;">R-0 (Part 0)</div>';
-  el('red1').innerHTML = '<div class="mini-label" style="color:#ec4899; font-size:9px; top:2px;">R-1 (Part 1)</div>';
-  el('red2').innerHTML = '<div class="mini-label" style="color:#f59e0b; font-size:9px; top:2px;">R-2 (Part 2)</div>';
+  // Clear any flying records
+  document.querySelectorAll('.flying-record').forEach(r => r.remove());
+
+  // Reset fills
+  if(el('fill0')) el('fill0').classList.remove('limit');
+  if(el('fill1')) el('fill1').classList.remove('limit');
 
   highlightNodes(null, 'IDLE');
 }

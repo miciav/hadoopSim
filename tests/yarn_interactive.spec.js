@@ -24,8 +24,8 @@ test('YARN resource usage stays within node capacity', async ({ page }) => {
   snapshot.nodes.forEach((node) => {
     expect(node.cpuUsed).toBeGreaterThanOrEqual(0);
     expect(node.cpuUsed).toBeLessThanOrEqual(node.cpuTotal);
-    expect(node.memoryUsed).toBeGreaterThanOrEqual(0);
-    expect(node.memoryUsed).toBeLessThanOrEqual(node.memoryTotal);
+    expect(node.memoryUsedMb).toBeGreaterThanOrEqual(0);
+    expect(node.memoryUsedMb).toBeLessThanOrEqual(node.memoryTotalMb);
   });
 });
 
@@ -41,7 +41,7 @@ test('YARN queue drains when resources free up', async ({ page }) => {
   await page.evaluate(() => {
     cluster.nodes.forEach((node) => {
       node.cpuTotal = 2;
-      node.memoryTotal = 4;
+      node.memoryTotalMb = 4096;
     });
     renderCluster();
 
@@ -50,13 +50,15 @@ test('YARN queue drains when resources free up', async ({ page }) => {
     }
   });
 
-  const initialQueue = await page.evaluate(() => cluster.jobQueue.length);
+  const initialQueue = await page.evaluate(() => cluster.yarnQueue.length);
   expect(initialQueue).toBeGreaterThan(0);
 
-  await page.waitForTimeout(300);
+  await page.waitForFunction(
+    () => cluster.yarnQueue.length === 0 && document.getElementById('activeApps')?.textContent === '0',
+    null,
+    { timeout: 2000 }
+  );
 
-  const finalQueue = await page.evaluate(() => cluster.jobQueue.length);
+  const finalQueue = await page.evaluate(() => cluster.yarnQueue.length);
   expect(finalQueue).toBe(0);
-
-  await expect(page.locator('#activeApps')).toHaveText('0');
 });

@@ -14,7 +14,7 @@ Inputs
 - Playwright tests under `tests/`.
 
 Outputs
-- New shared core library under `assets/js/core/`.
+- New shared core library under `assets/js/hadoop-sim/`.
 - Updated page scripts importing the shared core.
 - Updated tests and docs as needed.
 
@@ -26,24 +26,23 @@ Constraints
 
 Target Library Shape (suggested)
 ```
-assets/js/core/
-  constants.js
+assets/js/hadoop-sim/
+  events.js
   random.js
-  timers.js
-  notifications.js
+  clock.js
+  config.js
+  state.js
   hdfs.js
   yarn.js
   mapreduce.js
-  stats.js
+  simulation.js
   index.js
 ```
 
 Suggested APIs
-- `createTimerManager()` -> `{ timeout(fn, ms), interval(fn, ms), clearAll() }`
-- `createNotifier({ root, ttlMs })` -> `{ info, success, warn, error }`
-- `createHdfsCluster(config)` -> cluster object with `uploadFile`, `allocateBlock`, `failNode`, `reReplicate`, `reset`, `stats`
-- `createYarnCluster(config)` -> cluster object with `submitJob`, `submitBigJob`, `completeJob`, `drainQueue`, `stats`
-- `createMapReduceEngine({ hdfs, yarn, timers })` -> `runJob`, `simulateFailure`, `stats`
+- `createSimulation(config, deps)` -> `{ state, actions, on, off }`
+- `createManualClock()` for deterministic tests
+- `createSeededRng()` for deterministic tests
 
 Plan
 Phase 0 — Inventory & Invariants
@@ -52,23 +51,20 @@ Phase 0 — Inventory & Invariants
 - Define invariants as tests: no negative resources, replication factor bounds, queue behavior.
 
 Phase 1 — Extract Low-Risk Utilities
-- Move timer management into `core/timers.js`.
-- Move notification helper into `core/notifications.js` with DOM root injection.
-- Add `core/random.js` to inject deterministic RNG for tests.
+- Move timing into `hadoop-sim/clock.js`.
+- Add deterministic RNG in `hadoop-sim/random.js`.
 - Update pages to use these utilities without changing behavior.
 
 Phase 2 — Extract HDFS Logic
-- Move `allocateBlock`, `rollbackFile`, `reReplicateBlocks`, `failNode`, `reset` into `core/hdfs.js`.
-- Add `computeHdfsStats` to `core/stats.js`.
+- Move `allocateBlock`, `rollbackFile`, `reReplicateBlocks`, `failNode`, `reset` into `hadoop-sim/hdfs.js`.
 - Update `hdfs_interactive.js` and `hadoop_full.js` to use core HDFS.
 
 Phase 3 — Extract YARN Logic
-- Move container allocation, queue handling, job completion to `core/yarn.js`.
-- Add `computeYarnStats` to `core/stats.js`.
+- Move container allocation, queue handling, job completion to `hadoop-sim/yarn.js`.
 - Update `yarn_interactive.js` and `hadoop_full.js` to use core YARN.
 
 Phase 4 — Extract MapReduce Logic
-- Move block locality, mapper allocation, progress tracking, and failure handling to `core/mapreduce.js`.
+- Move block locality, mapper allocation, progress tracking, and failure handling to `hadoop-sim/mapreduce.js`.
 - Update `hadoop_full.js` (and later the React simulator) to use the core MapReduce engine.
 
 Phase 5 — Cleanup & Adapters
@@ -92,7 +88,7 @@ Testing Requirements
   - Reset clears pending timers
 
 Deliverables
-- Shared core library under `assets/js/core/`.
+- Shared core library under `assets/js/hadoop-sim/`.
 - Updated page scripts importing the shared core.
 - Tests updated or added to validate invariants.
 - Minimal, safe changes only; preserve UI behavior.

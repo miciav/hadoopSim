@@ -19,7 +19,7 @@ test('HDFS replication factor preserved when space is available', async ({ page 
   const rf = await page.evaluate(() => REPLICATION_FACTOR);
 
   const counts = {};
-  snapshot.datanodes.forEach((node) => {
+  snapshot.nodes.forEach((node) => {
     node.blocks.forEach((block) => {
       counts[block.id] = (counts[block.id] || 0) + 1;
     });
@@ -31,7 +31,7 @@ test('HDFS replication factor preserved when space is available', async ({ page 
     expect(counts[block.id]).toBe(rf);
   });
 
-  snapshot.datanodes.forEach((node) => {
+  snapshot.nodes.forEach((node) => {
     const ids = node.blocks.map((block) => block.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
@@ -45,7 +45,7 @@ test('HDFS avoids failed nodes and keeps storage within bounds', async ({ page }
   await page.evaluate(() => uploadFile());
 
   const snapshot = await getClusterSnapshot(page);
-  const failedNode = snapshot.datanodes.find((node) => node.failed);
+  const failedNode = snapshot.nodes.find((node) => node.failed);
   expect(failedNode).toBeTruthy();
 
   const latestFile = snapshot.files[snapshot.files.length - 1];
@@ -55,9 +55,9 @@ test('HDFS avoids failed nodes and keeps storage within bounds', async ({ page }
   const overlaps = latestFile.blocks.some((block) => failedBlockIds.has(block.id));
   expect(overlaps).toBe(false);
 
-  snapshot.datanodes.forEach((node) => {
-    expect(node.storageUsed).toBeGreaterThanOrEqual(0);
-    expect(node.storageUsed).toBeLessThanOrEqual(node.storageTotal);
+  snapshot.nodes.forEach((node) => {
+    expect(node.storageUsedMb).toBeGreaterThanOrEqual(0);
+    expect(node.storageUsedMb).toBeLessThanOrEqual(node.storageTotalMb);
   });
 });
 
@@ -67,9 +67,9 @@ test('HDFS rolls back partial uploads when space runs out', async ({ page }) => 
 
   await page.evaluate(() => {
     resetCluster();
-    cluster.datanodes.forEach((node) => {
-      node.storageTotal = 200;
-      node.storageUsed = 0;
+    cluster.nodes.forEach((node) => {
+      node.storageTotalMb = 200;
+      node.storageUsedMb = 0;
       node.blocks = [];
     });
     cluster.files = [];
@@ -85,12 +85,12 @@ test('HDFS rolls back partial uploads when space runs out', async ({ page }) => 
   const file = snapshot.files.find((entry) => entry.name === expectedFileName);
   expect(file).toBeUndefined();
 
-  const leakedBlocks = snapshot.datanodes.flatMap((node) =>
+  const leakedBlocks = snapshot.nodes.flatMap((node) =>
     node.blocks.filter((block) => block.fileName === expectedFileName)
   );
   expect(leakedBlocks.length).toBe(0);
 
-  snapshot.datanodes.forEach((node) => {
-    expect(node.storageUsed).toBe(0);
+  snapshot.nodes.forEach((node) => {
+    expect(node.storageUsedMb).toBe(0);
   });
 });

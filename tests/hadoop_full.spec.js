@@ -32,8 +32,8 @@ test('Full HDFS replication and storage bounds', async ({ page }) => {
   });
 
   snapshot.nodes.forEach((node) => {
-    expect(node.storageUsed).toBeGreaterThanOrEqual(0);
-    expect(node.storageUsed).toBeLessThanOrEqual(node.storageTotal);
+    expect(node.storageUsedMb).toBeGreaterThanOrEqual(0);
+    expect(node.storageUsedMb).toBeLessThanOrEqual(node.storageTotalMb);
   });
 });
 
@@ -90,8 +90,8 @@ test('MapReduce failure reschedules or marks mappers on failed nodes', async ({ 
   snapshot.nodes.forEach((node) => {
     expect(node.cpuUsed).toBeGreaterThanOrEqual(0);
     expect(node.cpuUsed).toBeLessThanOrEqual(node.cpuTotal);
-    expect(node.memoryUsed).toBeGreaterThanOrEqual(0);
-    expect(node.memoryUsed).toBeLessThanOrEqual(node.memoryTotal);
+    expect(node.memoryUsedMb).toBeGreaterThanOrEqual(0);
+    expect(node.memoryUsedMb).toBeLessThanOrEqual(node.memoryTotalMb);
   });
 });
 

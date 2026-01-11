@@ -1,1809 +1,7 @@
-const { useState, useEffect, useCallback, useRef } = React;
+const { useState, useEffect, useRef } = React;
 
-    // Constants
-    const REPLICATION_FACTOR = 3;
-    const BLOCK_SIZE = 128;
-    const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
-    const MAX_TASK_RETRIES = 3;
-    const TASK_RETRY_DELAY_MS = 2000;
-    const STORAGE_KEY = 'hadoop-ecosystem-simulator/v1';
-
-    // Persistence helpers
-    const loadPersistedState = () => {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return null;
-        const parsed = JSON.parse(raw);
-        if (!parsed?.cluster) return null;
-        return parsed;
-      } catch (err) {
-        console.warn('Failed to load persisted state', err);
-        return null;
-      }
-    };
-
-    const persistState = (state) => {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      } catch (err) {
-        console.warn('Failed to persist state', err);
-      }
-    };
-
-    // UI Components (pure/presentational)
-    const NotificationToaster = ({ notifications }) => (
-      <div>
-        {notifications.map(n => (
-          <div key={n.id} className={`notification ${n.type}`}>
-            {n.message}
-          </div>
-        ))}
-      </div>
-    );
-
-    const StatsPanel = ({ stats }) => (
-      <div className="stats-section">
-        <h2>📊 Statistics</h2>
-        <div className="stat-item">
-          <span className="stat-label">Nodes:</span>
-          <span className="stat-value">{stats.activeNodes}/{stats.totalNodes}</span>
-        </div>
-        <div className="stat-item">
-          <span className="stat-label">CPU:</span>
-          <span className="stat-value">{stats.cpuUsage}</span>
-        </div>
-        <div className="stat-item">
-          <span className="stat-label">Memory:</span>
-          <span className="stat-value">{stats.memoryUsage}</span>
-        </div>
-        <div className="stat-item">
-          <span className="stat-label">Storage:</span>
-          <span className="stat-value">{stats.storageUsage}</span>
-        </div>
-        <div className="stat-item">
-          <span className="stat-label">Files:</span>
-          <span className="stat-value">{stats.totalFiles}</span>
-        </div>
-        <div className="stat-item">
-          <span className="stat-label">Running Jobs:</span>
-          <span className="stat-value">{stats.runningJobs}</span>
-        </div>
-        <div className="stat-item">
-          <span className="stat-label">Completed:</span>
-          <span className="stat-value">{stats.completedJobs}</span>
-        </div>
-      </div>
-    );
-
-    const SidebarControls = ({ cluster, uploadFile, submitMapReduceJob, addNode, removeNode, rebalanceCluster, simulateNodeFailure, resetCluster, stats }) => (
-      <div className="sidebar">
-        <h2>🔧 Controls</h2>
-
-        <div>
-          <button className="btn btn-hdfs" onClick={() => uploadFile(256)}>
-            📤 Upload 256 MB
-          </button>
-          <button className="btn btn-hdfs" onClick={() => uploadFile(512)}>
-            📤 Upload 512 MB
-          </button>
-          <button className="btn btn-hdfs" onClick={() => uploadFile(1024)}>
-            📤 Upload 1 GB
-          </button>
-        </div>
-
-        <div style={{ marginTop: '15px' }}>
-          <h2>🎯 MapReduce</h2>
-          {cluster.files.map((file, idx) => (
-            <button
-              key={idx}
-              className="btn btn-mapreduce"
-              onClick={() => submitMapReduceJob(idx)}
-            >
-              🚀 Run on {file.name}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ marginTop: '15px' }}>
-          <h2>🖥️ Cluster</h2>
-          <button className="btn btn-yarn" onClick={addNode}>
-            ➕ Add Node
-          </button>
-          <button className="btn btn-yarn" onClick={removeNode}>
-            ➖ Remove Node
-          </button>
-          <button className="btn btn-hdfs" onClick={() => {
-            const activeNodes = cluster?.nodes.filter(n => !n.failed);
-            if (activeNodes && activeNodes.length > 0) {
-              rebalanceCluster(activeNodes[activeNodes.length - 1]);
-            }
-          }}>
-            ⚖️ Rebalance Storage
-          </button>
-        </div>
-
-        <div style={{ marginTop: '15px' }}>
-          <button className="btn btn-yarn" onClick={simulateNodeFailure}>
-            💥 Simulate Failure
-          </button>
-          <button className="btn btn-danger" onClick={resetCluster}>
-            🔄 Reset Cluster
-          </button>
-        </div>
-
-        <StatsPanel stats={stats} />
-      </div>
-    );
-
-    const NodeCard = ({ node, isShuffleSource, isShuffleTarget }) => {
-      const hasDataLocality = node.containers.some(c =>
-        c.isMapReduce && c.blockIds?.some(blockId =>
-          node.blocks.some(b => b.id === blockId)
-        )
-      );
-
-      return (
-        <div
-          className={`node ${node.failed ? 'failed' : ''} ${hasDataLocality ? 'data-locality' : ''} ${node.containers.length > 0 ? 'busy' : ''} ${isShuffleSource ? 'shuffle-source' : ''} ${isShuffleTarget ? 'shuffle-target' : ''}`}
-        >
-          <div className="node-header">
-            <span className="node-name">{node.name}</span>
-            <span className={`node-status ${node.failed ? 'status-failed' : 'status-active'}`}>
-              {node.failed ? 'FAILED' : 'ACTIVE'}
-            </span>
-          </div>
-
-          <div className="node-resources">
-            <div>
-              CPU: {node.cpuUsed}/{node.cpuTotal} cores
-              <div className="resource-bar">
-                <div
-                  className="resource-fill cpu-fill"
-                  style={{ width: `${(node.cpuUsed / node.cpuTotal) * 100}%` }}
-                />
-              </div>
-            </div>
-            <div>
-              Memory: {node.memoryUsed.toFixed(1)}/{node.memoryTotal} GB
-              <div className="resource-bar">
-                <div
-                  className="resource-fill memory-fill"
-                  style={{ width: `${(node.memoryUsed / node.memoryTotal) * 100}%` }}
-                />
-              </div>
-            </div>
-            <div>
-              Storage: {node.storageUsed.toFixed(1)}/{node.storageTotal} GB
-              <div className="resource-bar">
-                <div
-                  className="resource-fill storage-fill"
-                  style={{ width: `${(node.storageUsed / node.storageTotal) * 100}%` }}
-                />
-              </div>
-            </div>
-          </div>
-
-          {node.blocks.length > 0 && (
-            <div className="blocks-section">
-              <div className="section-title">📦 HDFS Blocks ({node.blocks.length})</div>
-              <div className="block-list">
-                {node.blocks.map((block, idx) => (
-                  <div
-                    key={idx}
-                    className={`block-item ${block.isReplica ? 'replica' : ''}`}
-                    style={{ backgroundColor: block.color }}
-                    title={`${block.id} - ${block.fileName}${block.isReplica ? ' (Replica)' : ' (Primary)'}`}
-                  >
-                    {block.id}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {node.containers.length > 0 && (
-            <div className="containers-section">
-              <div className="section-title">🎯 YARN Containers ({node.containers.length})</div>
-              <div className="container-list">
-                {node.containers.map((container, idx) => (
-                  <div
-                    key={idx}
-                    className={`container-item ${container.isApplicationMaster ? 'am' : ''} ${container.isReducer ? 'reducer' : ''}`}
-                    title={`${container.name} - CPU: ${container.cpu}, Mem: ${container.memory}GB`}
-                  >
-                    {container.isApplicationMaster ? '🎯 AM' : container.isReducer ? '🔄 Reducer' : container.name}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    };
-
-    const NodeGrid = ({ cluster }) => (
-      <div className="cluster-panel">
-        <div className="panel-header">
-          <span className="panel-icon">🖥️</span>
-          <h2>Cluster Nodes</h2>
-        </div>
-        <div className="nodes-container">
-          {cluster.nodes.map(node => {
-            const isShuffleSource = cluster.mapReduceJobs.some(job =>
-              job.shufflePhase?.inProgress &&
-              job.shufflePhase.sourceNodes.includes(node.id)
-            );
-
-            const isShuffleTarget = cluster.mapReduceJobs.some(job =>
-              job.shufflePhase?.inProgress &&
-              job.reducers.some(r => r.nodeId === node.id)
-            );
-
-            return (
-              <NodeCard
-                key={node.id}
-                node={node}
-                isShuffleSource={isShuffleSource}
-                isShuffleTarget={isShuffleTarget}
-              />
-            );
-          })}
-        </div>
-      </div>
-    );
-
-    const FilesPanel = ({ files }) => {
-      if (files.length === 0) return null;
-
-      return (
-        <div className="cluster-panel">
-          <div className="panel-header">
-            <span className="panel-icon">📁</span>
-            <h2>HDFS Files</h2>
-          </div>
-          <div className="files-list">
-            {files.map((file, idx) => (
-              <div key={idx} className="file-item" style={{ borderLeftColor: file.color }}>
-                <div className="file-header">
-                  <span className="file-name">{file.name}</span>
-                  <span className="file-size">{file.size} MB</span>
-                </div>
-                <div className="file-blocks">
-                  {file.blocks.map((block, bidx) => (
-                    <div
-                      key={bidx}
-                      className="block-item"
-                      style={{ backgroundColor: file.color }}
-                    >
-                      {block.id}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      );
-    };
-
-    const GanttChart = ({ job }) => {
-      const containerRef = useRef(null);
-      const timelineRef = useRef(null);
-      const timelineKey = `${job.timelineStart || 0}-${job.timelineEnd || 0}-${job.mappers.map(m => `${m.nodeId || 'x'}:${m.startedAt || 0}:${m.endedAt || 0}`).join('|')}-${job.reducers.map(r => `${r.nodeId || 'x'}:${r.startedAt || 0}:${r.endedAt || 0}`).join('|')}-${job.shufflePhase?.startedAt || 0}-${job.shufflePhase?.endedAt || 0}`;
-
-      useEffect(() => {
-        if (!containerRef.current) return;
-        if (!window.vis || !window.vis.DataSet || !window.vis.Timeline) {
-          console.warn('vis-timeline not available');
-          return;
-        }
-
-        const { DataSet, Timeline } = window.vis;
-
-        const now = job.timelineEnd || Date.now();
-        const startTime = job.timelineStart || now;
-        const items = new DataSet();
-        const groups = new DataSet();
-        const seenNodes = new Set();
-
-        // Clear any placeholder content before vis takes over
-        if (containerRef.current) {
-          containerRef.current.innerHTML = '';
-        }
-
-        const ensureGroup = (nodeId) => {
-          if (!nodeId || seenNodes.has(nodeId)) return;
-          seenNodes.add(nodeId);
-          groups.add({ id: nodeId, content: `Node-${nodeId}` });
-        };
-
-        job.mappers.forEach(mapper => {
-          if (!mapper.startedAt || mapper.nodeId == null) return;
-          ensureGroup(mapper.nodeId);
-          items.add({
-            id: `map-${mapper.name}`,
-            group: mapper.nodeId,
-            content: `🗺️ ${mapper.name}`,
-            start: new Date(mapper.startedAt),
-            end: new Date(mapper.endedAt || now),
-            className: 'gantt-map'
-          });
-        });
-
-        job.reducers.forEach(reducer => {
-          if (!reducer.startedAt || reducer.nodeId == null) return;
-          ensureGroup(reducer.nodeId);
-          items.add({
-            id: `reduce-${reducer.name}`,
-            group: reducer.nodeId,
-            content: `🧮 ${reducer.name}`,
-            start: new Date(reducer.startedAt),
-            end: new Date(reducer.endedAt || now),
-            className: 'gantt-reduce'
-          });
-        });
-
-        const shuffleNodes = new Set();
-        job.shufflePhase?.sourceNodes?.forEach(n => shuffleNodes.add(n));
-        job.reducers.forEach(r => r.nodeId && shuffleNodes.add(r.nodeId));
-        if (job.shufflePhase?.startedAt) {
-          shuffleNodes.forEach(nodeId => {
-            ensureGroup(nodeId);
-            items.add({
-              id: `shuffle-${nodeId}`,
-              group: nodeId,
-              content: '🔀 Shuffle',
-              start: new Date(job.shufflePhase.startedAt),
-              end: new Date(job.shufflePhase.endedAt || now),
-              className: 'gantt-shuffle'
-            });
-          });
-        }
-
-        if (timelineRef.current) {
-          timelineRef.current.destroy();
-          timelineRef.current = null;
-        }
-
-        if (items.get().length === 0) {
-          return;
-        }
-
-        const groupCount = groups.length || groups.get().length || seenNodes.size;
-        const heightPx = Math.max(220, Math.min(700, 140 + groupCount * 34));
-
-        const options = {
-          stack: true,
-          horizontalScroll: true,
-          zoomKey: 'ctrlKey',
-          min: new Date(startTime),
-          max: new Date(now + 2000),
-          zoomMin: 1000,
-          zoomMax: 1000 * 60 * 60,
-          height: `${heightPx}px`,
-          width: '100%',
-          orientation: 'top',
-          groupOrder: (a, b) => (Number(a.id) || 0) - (Number(b.id) || 0),
-          margin: { item: 8, axis: 6 },
-          groupHeightMode: 'fitItems',
-          format: {
-            minorLabels: {
-              millisecond: 'SSS',
-              second: 's',
-              minute: 'HH:mm',
-              hour: 'HH:mm'
-            },
-            majorLabels: {
-              minute: 'ddd D MMM',
-              hour: 'ddd D MMM'
-            }
-          }
-        };
-
-        timelineRef.current = new Timeline(
-          containerRef.current,
-          items,
-          groups,
-          options
-        );
-        timelineRef.current.fit();
-        timelineRef.current.on('doubleClick', () => timelineRef.current && timelineRef.current.fit());
-
-        return () => {
-          if (timelineRef.current) {
-            timelineRef.current.destroy();
-            timelineRef.current = null;
-          }
-        };
-      }, [timelineKey, job.mappers.length, job.reducers.length]);
-
-      return (
-        <div className="gantt-container">
-          <div className="gantt-metrics">
-            <div className="gantt-metric">
-              <span>Job Status</span>
-              <strong>{job.status}</strong>
-            </div>
-            <div className="gantt-metric">
-              <span>AM Node</span>
-              <strong>{job.amNodeId ? `Node-${job.amNodeId}` : 'Pending'}</strong>
-            </div>
-            <div className="gantt-metric">
-              <span>Mappers</span>
-              <strong>{job.mappers.length}</strong>
-            </div>
-            <div className="gantt-metric">
-              <span>Reducers</span>
-              <strong>{job.reducers.length}</strong>
-            </div>
-          </div>
-
-          <div className="gantt-body">
-            <div className="gantt-legend">
-              <span className="legend-swatch map"></span> Map
-              <span className="legend-swatch shuffle"></span> Shuffle (per node)
-              <span className="legend-swatch reduce"></span> Reduce
-            </div>
-            <div ref={containerRef} className="gantt-vis-wrapper">
-              <div className="gantt-empty">Loading timeline…</div>
-            </div>
-            {job.mappers.length === 0 && job.reducers.length === 0 && (
-              <div className="gantt-empty">No timeline data yet.</div>
-            )}
-          </div>
-        </div>
-      );
-    };
-
-    const JobCard = ({ job, cluster, toggleJobVisibility }) => {
-      const isCollapsed = !!job.isCollapsed;
-      return (
-        <div className="job-item" style={{ borderLeftColor: job.fileColor }}>
-          <div className="job-header">
-            <span className="job-name">{job.name}</span>
-            <div className="job-actions">
-              <button
-                type="button"
-                className="job-toggle"
-                onClick={() => toggleJobVisibility(job.name)}
-                aria-expanded={!isCollapsed}
-                aria-label={`${isCollapsed ? 'Expand' : 'Minimize'} ${job.name}`}
-              >
-                {isCollapsed ? 'Expand' : 'Minimize'}
-              </button>
-              <span className={`job-status status-${job.status}`}>
-                {job.status.toUpperCase()}
-              </span>
-            </div>
-          </div>
-
-          <div className={`job-body ${isCollapsed ? 'collapsed' : ''}`}>
-            <div style={{ fontSize: '0.9em', color: '#718096', marginBottom: '10px' }}>
-              File: {job.fileName} | AM: Node-{job.amNodeId || 'N/A'}
-              {job.reducers.some(r => r.nodeId) && ` | Reducers: ${job.reducers.length}`}
-            </div>
-
-            {job.status !== 'completed' && (
-              <div className="mappers-container">
-                <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Map Phase:</div>
-                {job.mappers.map((mapper, midx) => {
-                  const node = cluster.nodes.find(n => n.id === mapper.nodeId);
-                  const hasLocality = node?.blocks.some(b => b.id === mapper.blockId);
-
-                  return (
-                    <div key={midx} className="mapper-item">
-                      <span className="mapper-name">
-                        {mapper.name}
-                        {hasLocality && ' ⚡'}
-                      </span>
-                      <span style={{ fontSize: '0.85em', color: '#718096' }}>
-                        Node-{mapper.nodeId || 'N/A'}
-                      </span>
-                      <div className="progress-bar">
-                        {mapper.progress >= 0 && (
-                          <div
-                            className="progress-fill"
-                            style={{ width: `${mapper.progress}%` }}
-                          >
-                            {mapper.progress.toFixed(0)}%
-                          </div>
-                        )}
-                        {mapper.progress < 0 && (
-                          <div style={{ padding: '0 10px', fontSize: '0.85em' }}>
-                            ❌ Failed
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {job.status === 'running' && job.mappers.every(m => m.progress >= 100 || m.progress < 0) && (
-              <>
-                {job.shufflePhase && job.shufflePhase.inProgress && (
-                  <div className="shuffle-phase">
-                    <div style={{ fontWeight: 'bold', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span>🔀 Shuffle &amp; Sort Phase</span>
-                      <span style={{ fontSize: '0.85em', color: '#718096' }}>
-                        Source nodes: {job.shufflePhase.sourceNodes.join(', ')}
-                      </span>
-                    </div>
-                    <div className="progress-bar">
-                      <div
-                        className="progress-fill"
-                        style={{ width: `${job.shufflePhase.progress}%`, background: 'linear-gradient(90deg, #ed8936 0%, #dd6b20 100%)' }}
-                      >
-                        {job.shufflePhase.progress.toFixed(0)}%
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {job.reducers.length > 0 && (
-                  <div className="reducers-container">
-                    <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Reduce Phase:</div>
-                    {job.reducers.map((reducer, ridx) => (
-                      <div key={ridx} className="reducer-item">
-                        <span className="reducer-name">
-                          {reducer.name}
-                        </span>
-                        <span style={{ fontSize: '0.85em', color: '#718096' }}>
-                          Node-{reducer.nodeId || 'N/A'}
-                        </span>
-                        <div className="progress-bar">
-                          {reducer.progress >= 0 && (
-                            <div
-                              className="progress-fill reducer-fill"
-                              style={{ width: `${reducer.progress}%` }}
-                            >
-                              {reducer.progress.toFixed(0)}%
-                            </div>
-                          )}
-                          {reducer.progress < 0 && (
-                            <div style={{ padding: '0 10px', fontSize: '0.85em' }}>
-                              ❌ Failed
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-
-            {job.status === 'completed' && (
-              <div className="job-complete">
-                <div className="job-complete-title">✅ Job Completed</div>
-                <div className="job-complete-details">
-                  <div>AM: Node-{job.amNodeId || 'N/A'}</div>
-                  <div>Mappers: {job.mappers.length}</div>
-                  <div>Reducers: {job.reducers.length}</div>
-                </div>
-              </div>
-            )}
-
-            <GanttChart job={job} />
-          </div>
-        </div>
-      );
-    };
-
-    const JobsPanel = ({ cluster, toggleJobVisibility }) => {
-      if (cluster.mapReduceJobs.length === 0) return null;
-      return (
-        <div className="cluster-panel">
-          <div className="panel-header">
-            <span className="panel-icon">⚙️</span>
-            <h2>MapReduce Jobs</h2>
-          </div>
-          <div className="jobs-list">
-            {cluster.mapReduceJobs.map((job, idx) => (
-              <JobCard
-                key={idx}
-                job={job}
-                cluster={cluster}
-                toggleJobVisibility={toggleJobVisibility}
-              />
-            ))}
-          </div>
-        </div>
-      );
-    };
-
-    const HadoopEcosystem = () => {
-      // State
-      const [colorIndex, setColorIndex] = useState(0);
-      const [cluster, setCluster] = useState(null);
-      const [notifications, setNotifications] = useState([]);
-      const [nextNodeId, setNextNodeId] = useState(7);
-      const [resumeNeeded, setResumeNeeded] = useState(false);
-
-      // Initialize cluster
-      const initializeCluster = useCallback(() => {
-        const nodes = [];
-        for (let i = 0; i < 6; i++) {
-          nodes.push({
-            id: i + 1,
-            name: `Node-${i + 1}`,
-            cpuTotal: 16,
-            cpuUsed: 0,
-            memoryTotal: 32,
-            memoryUsed: 0,
-            storageTotal: 100,
-            storageUsed: 0,
-            blocks: [],
-            containers: [],
-            failed: false
-          });
-        }
-
-        setCluster({
-          nodes,
-          files: [],
-          mapReduceJobs: [],
-          fileCounter: 1,
-          jobCounter: 1,
-          mapReduceCounter: 1
-        });
-        setNextNodeId(7);
-      }, []);
-
-      useEffect(() => {
-        const persisted = loadPersistedState();
-        if (persisted?.cluster) {
-          setCluster(persisted.cluster);
-          setColorIndex(persisted.colorIndex ?? 0);
-          setNextNodeId(persisted.nextNodeId ?? 7);
-          setNotifications([]);
-          setResumeNeeded(true);
-        } else {
-          initializeCluster();
-          setResumeNeeded(false);
-        }
-      }, [initializeCluster]);
-
-      useEffect(() => {
-        if (!cluster) return;
-        persistState({
-          cluster,
-          colorIndex,
-          nextNodeId
-        });
-      }, [cluster, colorIndex, nextNodeId]);
-
-      // Notification system
-      const showNotification = (message, type) => {
-        const id = Date.now();
-        setNotifications(prev => [...prev, { id, message, type }]);
-        setTimeout(() => {
-          setNotifications(prev => prev.filter(n => n.id !== id));
-        }, 4000);
-      };
-
-      // Get next color
-      const getNextColor = () => {
-        const color = COLORS[colorIndex % COLORS.length];
-        setColorIndex(prev => prev + 1);
-        return color;
-      };
-
-      // Upload file to HDFS
-      const uploadFile = (sizeInMB) => {
-        if (!cluster) return;
-
-        const activeNodes = cluster.nodes.filter(n => !n.failed);
-        if (activeNodes.length < REPLICATION_FACTOR) {
-          showNotification(`❌ Cannot upload! Need at least ${REPLICATION_FACTOR} active nodes!`, 'error');
-          return;
-        }
-
-        const fileColor = getNextColor();
-        const fileId = cluster.fileCounter;
-        const fileName = `file-${fileId}.txt`;
-        const numBlocks = Math.ceil(sizeInMB / BLOCK_SIZE);
-        const blocks = [];
-
-        for (let i = 0; i < numBlocks; i++) {
-          const blockSize = Math.min(BLOCK_SIZE, sizeInMB - i * BLOCK_SIZE);
-          const block = {
-            id: `file-${fileId}-block-${i + 1}`,
-            fileName,
-            size: blockSize,
-            color: fileColor,
-            index: i
-          };
-
-          const nodesWithBlock = [];
-          for (let r = 0; r < REPLICATION_FACTOR; r++) {
-            const availableNodes = activeNodes.filter(node => 
-              !nodesWithBlock.includes(node) &&
-              (node.storageTotal - node.storageUsed) >= (blockSize / 1024)
-            );
-
-            if (availableNodes.length === 0) {
-              showNotification('❌ Not enough storage space!', 'error');
-              return;
-            }
-
-            const selectedNode = availableNodes[Math.floor(Math.random() * availableNodes.length)];
-            selectedNode.blocks.push({ ...block, isReplica: r > 0 });
-            selectedNode.storageUsed += blockSize / 1024;
-            nodesWithBlock.push(selectedNode);
-          }
-
-          blocks.push(block);
-        }
-
-        const newFile = { name: fileName, size: sizeInMB, blocks, color: fileColor };
-
-        setCluster(prev => ({
-          ...prev,
-          files: [...prev.files, newFile],
-          fileCounter: prev.fileCounter + 1
-        }));
-
-        showNotification(`✅ File "${fileName}" (${sizeInMB} MB) uploaded with ${numBlocks} blocks × RF${REPLICATION_FACTOR}`, 'success');
-      };
-
-      // Submit MapReduce job
-      const submitMapReduceJob = (fileId) => {
-        if (!cluster) return;
-
-        const file = cluster.files[fileId];
-        if (!file) {
-          showNotification('❌ File not found!', 'error');
-          return;
-        }
-
-        const activeNodes = cluster.nodes.filter(n => !n.failed);
-        if (activeNodes.length === 0) {
-          showNotification('❌ No active nodes available!', 'error');
-          return;
-        }
-
-        const jobName = `MapReduce-${cluster.mapReduceCounter}`;
-
-        // Create a mapper for EVERY block in the file
-        const mappers = file.blocks.map((block, idx) => ({
-          name: `Map-${cluster.mapReduceCounter}-${idx + 1}`,
-          blockId: block.id,
-          nodeId: null,
-          progress: 0,
-          retryCount: 0,
-          needsReschedule: false
-        }));
-
-        // Random number of reducers: 1, 2, or 3
-        const numReducers = Math.floor(Math.random() * 3) + 1;
-        const reducers = Array.from({ length: numReducers }, (_, idx) => ({
-          name: `Reduce-${cluster.mapReduceCounter}-${idx + 1}`,
-          progress: 0,
-          nodeId: null,
-          retryCount: 0,
-          needsReschedule: false
-        }));
-
-        const job = {
-          name: jobName,
-          fileName: file.name,
-          fileColor: file.color,
-          mappers,
-          reducers,
-          status: 'pending',
-          amNodeId: null,
-          timelineStart: Date.now(),
-          timelineEnd: null,
-          isCollapsed: false
-        };
-
-        setCluster(prev => ({
-          ...prev,
-          mapReduceJobs: [...prev.mapReduceJobs, job],
-          mapReduceCounter: prev.mapReduceCounter + 1
-        }));
-
-        showNotification(`🚀 Submitting ${jobName} with ${mappers.length} mapper${mappers.length > 1 ? 's' : ''} and ${numReducers} reducer${numReducers > 1 ? 's' : ''}`, 'info');
-        setTimeout(() => scheduleMapReduceJob(job), 100);
-      };
-
-      // Allocate Application Master
-      const allocateApplicationMaster = (jobName, job) => {
-        if (!cluster) return false;
-
-        const activeNodes = cluster.nodes.filter(n => !n.failed);
-        const sortedNodes = activeNodes.sort((a, b) => {
-          const aAvailCpu = a.cpuTotal - a.cpuUsed;
-          const bAvailCpu = b.cpuTotal - b.cpuUsed;
-          return bAvailCpu - aAvailCpu;
-        });
-
-        for (const node of sortedNodes) {
-          const cpuAvailable = node.cpuTotal - node.cpuUsed;
-          const memAvailable = node.memoryTotal - node.memoryUsed;
-
-          if (cpuAvailable >= 1 && memAvailable >= 2) {
-            node.cpuUsed += 1;
-            node.memoryUsed += 2;
-            node.containers.push({
-              name: `AM-${jobName}`,
-              cpu: 1,
-              memory: 2,
-              isApplicationMaster: true,
-              jobName
-            });
-
-            job.amNodeId = node.id;
-            setCluster(prev => ({ ...prev }));
-            return true;
-          }
-        }
-
-        return false;
-      };
-
-      // Schedule MapReduce job
-      const scheduleMapReduceJob = (job) => {
-        if (!cluster) return;
-
-        const allocated = allocateApplicationMaster(job.name, job);
-        if (!allocated) {
-          showNotification(`❌ Cannot allocate ApplicationMaster for ${job.name}!`, 'error');
-          job.status = 'failed';
-          setCluster(prev => ({ ...prev }));
-          return;
-        }
-
-        showNotification(`🚀 ${job.name} scheduled! AM allocated on Node-${job.amNodeId}`, 'info');
-
-        const activeNodes = cluster.nodes.filter(n => !n.failed);
-        let allMappersAllocated = true;
-
-        job.mappers.forEach(mapper => {
-          const nodesWithBlock = activeNodes.filter(node =>
-            node.blocks.some(b => b.id === mapper.blockId)
-          );
-
-          const candidateNodes = nodesWithBlock.length > 0 ? nodesWithBlock : activeNodes;
-          const sortedCandidates = candidateNodes.sort((a, b) => {
-            const aHasBlock = a.blocks.some(b => b.id === mapper.blockId);
-            const bHasBlock = b.blocks.some(b => b.id === mapper.blockId);
-            if (aHasBlock && !bHasBlock) return -1;
-            if (!aHasBlock && bHasBlock) return 1;
-            const aAvailCpu = a.cpuTotal - a.cpuUsed;
-            const bAvailCpu = b.cpuTotal - b.cpuUsed;
-            return bAvailCpu - aAvailCpu;
-          });
-
-          let allocated = false;
-          for (const node of sortedCandidates) {
-            const cpuAvailable = node.cpuTotal - node.cpuUsed;
-            const memAvailable = node.memoryTotal - node.memoryUsed;
-
-            if (cpuAvailable >= 2 && memAvailable >= 4) {
-              node.cpuUsed += 2;
-              node.memoryUsed += 4;
-              node.containers.push({
-                name: mapper.name,
-                cpu: 2,
-                memory: 4,
-                isMapReduce: true,
-                isMapper: true,
-                blockIds: [mapper.blockId]
-              });
-
-              mapper.nodeId = node.id;
-              mapper.hadLocality = node.blocks.some(b => b.id === mapper.blockId);
-              allocated = true;
-              break;
-            }
-          }
-
-          if (!allocated) {
-            allMappersAllocated = false;
-          }
-        });
-
-        if (!allMappersAllocated) {
-          showNotification(`⚠️ Some mappers for ${job.name} could not be allocated!`, 'warning');
-        }
-
-        job.status = 'running';
-        setCluster(prev => ({ ...prev }));
-
-        runMappers(job);
-      };
-
-      const allocateMapperTask = (mapper, nodes) => {
-        if (!mapper || !Array.isArray(nodes) || nodes.length === 0) return false;
-
-        const nodesWithBlock = nodes.filter(node =>
-          node.blocks.some(b => b.id === mapper.blockId)
-        );
-
-        const candidateNodes = nodesWithBlock.length > 0 ? nodesWithBlock : nodes;
-        const sortedNodes = [...candidateNodes].sort((a, b) => {
-          const aHasBlock = a.blocks.some(b => b.id === mapper.blockId);
-          const bHasBlock = b.blocks.some(b => b.id === mapper.blockId);
-          if (aHasBlock && !bHasBlock) return -1;
-          if (!aHasBlock && bHasBlock) return 1;
-          const aAvailCpu = a.cpuTotal - a.cpuUsed;
-          const bAvailCpu = b.cpuTotal - b.cpuUsed;
-          return bAvailCpu - aAvailCpu;
-        });
-
-        for (const node of sortedNodes) {
-          const cpuAvailable = node.cpuTotal - node.cpuUsed;
-          const memAvailable = node.memoryTotal - node.memoryUsed;
-
-          if (cpuAvailable >= 2 && memAvailable >= 4) {
-            node.cpuUsed += 2;
-            node.memoryUsed += 4;
-            node.containers.push({
-              name: mapper.name,
-              cpu: 2,
-              memory: 4,
-              isMapReduce: true,
-              isMapper: true,
-              blockIds: [mapper.blockId]
-            });
-
-            mapper.nodeId = node.id;
-            mapper.progress = 0;
-            mapper.startedAt = null;
-            mapper.endedAt = null;
-            mapper.needsReschedule = false;
-            mapper.hadLocality = node.blocks.some(b => b.id === mapper.blockId);
-            return true;
-          }
-        }
-
-        return false;
-      };
-
-      const allocateReducerTask = (reducer, jobName, nodes) => {
-        if (!reducer || !Array.isArray(nodes) || nodes.length === 0) return false;
-        const sortedNodes = [...nodes].sort((a, b) => {
-          const aAvailCpu = a.cpuTotal - a.cpuUsed;
-          const bAvailCpu = b.cpuTotal - b.cpuUsed;
-          return bAvailCpu - aAvailCpu;
-        });
-
-        for (const node of sortedNodes) {
-          const cpuAvailable = node.cpuTotal - node.cpuUsed;
-          const memAvailable = node.memoryTotal - node.memoryUsed;
-
-          if (cpuAvailable >= 2 && memAvailable >= 4) {
-            node.cpuUsed += 2;
-            node.memoryUsed += 4;
-            node.containers.push({
-              name: reducer.name,
-              cpu: 2,
-              memory: 4,
-              isMapReduce: true,
-              isReducer: true,
-              jobName
-            });
-
-            reducer.nodeId = node.id;
-            reducer.progress = 0;
-            reducer.startedAt = null;
-            reducer.endedAt = null;
-            reducer.needsReschedule = false;
-            return true;
-          }
-        }
-
-        return false;
-      };
-
-      const scheduleMapperRetry = (jobName, delay = TASK_RETRY_DELAY_MS) => {
-        setTimeout(() => {
-          let rescheduledAny = false;
-          let failedJob = null;
-
-          setCluster(prev => {
-            if (!prev) return prev;
-            const job = prev.mapReduceJobs.find(j => j.name === jobName);
-            if (!job || job.status !== 'running') return prev;
-
-            job.pendingMapperRetry = false;
-
-            const activeNodes = prev.nodes.filter(n => !n.failed);
-            job.mappers.forEach(mapper => {
-              if (mapper.nodeId === null && mapper.progress >= 0 && (mapper.retryCount || 0) < MAX_TASK_RETRIES) {
-                const allocated = allocateMapperTask(mapper, activeNodes);
-                if (allocated) {
-                  rescheduledAny = true;
-                }
-              }
-            });
-
-            const pendingMappers = job.mappers.filter(mapper => mapper.nodeId === null && mapper.progress >= 0);
-            const exhaustedAttempts = pendingMappers.some(mapper => (mapper.retryCount || 0) >= MAX_TASK_RETRIES);
-
-            if (exhaustedAttempts) {
-              job.status = 'failed';
-              failedJob = job.name;
-            } else if (pendingMappers.length > 0) {
-              job.pendingMapperRetry = true;
-              scheduleMapperRetry(job.name);
-            }
-
-            return { ...prev };
-          });
-
-          if (failedJob) {
-            showNotification(`❌ ${failedJob} failed: mapper retries exhausted`, 'error');
-          } else if (rescheduledAny) {
-            showNotification(`🔁 Rescheduled mapper tasks for ${jobName}`, 'info');
-          }
-        }, delay);
-      };
-
-      const scheduleReducerRetry = (jobName, delay = TASK_RETRY_DELAY_MS) => {
-        setTimeout(() => {
-          let rescheduledAny = false;
-          let failedJob = null;
-
-          setCluster(prev => {
-            if (!prev) return prev;
-            const job = prev.mapReduceJobs.find(j => j.name === jobName);
-            if (!job || job.status !== 'running') return prev;
-
-            job.pendingReducerRetry = false;
-
-            const activeNodes = prev.nodes.filter(n => !n.failed);
-            job.reducers.forEach(reducer => {
-              if (reducer.nodeId === null && reducer.progress >= 0 && (reducer.retryCount || 0) < MAX_TASK_RETRIES) {
-                const allocated = allocateReducerTask(reducer, job.name, activeNodes);
-                if (allocated) {
-                  rescheduledAny = true;
-                }
-              }
-            });
-
-            const pendingReducers = job.reducers.filter(reducer => reducer.nodeId === null && reducer.progress >= 0);
-            const exhaustedAttempts = pendingReducers.some(reducer => (reducer.retryCount || 0) >= MAX_TASK_RETRIES);
-
-            if (exhaustedAttempts) {
-              job.status = 'failed';
-              failedJob = job.name;
-            } else if (pendingReducers.length > 0) {
-              job.pendingReducerRetry = true;
-              scheduleReducerRetry(job.name);
-            }
-
-            return { ...prev };
-          });
-
-          if (failedJob) {
-            showNotification(`❌ ${failedJob} failed: reducer retries exhausted`, 'error');
-          } else if (rescheduledAny) {
-            showNotification(`🔁 Rescheduled reducer tasks for ${jobName}`, 'info');
-          }
-        }, delay);
-      };
-
-      // Toggle visibility of a MapReduce job card without breaking job references
-      const toggleJobVisibility = (jobName) => {
-        setCluster(prev => {
-          if (!prev) return prev;
-          const job = prev.mapReduceJobs.find(j => j.name === jobName);
-          if (job) {
-            job.isCollapsed = !job.isCollapsed;
-          }
-          return { ...prev };
-        });
-      };
-
-      // Run mappers with progress simulation (slower + timestamps)
-      const runMappers = (job) => {
-        const interval = setInterval(() => {
-          setCluster(prev => {
-            if (!prev) return prev;
-
-            const updatedJob = prev.mapReduceJobs.find(j => j.name === job.name);
-            if (!updatedJob || updatedJob.status !== 'running') {
-              clearInterval(interval);
-              return prev;
-            }
-
-            let allMappersComplete = true;
-            let anyMapperRunning = false;
-
-            updatedJob.mappers.forEach(mapper => {
-              if (mapper.progress >= 0 && mapper.progress < 100 && mapper.nodeId !== null) {
-                if (!mapper.startedAt) {
-                  mapper.startedAt = Date.now();
-                }
-                mapper.progress = Math.min(100, mapper.progress + Math.random() * 6);
-                if (mapper.progress >= 100 && !mapper.endedAt) {
-                  mapper.endedAt = Date.now();
-                }
-                anyMapperRunning = true;
-              }
-              if (mapper.progress < 100 && mapper.progress >= 0) {
-                allMappersComplete = false;
-              }
-            });
-
-            // Only complete map phase when ALL mappers are at 100%
-            if (allMappersComplete && anyMapperRunning === false && !updatedJob.reducers.some(r => r.nodeId !== null)) {
-              clearInterval(interval);
-              // Use setTimeout to ensure state update happens before starting reduce
-              setTimeout(() => completeMapPhase(updatedJob), 100);
-            }
-
-            return { ...prev };
-          });
-        }, 900);
-      };
-
-      // Complete map phase and start shuffle
-      const completeMapPhase = (job) => {
-        if (!cluster) return;
-
-        // First, free all mapper containers
-        const activeNodes = cluster.nodes.filter(n => !n.failed);
-        const mapperNodes = [];
-
-        activeNodes.forEach(node => {
-          job.mappers.forEach(mapper => {
-            const containerIndex = node.containers.findIndex(c => c.name === mapper.name);
-            if (containerIndex !== -1) {
-              mapperNodes.push(node.id);
-              const container = node.containers[containerIndex];
-              node.cpuUsed -= container.cpu;
-              node.memoryUsed -= container.memory;
-              node.containers.splice(containerIndex, 1);
-            }
-          });
-        });
-
-        // Set shuffle phase
-        job.shufflePhase = {
-          inProgress: true,
-          progress: 0,
-          sourceNodes: [...new Set(mapperNodes)],
-          startedAt: Date.now(),
-          endedAt: null
-        };
-
-        setCluster(prev => ({ ...prev }));
-        showNotification(`🔀 Shuffle phase started for ${job.name}! Transferring data...`, 'info');
-
-        // Simulate shuffle progress (slower)
-        const shuffleInterval = setInterval(() => {
-          setCluster(prev => {
-            if (!prev) return prev;
-
-            const updatedJob = prev.mapReduceJobs.find(j => j.name === job.name);
-            if (!updatedJob || !updatedJob.shufflePhase) {
-              clearInterval(shuffleInterval);
-              return prev;
-            }
-
-            updatedJob.shufflePhase.progress = Math.min(100, updatedJob.shufflePhase.progress + Math.random() * 10);
-
-            if (updatedJob.shufflePhase.progress >= 100) {
-              clearInterval(shuffleInterval);
-              updatedJob.shufflePhase.inProgress = false;
-              updatedJob.shufflePhase.endedAt = Date.now();
-              // Start reduce phase shortly after shuffle completes
-              setTimeout(() => startReducePhase(updatedJob), 100);
-            }
-
-            return { ...prev };
-          });
-        }, 800);
-      };
-
-      // Start reduce phase after shuffle
-      const startReducePhase = (job) => {
-        if (!cluster) return;
-
-        const activeNodes = cluster.nodes.filter(n => !n.failed);
-
-        // Allocate multiple reducer containers
-        let allReducersAllocated = true;
-
-        job.reducers.forEach(reducer => {
-          const reducerAllocated = allocateReducerTask(reducer, job.name, activeNodes);
-          if (reducerAllocated && !reducer.startedAt) {
-            reducer.startedAt = Date.now();
-          }
-          if (!reducerAllocated) {
-            allReducersAllocated = false;
-          }
-        });
-
-        if (!allReducersAllocated) {
-          showNotification(`❌ Cannot allocate all reducers for ${job.name}!`, 'error');
-          job.status = 'failed';
-          setCluster(prev => ({ ...prev }));
-          return;
-        }
-
-        setCluster(prev => ({ ...prev }));
-
-        const reducerNodes = [...new Set(job.reducers.map(r => r.nodeId))];
-        showNotification(`✅ Shuffle complete! ${job.reducers.length} reducer${job.reducers.length > 1 ? 's' : ''} allocated on ${reducerNodes.length} node${reducerNodes.length > 1 ? 's' : ''}`, 'success');
-
-        const reduceInterval = setInterval(() => {
-          setCluster(prev => {
-            if (!prev) return prev;
-
-            const updatedJob = prev.mapReduceJobs.find(j => j.name === job.name);
-            if (!updatedJob || updatedJob.status !== 'running') {
-              clearInterval(reduceInterval);
-              return prev;
-            }
-
-            // Update all reducers progress (slower + timestamps)
-            updatedJob.reducers.forEach(reducer => {
-              if (reducer.nodeId !== null && reducer.progress < 100) {
-                if (!reducer.startedAt) {
-                  reducer.startedAt = Date.now();
-                }
-                reducer.progress = Math.min(100, reducer.progress + Math.random() * 6);
-                if (reducer.progress >= 100 && !reducer.endedAt) {
-                  reducer.endedAt = Date.now();
-                }
-              }
-            });
-
-            // Check if all reducers completed
-            const allReducersComplete = updatedJob.reducers.every(r => r.progress >= 100);
-
-            if (allReducersComplete) {
-              clearInterval(reduceInterval);
-              completeJob(updatedJob);
-            }
-
-            return { ...prev };
-          });
-        }, 900);
-      };
-
-      useEffect(() => {
-        if (!resumeNeeded || !cluster) return;
-        cluster.mapReduceJobs.forEach(job => {
-          if (job.status === 'running') {
-            const hasPendingMappers = job.mappers.some(m => m.progress < 100 && m.progress >= 0);
-            const shuffleInProgress = job.shufflePhase?.inProgress;
-            const reducersRunning = job.reducers.some(r => r.progress < 100 && r.progress >= 0 && r.nodeId);
-
-            if (hasPendingMappers) {
-              runMappers(job);
-            } else if (shuffleInProgress) {
-              setTimeout(() => startReducePhase(job), 100);
-            } else if (reducersRunning) {
-              startReducePhase(job);
-            }
-          }
-        });
-        setResumeNeeded(false);
-      }, [resumeNeeded, cluster]);
-
-      // Complete job
-      const completeJob = (job) => {
-        job.status = 'completed';
-        job.timelineEnd = Date.now();
-
-        const activeNodes = cluster.nodes.filter(n => !n.failed);
-        activeNodes.forEach(node => {
-          // Track resources to free
-          let cpuToFree = 0;
-          let memoryToFree = 0;
-
-          // Remove mapper containers
-          job.mappers.forEach(mapper => {
-            const containerIndex = node.containers.findIndex(c => c.name === mapper.name);
-            if (containerIndex !== -1) {
-              const container = node.containers[containerIndex];
-              cpuToFree += container.cpu;
-              memoryToFree += container.memory;
-              node.containers.splice(containerIndex, 1);
-            }
-          });
-
-          // Remove all reducer containers
-          job.reducers.forEach(reducer => {
-            const reducerIndex = node.containers.findIndex(c => c.name === reducer.name);
-            if (reducerIndex !== -1) {
-              const container = node.containers[reducerIndex];
-              cpuToFree += container.cpu;
-              memoryToFree += container.memory;
-              node.containers.splice(reducerIndex, 1);
-            }
-          });
-
-          // Remove AM container
-          const amIndex = node.containers.findIndex(c => c.isApplicationMaster && c.jobName === job.name);
-          if (amIndex !== -1) {
-            const container = node.containers[amIndex];
-            cpuToFree += container.cpu;
-            memoryToFree += container.memory;
-            node.containers.splice(amIndex, 1);
-          }
-
-          // Free resources
-          node.cpuUsed -= cpuToFree;
-          node.memoryUsed -= memoryToFree;
-        });
-
-        setCluster(prev => ({ ...prev }));
-        showNotification(`🎉 ${job.name} completed successfully!`, 'success');
-      };
-
-      // Simulate node failure
-      const simulateNodeFailure = () => {
-        if (!cluster) return;
-
-        const activeNodes = cluster.nodes.filter(n => !n.failed);
-        if (activeNodes.length === 0) {
-          showNotification('❌ No active nodes to fail!', 'error');
-          return;
-        }
-
-        const randomNode = activeNodes[Math.floor(Math.random() * activeNodes.length)];
-        randomNode.failed = true;
-
-        const remainingNodes = cluster.nodes.filter(n => !n.failed && n.id !== randomNode.id);
-        const affectedJobs = [];
-
-        cluster.mapReduceJobs.forEach(job => {
-          if (job.status !== 'running') return;
-
-          const mappersOnFailedNode = job.mappers.filter(m => m.nodeId === randomNode.id);
-          const reducersOnFailedNode = job.reducers.filter(r => r.nodeId === randomNode.id);
-
-          if (mappersOnFailedNode.length === 0 && reducersOnFailedNode.length === 0) return;
-
-          let mapperRestarts = 0;
-          let mapperQueued = 0;
-          let reducerRestarts = 0;
-          let reducerQueued = 0;
-          let mapperRetryExceeded = false;
-          let reducerRetryExceeded = false;
-
-          mappersOnFailedNode.forEach(mapper => {
-            const containerIndex = randomNode.containers.findIndex(c => c.name === mapper.name);
-            if (containerIndex !== -1) {
-              const container = randomNode.containers[containerIndex];
-              randomNode.cpuUsed -= container.cpu;
-              randomNode.memoryUsed -= container.memory;
-              randomNode.containers.splice(containerIndex, 1);
-            }
-
-            mapper.nodeId = null;
-            mapper.startedAt = null;
-            mapper.endedAt = null;
-            mapper.progress = 0;
-            mapper.retryCount = (mapper.retryCount || 0) + 1;
-            mapper.needsReschedule = true;
-
-            if ((mapper.retryCount || 0) >= MAX_TASK_RETRIES) {
-              mapperRetryExceeded = true;
-              return;
-            }
-
-            const allocated = allocateMapperTask(mapper, remainingNodes);
-            if (allocated) {
-              mapperRestarts++;
-            } else {
-              mapperQueued++;
-            }
-          });
-
-          reducersOnFailedNode.forEach(reducer => {
-            const containerIndex = randomNode.containers.findIndex(c => c.name === reducer.name);
-            if (containerIndex !== -1) {
-              const container = randomNode.containers[containerIndex];
-              randomNode.cpuUsed -= container.cpu;
-              randomNode.memoryUsed -= container.memory;
-              randomNode.containers.splice(containerIndex, 1);
-            }
-
-            reducer.nodeId = null;
-            reducer.startedAt = null;
-            reducer.endedAt = null;
-            reducer.progress = 0;
-            reducer.retryCount = (reducer.retryCount || 0) + 1;
-            reducer.needsReschedule = true;
-
-            if ((reducer.retryCount || 0) >= MAX_TASK_RETRIES) {
-              reducerRetryExceeded = true;
-              return;
-            }
-
-            const allocated = allocateReducerTask(reducer, job.name, remainingNodes);
-            if (allocated) {
-              reducerRestarts++;
-            } else {
-              reducerQueued++;
-            }
-          });
-
-          let summary = `${job.name}:`;
-          if (mappersOnFailedNode.length > 0) {
-            summary += ` ${mappersOnFailedNode.length} mapper(s) lost`;
-            if (mapperRestarts > 0) summary += `, ${mapperRestarts} restarted`;
-            if (mapperQueued > 0) summary += `, ${mapperQueued} waiting`;
-          }
-          if (reducersOnFailedNode.length > 0) {
-            summary += `${mappersOnFailedNode.length > 0 ? ' |' : ''} ${reducersOnFailedNode.length} reducer(s) lost`;
-            if (reducerRestarts > 0) summary += `, ${reducerRestarts} restarted`;
-            if (reducerQueued > 0) summary += `, ${reducerQueued} waiting`;
-          }
-          affectedJobs.push(summary.trim());
-
-          if (mapperRetryExceeded || reducerRetryExceeded) {
-            job.status = 'failed';
-          } else {
-            if (mapperQueued > 0 && !job.pendingMapperRetry) {
-              job.pendingMapperRetry = true;
-              scheduleMapperRetry(job.name);
-            }
-            if (reducerQueued > 0 && !job.pendingReducerRetry) {
-              job.pendingReducerRetry = true;
-              scheduleReducerRetry(job.name);
-            }
-          }
-
-          const amIndex = randomNode.containers.findIndex(c => c.isApplicationMaster && c.jobName === job.name);
-          if (amIndex !== -1) {
-            const am = randomNode.containers[amIndex];
-            randomNode.cpuUsed -= am.cpu;
-            randomNode.memoryUsed -= am.memory;
-            randomNode.containers.splice(amIndex, 1);
-
-            const reallocated = allocateApplicationMaster(job.name, job);
-            if (!reallocated) {
-              job.status = 'failed';
-            }
-          }
-        });
-
-        setCluster(prev => ({ ...prev }));
-
-        if (affectedJobs.length > 0) {
-          showNotification(`💥 ${randomNode.name} failed! Jobs affected: ${affectedJobs.join(' | ')}`, 'error');
-        } else {
-          showNotification(`💥 ${randomNode.name} failed! HDFS re-replicating...`, 'warning');
-        }
-
-        setTimeout(() => reReplicateBlocks(randomNode), 2000);
-      };
-
-      // Re-replicate blocks
-      const reReplicateBlocks = (failedNode) => {
-        if (!cluster) return;
-
-        const activeNodes = cluster.nodes.filter(n => !n.failed && n.id !== failedNode.id);
-
-        if (activeNodes.length === 0) {
-          showNotification('❌ No active nodes for re-replication!', 'error');
-          return;
-        }
-
-        const blockReplicationStatus = {};
-
-        cluster.nodes.forEach(node => {
-          node.blocks.forEach(block => {
-            if (!blockReplicationStatus[block.id]) {
-              blockReplicationStatus[block.id] = {
-                block,
-                replicaCount: 0,
-                sourceNodes: [],
-                wasOnFailedNode: false
-              };
-            }
-
-            if (!node.failed) {
-              blockReplicationStatus[block.id].replicaCount++;
-              blockReplicationStatus[block.id].sourceNodes.push(node);
-            } else if (node.id === failedNode.id) {
-              blockReplicationStatus[block.id].wasOnFailedNode = true;
-            }
-          });
-        });
-
-        let reReplicated = 0;
-        let underReplicated = 0;
-        let totalLost = 0;
-
-        for (const [blockId, status] of Object.entries(blockReplicationStatus)) {
-          if (status.replicaCount === 0) {
-            totalLost++;
-            continue;
-          }
-
-          if (status.replicaCount < REPLICATION_FACTOR) {
-            underReplicated++;
-
-            const sourceNode = status.sourceNodes[0];
-            const candidateNodes = activeNodes
-              .filter(node => !node.blocks.some(b => b.id === blockId))
-              .sort((a, b) => {
-                const aSpace = a.storageTotal - a.storageUsed;
-                const bSpace = b.storageTotal - b.storageUsed;
-                return bSpace - aSpace;
-              });
-
-            if (candidateNodes.length > 0) {
-              const targetNode = candidateNodes[0];
-              const availableSpaceGB = targetNode.storageTotal - targetNode.storageUsed;
-              const blockSizeGB = status.block.size / 1024;
-
-              if (availableSpaceGB >= blockSizeGB) {
-                targetNode.storageUsed += blockSizeGB;
-                targetNode.blocks.push({ ...status.block, isReplica: true });
-                reReplicated++;
-              }
-            }
-          }
-        }
-
-        setCluster(prev => ({ ...prev }));
-
-        if (totalLost > 0) {
-          showNotification(`❌ CRITICAL: ${totalLost} blocks LOST! Data corruption!`, 'error');
-        } else if (underReplicated > 0) {
-          showNotification(`✅ Re-replication complete! ${reReplicated} replicas added`, 'success');
-        } else {
-          showNotification(`✅ No re-replication needed (RF=${REPLICATION_FACTOR})`, 'success');
-        }
-      };
-
-      // Reset cluster
-      const resetCluster = () => {
-        setColorIndex(0);
-        initializeCluster();
-        showNotification('🔄 Cluster reset!', 'info');
-      };
-
-      // Add new node
-      const addNode = () => {
-        if (!cluster) return;
-
-        const newNode = {
-          id: nextNodeId,
-          name: `Node-${nextNodeId}`,
-          cpuTotal: 16,
-          cpuUsed: 0,
-          memoryTotal: 32,
-          memoryUsed: 0,
-          storageTotal: 100,
-          storageUsed: 0,
-          blocks: [],
-          containers: [],
-          failed: false
-        };
-
-        setCluster(prev => ({
-          ...prev,
-          nodes: [...prev.nodes, newNode]
-        }));
-        setNextNodeId(prev => prev + 1);
-        showNotification(`✅ ${newNode.name} added to cluster!`, 'success');
-
-        // Trigger rebalancing after a short delay
-        setTimeout(() => {
-          rebalanceCluster(newNode);
-        }, 1000);
-      };
-
-      // Rebalance cluster storage
-      const rebalanceCluster = (newNode) => {
-        if (!cluster) return;
-
-        const activeNodes = cluster.nodes.filter(n => !n.failed);
-
-        if (activeNodes.length <= 1) {
-          showNotification('ℹ️ No rebalancing needed (only 1 active node)', 'info');
-          return;
-        }
-
-        // Calculate average storage usage
-        const totalStorageUsed = activeNodes.reduce((sum, n) => sum + n.storageUsed, 0);
-        const avgStorageUsed = totalStorageUsed / activeNodes.length;
-
-        // Find nodes with above-average storage (potential donors)
-        const overloadedNodes = activeNodes.filter(n => 
-          n.id !== newNode.id && n.storageUsed > avgStorageUsed * 1.2
-        ).sort((a, b) => b.storageUsed - a.storageUsed);
-
-        if (overloadedNodes.length === 0) {
-          showNotification('✅ Cluster storage already balanced', 'success');
-          return;
-        }
-
-        let blocksMovedCount = 0;
-        let totalBlocksSizeGB = 0;
-
-        // Track which blocks have been moved to avoid duplicates
-        const movedBlockIds = new Set();
-
-        // Try to move blocks from overloaded nodes to the new node
-        for (const sourceNode of overloadedNodes) {
-          // Only move if new node has space and source node is still overloaded
-          while (newNode.storageUsed < avgStorageUsed * 0.8 && 
-                 sourceNode.storageUsed > avgStorageUsed * 1.2 &&
-                 sourceNode.blocks.length > 0) {
-
-            // Find a block that can be moved (must maintain RF=3)
-            let blockToMove = null;
-
-            for (const block of sourceNode.blocks) {
-              // Skip if already moved
-              if (movedBlockIds.has(block.id)) continue;
-
-              // Count replicas of this block across all active nodes
-              const replicaCount = activeNodes.reduce((count, node) => {
-                return count + (node.blocks.some(b => b.id === block.id) ? 1 : 0);
-              }, 0);
-
-              // Only move if we have more than RF replicas OR if new node doesn't have it
-              const newNodeHasBlock = newNode.blocks.some(b => b.id === block.id);
-
-              if (replicaCount > REPLICATION_FACTOR || (!newNodeHasBlock && replicaCount === REPLICATION_FACTOR)) {
-                blockToMove = block;
-                break;
-              }
-            }
-
-            if (!blockToMove) break; // No suitable block found
-
-            const blockSizeGB = blockToMove.size / 1024;
-
-            // Check if new node has enough space
-            if (newNode.storageTotal - newNode.storageUsed < blockSizeGB) break;
-
-            // Move the block
-            const blockIndex = sourceNode.blocks.findIndex(b => b.id === blockToMove.id);
-
-            if (blockIndex !== -1) {
-              // Remove from source (if it's a replica and we still have RF copies)
-              const replicasAfterRemoval = activeNodes.reduce((count, node) => {
-                if (node.id === sourceNode.id) return count;
-                return count + (node.blocks.some(b => b.id === blockToMove.id) ? 1 : 0);
-              }, 0);
-
-              if (replicasAfterRemoval >= REPLICATION_FACTOR - 1) {
-                sourceNode.blocks.splice(blockIndex, 1);
-                sourceNode.storageUsed -= blockSizeGB;
-              }
-
-              // Add to new node (always as replica)
-              newNode.blocks.push({
-                ...blockToMove,
-                isReplica: true
-              });
-              newNode.storageUsed += blockSizeGB;
-
-              blocksMovedCount++;
-              totalBlocksSizeGB += blockSizeGB;
-              movedBlockIds.add(blockToMove.id);
-            }
-          }
-        }
-
-        setCluster(prev => ({ ...prev }));
-
-        if (blocksMovedCount > 0) {
-          showNotification(
-            `⚖️ Rebalancing complete! Moved ${blocksMovedCount} block(s) (${totalBlocksSizeGB.toFixed(1)} GB) to ${newNode.name}`,
-            'success'
-          );
-        } else {
-          showNotification('✅ No rebalancing needed - cluster already balanced', 'success');
-        }
-      };
-
-      // Remove node
-      const removeNode = () => {
-        if (!cluster) return;
-
-        if (cluster.nodes.length <= 1) {
-          showNotification('❌ Cannot remove the last node!', 'error');
-          return;
-        }
-
-        // Find a node to remove (prefer failed nodes first, then idle nodes)
-        const failedNodes = cluster.nodes.filter(n => n.failed);
-        const idleNodes = cluster.nodes.filter(n => !n.failed && n.containers.length === 0 && n.blocks.length === 0);
-        const busyIdleNodes = cluster.nodes.filter(n => !n.failed && n.containers.length === 0);
-
-        let nodeToRemove;
-
-        if (failedNodes.length > 0) {
-          nodeToRemove = failedNodes[failedNodes.length - 1];
-        } else if (idleNodes.length > 0) {
-          nodeToRemove = idleNodes[idleNodes.length - 1];
-        } else if (busyIdleNodes.length > 0) {
-          nodeToRemove = busyIdleNodes[busyIdleNodes.length - 1];
-        } else {
-          // Remove last node even if busy
-          nodeToRemove = cluster.nodes[cluster.nodes.length - 1];
-        }
-
-        // Check if node has blocks or containers
-        if (nodeToRemove.blocks.length > 0 || nodeToRemove.containers.length > 0) {
-          const hasBlocks = nodeToRemove.blocks.length > 0;
-          const hasContainers = nodeToRemove.containers.length > 0;
-
-          if (hasContainers) {
-            // Try to reschedule containers
-            const activeNodes = cluster.nodes.filter(n => !n.failed && n.id !== nodeToRemove.id);
-
-            // Fail any running jobs on this node
-            cluster.mapReduceJobs.forEach(job => {
-              if (job.status === 'running') {
-                const mappersOnNode = job.mappers.filter(m => m.nodeId === nodeToRemove.id);
-                if (mappersOnNode.length > 0) {
-                  job.status = 'failed';
-                  showNotification(`❌ ${job.name} failed due to node removal`, 'error');
-                }
-              }
-            });
-          }
-
-          if (hasBlocks) {
-            showNotification(`⚠️ Removing ${nodeToRemove.name} with ${nodeToRemove.blocks.length} blocks - re-replication will occur`, 'warning');
-          }
-        }
-
-        setCluster(prev => ({
-          ...prev,
-          nodes: prev.nodes.filter(n => n.id !== nodeToRemove.id)
-        }));
-
-        showNotification(`🗑️ ${nodeToRemove.name} removed from cluster`, 'info');
-
-        // Trigger re-replication if the node had blocks
-        if (nodeToRemove.blocks.length > 0) {
-          setTimeout(() => {
-            reReplicateBlocks(nodeToRemove);
-          }, 1000);
-        }
-      };
-
-      // Calculate statistics
-      // Calculate statistics
-      const getStats = () => {
-        if (!cluster) return {};
-
-        const activeNodes = cluster.nodes.filter(n => !n.failed);
-        const totalCpu = cluster.nodes.reduce((sum, n) => sum + n.cpuTotal, 0);
-        const usedCpu = cluster.nodes.reduce((sum, n) => sum + n.cpuUsed, 0);
-        const totalMemory = cluster.nodes.reduce((sum, n) => sum + n.memoryTotal, 0);
-        const usedMemory = cluster.nodes.reduce((sum, n) => sum + n.memoryUsed, 0);
-        const totalStorage = cluster.nodes.reduce((sum, n) => sum + n.storageTotal, 0);
-        const usedStorage = cluster.nodes.reduce((sum, n) => sum + n.storageUsed, 0);
-
-        return {
-          activeNodes: activeNodes.length,
-          totalNodes: cluster.nodes.length,
-          cpuUsage: `${usedCpu}/${totalCpu} cores`,
-          memoryUsage: `${usedMemory.toFixed(1)}/${totalMemory} GB`,
-          storageUsage: `${usedStorage.toFixed(1)}/${totalStorage} GB`,
-          totalFiles: cluster.files.length,
-          runningJobs: cluster.mapReduceJobs.filter(j => j.status === 'running').length,
-          completedJobs: cluster.mapReduceJobs.filter(j => j.status === 'completed').length
-        };
-      };
-
-      if (!cluster) return <div className="loading">Loading...</div>;
-
-      const stats = getStats();
-
-      return (
-        <div className="hadoop-container">
-          <style>{`
+const FILE_COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
+const STYLES = `
             * {
               margin: 0;
               padding: 0;
@@ -2530,42 +728,443 @@ const { useState, useEffect, useCallback, useRef } = React;
               color: white;
             }
 
+            .empty-note {
+              font-size: 0.85em;
+              color: #718096;
+            }
+
             @media (max-width: 768px) {
               .main-container {
                 grid-template-columns: 1fr;
               }
             }
-          `}</style>
+          `;
 
-          <div className="header">
-            <h1>🐘 Hadoop Ecosystem Simulator</h1>
-            <p>Interactive HDFS + YARN + MapReduce Visualization</p>
+const bootstrap = (HadoopSim) => {
+  const { createSimulation } = HadoopSim;
+
+  const NotificationToaster = ({ notifications }) => (
+  <div>
+    {notifications.map((notice) => (
+      <div key={notice.id} className={`notification ${notice.type}`}>
+        {notice.message}
+      </div>
+    ))}
+  </div>
+  );
+
+  const StatsPanel = ({ stats }) => (
+  <div className="stats-section">
+    <h2>📊 Statistics</h2>
+    <div className="stat-item">
+      <span className="stat-label">Nodes:</span>
+      <span className="stat-value">{stats.activeNodes}/{stats.totalNodes}</span>
+    </div>
+    <div className="stat-item">
+      <span className="stat-label">CPU:</span>
+      <span className="stat-value">{stats.cpuUsage}</span>
+    </div>
+    <div className="stat-item">
+      <span className="stat-label">Memory:</span>
+      <span className="stat-value">{stats.memoryUsage}</span>
+    </div>
+    <div className="stat-item">
+      <span className="stat-label">Storage:</span>
+      <span className="stat-value">{stats.storageUsage}</span>
+    </div>
+    <div className="stat-item">
+      <span className="stat-label">Files:</span>
+      <span className="stat-value">{stats.totalFiles}</span>
+    </div>
+    <div className="stat-item">
+      <span className="stat-label">Running Jobs:</span>
+      <span className="stat-value">{stats.runningJobs}</span>
+    </div>
+    <div className="stat-item">
+      <span className="stat-label">Completed:</span>
+      <span className="stat-value">{stats.completedJobs}</span>
+    </div>
+  </div>
+  );
+
+  const SidebarControls = ({ files, onUpload, onRunMapReduce, onFailNode, onReset, stats }) => (
+  <div className="sidebar">
+    <h2>🔧 Controls</h2>
+
+    <div>
+      <button className="btn btn-hdfs" onClick={() => onUpload(256)}>
+        📤 Upload 256 MB
+      </button>
+      <button className="btn btn-hdfs" onClick={() => onUpload(512)}>
+        📤 Upload 512 MB
+      </button>
+      <button className="btn btn-hdfs" onClick={() => onUpload(1024)}>
+        📤 Upload 1 GB
+      </button>
+    </div>
+
+    <div style={{ marginTop: '15px' }}>
+      <h2>🎯 MapReduce</h2>
+      {files.length === 0 ? (
+        <div className="empty-note">Upload a file to start MapReduce.</div>
+      ) : (
+        files.map((file) => (
+          <button
+            key={file.name}
+            className="btn btn-mapreduce"
+            onClick={() => onRunMapReduce(file.name)}
+          >
+            🚀 Run on {file.name}
+          </button>
+        ))
+      )}
+    </div>
+
+    <div style={{ marginTop: '15px' }}>
+      <button className="btn btn-yarn" onClick={onFailNode}>
+        💥 Simulate Failure
+      </button>
+      <button className="btn btn-danger" onClick={onReset}>
+        🔄 Reset Cluster
+      </button>
+    </div>
+
+    <StatsPanel stats={stats} />
+  </div>
+  );
+
+  const NodeCard = ({ node, fileColors }) => {
+  const hasDataLocality = node.containers.some((container) => {
+    if (!container.isMapReduce || !container.blockIds) {
+      return false;
+    }
+    return container.blockIds.some((blockId) =>
+      node.blocks.some((block) => block.id === blockId)
+    );
+  });
+
+  const storagePercent = (node.storageUsedMb / node.storageTotalMb) * 100;
+  const cpuPercent = (node.cpuUsed / node.cpuTotal) * 100;
+  const memPercent = (node.memoryUsedMb / node.memoryTotalMb) * 100;
+
+  return (
+    <div
+      className={`node ${node.failed ? 'failed' : ''} ${hasDataLocality ? 'data-locality' : ''} ${
+        node.containers.length > 0 ? 'busy' : ''
+      }`}
+    >
+      <div className="node-header">
+        <span className="node-name">{node.name}</span>
+        <span className={`node-status ${node.failed ? 'status-failed' : 'status-active'}`}>
+          {node.failed ? 'FAILED' : 'ACTIVE'}
+        </span>
+      </div>
+
+      <div className="node-resources">
+        <div>
+          CPU: {node.cpuUsed}/{node.cpuTotal} cores
+          <div className="resource-bar">
+            <div className="resource-fill cpu-fill" style={{ width: `${cpuPercent}%` }} />
           </div>
+        </div>
+        <div>
+          Memory: {(node.memoryUsedMb / 1024).toFixed(1)}/{(node.memoryTotalMb / 1024).toFixed(0)} GB
+          <div className="resource-bar">
+            <div className="resource-fill memory-fill" style={{ width: `${memPercent}%` }} />
+          </div>
+        </div>
+        <div>
+          Storage: {(node.storageUsedMb / 1024).toFixed(1)}/{(node.storageTotalMb / 1024).toFixed(0)} GB
+          <div className="resource-bar">
+            <div className="resource-fill storage-fill" style={{ width: `${storagePercent}%` }} />
+          </div>
+        </div>
+      </div>
 
-          <div className="main-container">
-            <SidebarControls
-              cluster={cluster}
-              uploadFile={uploadFile}
-              submitMapReduceJob={submitMapReduceJob}
-              addNode={addNode}
-              removeNode={removeNode}
-              rebalanceCluster={rebalanceCluster}
-              simulateNodeFailure={simulateNodeFailure}
-              resetCluster={resetCluster}
-              stats={stats}
-            />
+      {node.blocks.length > 0 && (
+        <div className="blocks-section">
+          <div className="section-title">📦 HDFS Blocks ({node.blocks.length})</div>
+          <div className="block-list">
+            {node.blocks.map((block) => (
+              <div
+                key={block.id}
+                className={`block-item ${block.isReplica ? 'replica' : ''}`}
+                style={{ backgroundColor: fileColors.get(block.fileName) || '#cbd5f0' }}
+                title={`${block.id} - ${block.fileName}`}
+              >
+                {block.id}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-            <div className="content-area">
-              <NodeGrid cluster={cluster} />
-              <FilesPanel files={cluster.files} />
-              <JobsPanel cluster={cluster} toggleJobVisibility={toggleJobVisibility} />
+      <div className="containers-section">
+        <div className="section-title">🔷 Containers ({node.containers.length})</div>
+        <div className="container-list">
+          {node.containers.length === 0 ? (
+            <span className="empty-note">No active containers</span>
+          ) : (
+            node.containers.map((container) => (
+              <div
+                key={container.name}
+                className={`container-chip ${container.isMapReduce ? 'mapreduce' : ''} ${
+                  container.isApplicationMaster ? 'appmaster' : ''
+                }`}
+              >
+                {container.isApplicationMaster ? '👑 ' : ''}{container.name}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+  };
+
+  const HadoopEcosystem = () => {
+  const simRef = useRef(null);
+  const [notifications, setNotifications] = useState([]);
+  const [, setVersion] = useState(0);
+  const fileColorsRef = useRef(new Map());
+  const colorIndexRef = useRef(0);
+
+  if (!simRef.current) {
+    simRef.current = createSimulation({
+      nodeCount: 6,
+      replicationFactor: 3,
+      blockSizeMb: 128,
+      nodeTemplate: {
+        cpuTotal: 16,
+        memoryTotalMb: 32 * 1024,
+        storageTotalMb: 100 * 1024,
+        namePrefix: 'Node-'
+      }
+    });
+  }
+
+  const sim = simRef.current;
+
+  useEffect(() => {
+    const off = sim.on('*', () => setVersion((value) => value + 1));
+    return () => off();
+  }, [sim]);
+
+  const pushNotification = (message, type) => {
+    const id = Date.now() + Math.random();
+    setNotifications((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setNotifications((prev) => prev.filter((notice) => notice.id !== id));
+    }, 4000);
+  };
+
+  const ensureFileColor = (fileName) => {
+    if (!fileColorsRef.current.has(fileName)) {
+      const color = FILE_COLORS[colorIndexRef.current % FILE_COLORS.length];
+      colorIndexRef.current += 1;
+      fileColorsRef.current.set(fileName, color);
+    }
+  };
+
+  const uploadFile = (sizeMb) => {
+    const result = sim.actions.uploadFile(sizeMb);
+    if (!result.ok) {
+      pushNotification(`❌ Failed to upload (${sizeMb} MB).`, 'error');
+      return;
+    }
+    ensureFileColor(result.file.name);
+    if (result.results.some((entry) => entry.underReplicated)) {
+      pushNotification(`⚠️ ${result.file.name} uploaded with under-replicated blocks`, 'warning');
+    } else {
+      pushNotification(`✅ ${result.file.name} uploaded`, 'success');
+    }
+  };
+
+  const runMapReduce = (fileName) => {
+    const job = sim.actions.submitMapReduce({ fileName });
+    if (!job) {
+      pushNotification('⚠️ Upload an HDFS file first!', 'warning');
+      return;
+    }
+    if (job.status === 'queued') {
+      pushNotification(`⏳ ${job.name} queued: insufficient resources`, 'warning');
+    } else {
+      pushNotification(`✅ ${job.name} started`, 'success');
+    }
+  };
+
+  const failNode = () => {
+    const activeNodes = sim.state.nodes.filter((node) => !node.failed);
+    if (activeNodes.length === 0) {
+      pushNotification('❌ All nodes already failed', 'error');
+      return;
+    }
+    const randomNode = activeNodes[Math.floor(Math.random() * activeNodes.length)];
+    sim.actions.failNode(randomNode.id);
+    pushNotification(`💥 ${randomNode.name} failed. Re-replicating...`, 'warning');
+
+    setTimeout(() => {
+      const summary = sim.actions.reReplicate();
+      if (summary.lost > 0) {
+        pushNotification(`❌ ${summary.lost} blocks permanently lost`, 'error');
+      } else if (summary.reReplicated > 0) {
+        pushNotification(`✅ Re-replicated ${summary.reReplicated} blocks`, 'success');
+      }
+    }, 1500);
+  };
+
+  const resetCluster = () => {
+    sim.actions.reset();
+    fileColorsRef.current.clear();
+    colorIndexRef.current = 0;
+    pushNotification('🔄 Cluster reset!', 'info');
+  };
+
+  const totalStorageMb = sim.state.nodes.reduce((sum, node) => sum + node.storageTotalMb, 0);
+  const usedStorageMb = sim.state.nodes.reduce((sum, node) => sum + node.storageUsedMb, 0);
+  const yarnStats = sim.yarn.stats();
+  const mapReduceStats = sim.mapreduce.stats();
+
+  const stats = {
+    activeNodes: sim.state.nodes.filter((node) => !node.failed).length,
+    totalNodes: sim.state.nodes.length,
+    cpuUsage: `${yarnStats.usedCpu}/${yarnStats.totalCpu} cores`,
+    memoryUsage: `${(yarnStats.usedMemMb / 1024).toFixed(1)}/${(
+      yarnStats.totalMemMb / 1024
+    ).toFixed(1)} GB`,
+    storageUsage: `${(usedStorageMb / 1024).toFixed(1)}/${(
+      totalStorageMb / 1024
+    ).toFixed(1)} GB`,
+    totalFiles: sim.state.files.length,
+    runningJobs: mapReduceStats.runningJobs,
+    completedJobs: mapReduceStats.completedJobs
+  };
+
+  const fileColors = fileColorsRef.current;
+
+  return (
+    <div className="hadoop-container">
+      <style>{STYLES}</style>
+      <div className="header">
+        <h1>🐘 Hadoop Ecosystem Simulator</h1>
+        <p>HDFS + YARN + MapReduce (Library-driven)</p>
+      </div>
+
+      <div className="main-container">
+        <SidebarControls
+          files={sim.state.files}
+          onUpload={uploadFile}
+          onRunMapReduce={runMapReduce}
+          onFailNode={failNode}
+          onReset={resetCluster}
+          stats={stats}
+        />
+
+        <div className="content-area">
+          <div className="cluster-panel">
+            <div className="panel-header">
+              <div className="panel-icon">🖥️</div>
+              <h2>Cluster Overview</h2>
+            </div>
+            <div className="nodes-container">
+              {sim.state.nodes.map((node) => (
+                <NodeCard key={node.id} node={node} fileColors={fileColors} />
+              ))}
             </div>
           </div>
 
-          <NotificationToaster notifications={notifications} />
-        </div>
-      );
-    };
+          <div className="cluster-panel">
+            <div className="panel-header">
+              <div className="panel-icon">📂</div>
+              <h2>HDFS Files</h2>
+            </div>
+            <div className="files-container">
+              {sim.state.files.length === 0 ? (
+                <div className="empty-note">No files yet. Upload to begin.</div>
+              ) : (
+                sim.state.files.map((file) => {
+                  ensureFileColor(file.name);
+                  return (
+                    <div key={file.name} className="file-item" style={{ borderLeftColor: fileColors.get(file.name) }}>
+                      <div className="file-name">📄 {file.name}</div>
+                      <div className="file-size">{file.sizeMb} MB • {file.blocks.length} blocks</div>
+                      <div className="file-blocks">
+                        {file.blocks.map((block) => (
+                          <div
+                            key={block.id}
+                            className="block-chip"
+                            style={{ backgroundColor: fileColors.get(file.name) }}
+                          >
+                            {block.id}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
 
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<HadoopEcosystem />);
+          <div className="cluster-panel">
+            <div className="panel-header">
+              <div className="panel-icon">⚙️</div>
+              <h2>MapReduce Jobs</h2>
+            </div>
+            <div className="jobs-container">
+              {sim.state.mapReduceJobs.length === 0 ? (
+                <div className="empty-note">No MapReduce jobs yet.</div>
+              ) : (
+                sim.state.mapReduceJobs.map((job) => (
+                  <div key={job.id} className="job-item">
+                    <div className="job-header">
+                      <div className="job-name">{job.name}</div>
+                      <div className={`job-status status-${job.status}`}>{job.status}</div>
+                    </div>
+                    <div className="job-details">
+                      <div>File: {job.fileName}</div>
+                      <div>Mappers: {job.mappers.length}</div>
+                    </div>
+                    <div className="job-progress">
+                      <div className="progress-bar">
+                        <div className="progress-fill" style={{ width: `${job.progress}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <NotificationToaster notifications={notifications} />
+    </div>
+  );
+  };
+
+  const root = ReactDOM.createRoot(document.getElementById('root'));
+  root.render(<HadoopEcosystem />);
+};
+
+const waitForHadoopSim = () => {
+  if (window.HadoopSimReady) {
+    return window.HadoopSimReady;
+  }
+  if (window.HadoopSim) {
+    return Promise.resolve(window.HadoopSim);
+  }
+  return new Promise((resolve) => {
+    const intervalId = setInterval(() => {
+      if (window.HadoopSimReady) {
+        clearInterval(intervalId);
+        window.HadoopSimReady.then(resolve);
+      } else if (window.HadoopSim) {
+        clearInterval(intervalId);
+        resolve(window.HadoopSim);
+      }
+    }, 50);
+  });
+};
+
+waitForHadoopSim().then(bootstrap);

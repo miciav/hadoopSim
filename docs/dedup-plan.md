@@ -13,7 +13,7 @@ Create a shared JS library for common HDFS, YARN, and MapReduce logic while keep
 
 ## Target Library Shape
 ```
-assets/js/core/
+assets/js/hadoop-sim/
   constants.js
   random.js
   timers.js
@@ -40,26 +40,25 @@ assets/js/core/
 - Define invariants as tests: non-negative resources, RF bounds, queue behavior.
 
 ### Phase 1: Extract low-risk utilities
-- Move timer management into `core/timers.js`.
-- Move notification helper into `core/notifications.js` with DOM root injection.
-- Add `core/random.js` to inject deterministic RNG for tests.
+- Move timer management into `hadoop-sim/clock.js`.
+- Add deterministic RNG in `hadoop-sim/random.js`.
 - Update HDFS/YARN/Full pages to use these utilities.
 
 ### Phase 2: Extract HDFS logic
-- Create `core/hdfs.js` with:
+- Create `hadoop-sim/hdfs.js` with:
   - `allocateBlock`, `rollbackFile`, `reReplicateBlocks`, `failNode`, `reset`.
   - `computeHdfsStats` for totals and percent usage.
 - Replace HDFS logic in `hdfs_interactive.js` and `hadoop_full.js`.
 - Keep DOM rendering in page code; library returns plain data.
 
 ### Phase 3: Extract YARN logic
-- Create `core/yarn.js` with:
+- Create `hadoop-sim/yarn.js` with:
   - `allocateContainer`, `allocateAppMaster`, `submitJob`, `submitBigJob`.
   - `completeJob`, `drainQueue`, `computeYarnStats`.
 - Replace YARN logic in `yarn_interactive.js` and `hadoop_full.js`.
 
 ### Phase 4: Extract MapReduce logic
-- Create `core/mapreduce.js` with:
+- Create `hadoop-sim/mapreduce.js` with:
   - `buildBlockLocations`, `allocateMappers`, `trackProgress`, `handleFailure`.
   - explicit hooks for timers and completion.
 - Replace MapReduce logic in `hadoop_full.js` and (later) React simulator.

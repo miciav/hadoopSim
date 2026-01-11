@@ -1,43 +1,62 @@
-import { createTimerManager } from './core/timers.js';
-import { createNotifier } from './core/notifications.js';
-import { randomInt } from './core/random.js';
-import {
-  allocateContainer,
-  releaseContainerByName,
-  computeYarnStats
-} from './core/yarn.js';
+import { createSimulation } from './hadoop-sim/simulation.js';
+import { randomInt } from './hadoop-sim/random.js';
 
-const timers = createTimerManager();
-const notifier = createNotifier({ root: document.body, ttlMs: 3000 });
+const nodes = [
+  { id: 1, name: 'Node-01', cpuTotal: 8, memoryTotalMb: 16 * 1024, storageTotalMb: 50000 },
+  { id: 2, name: 'Node-02', cpuTotal: 8, memoryTotalMb: 16 * 1024, storageTotalMb: 50000 },
+  { id: 3, name: 'Node-03', cpuTotal: 12, memoryTotalMb: 24 * 1024, storageTotalMb: 60000 },
+  { id: 4, name: 'Node-04', cpuTotal: 12, memoryTotalMb: 24 * 1024, storageTotalMb: 60000 },
+  { id: 5, name: 'Node-05', cpuTotal: 16, memoryTotalMb: 32 * 1024, storageTotalMb: 80000 },
+  { id: 6, name: 'Node-06', cpuTotal: 16, memoryTotalMb: 32 * 1024, storageTotalMb: 80000 }
+];
 
-// Cluster state
-const cluster = {
-  nodes: [],
-  jobQueue: [],
-  jobCounter: 1
-};
+const sim = createSimulation({ nodes });
+const completionTimers = new Map();
 
-// Initialize nodes
-function initializeCluster() {
-  cluster.nodes = [
-    { id: 1, name: 'Node-01', cpuTotal: 8, cpuUsed: 0, memoryTotal: 16, memoryUsed: 0, containers: [] },
-    { id: 2, name: 'Node-02', cpuTotal: 8, cpuUsed: 0, memoryTotal: 16, memoryUsed: 0, containers: [] },
-    { id: 3, name: 'Node-03', cpuTotal: 12, cpuUsed: 0, memoryTotal: 24, memoryUsed: 0, containers: [] },
-    { id: 4, name: 'Node-04', cpuTotal: 12, cpuUsed: 0, memoryTotal: 24, memoryUsed: 0, containers: [] },
-    { id: 5, name: 'Node-05', cpuTotal: 16, cpuUsed: 0, memoryTotal: 32, memoryUsed: 0, containers: [] },
-    { id: 6, name: 'Node-06', cpuTotal: 16, cpuUsed: 0, memoryTotal: 32, memoryUsed: 0, containers: [] }
-  ];
-  renderCluster();
+function notify(message, type) {
+  const notification = document.createElement('div');
+  notification.className = `notification ${type}`;
+  notification.textContent = message;
+  notification.setAttribute('role', 'status');
+  notification.setAttribute('aria-live', 'polite');
+  document.body.appendChild(notification);
+
+  setTimeout(() => {
+    notification.style.opacity = '0';
+    setTimeout(() => notification.remove(), 300);
+  }, 3000);
 }
 
-// Render the cluster
+function scheduleCompletion(container) {
+  if (completionTimers.has(container.name)) {
+    return;
+  }
+  const duration = randomInt(5000, 9000);
+  const timeoutId = setTimeout(() => {
+    completionTimers.delete(container.name);
+    sim.yarn.releaseContainer(container.name);
+    notify(`✅ ${container.name} completed`, 'success');
+    renderCluster();
+  }, duration);
+  completionTimers.set(container.name, timeoutId);
+}
+
+sim.on('yarn:allocated', ({ container }) => {
+  scheduleCompletion(container);
+  renderCluster();
+});
+
+sim.on('yarn:queued', () => {
+  renderCluster();
+});
+
 function renderCluster() {
   const grid = document.getElementById('nodesGrid');
   grid.innerHTML = '';
 
-  cluster.nodes.forEach((node) => {
+  sim.state.nodes.forEach((node) => {
     const cpuPercent = ((node.cpuUsed / node.cpuTotal) * 100).toFixed(0);
-    const memPercent = ((node.memoryUsed / node.memoryTotal) * 100).toFixed(0);
+    const memPercent = ((node.memoryUsedMb / node.memoryTotalMb) * 100).toFixed(0);
 
     let status = 'idle';
     let statusClass = 'active';
@@ -71,7 +90,7 @@ function renderCluster() {
         <div class="resource-bar">
           <div class="resource-label">
             <span>💾 Memory (GB)</span>
-            <span>${node.memoryUsed} / ${node.memoryTotal}</span>
+            <span>${(node.memoryUsedMb / 1024).toFixed(0)} / ${(node.memoryTotalMb / 1024).toFixed(0)}</span>
           </div>
           <div class="progress-bar">
             <div class="progress-fill memory-fill" style="width: ${memPercent}%">
@@ -84,10 +103,7 @@ function renderCluster() {
         <div class="containers-title">📦 Running Containers: ${node.containers.length}</div>
         <div class="container-list">
           ${node.containers
-            .map((container) => {
-              const label = typeof container === 'string' ? container : container.name;
-              return `<div class="container-item">${label}</div>`;
-            })
+            .map((container) => `<div class="container-item">${container.name}</div>`)
             .join('')}
         </div>
       </div>
@@ -99,30 +115,25 @@ function renderCluster() {
   updateQueue();
 }
 
-// Update statistics
 function updateStats() {
-  const stats = computeYarnStats(cluster.nodes);
-
-  document.getElementById('totalNodes').textContent = cluster.nodes.length;
-  document.getElementById('activeApps').textContent = stats.activeApps;
-  document.getElementById('queuedJobs').textContent = cluster.jobQueue.length;
+  const stats = sim.yarn.stats();
+  document.getElementById('totalNodes').textContent = sim.state.nodes.length;
+  document.getElementById('activeApps').textContent = stats.activeContainers;
+  document.getElementById('queuedJobs').textContent = stats.queuedRequests;
   document.getElementById('cpuUsage').textContent = `${stats.cpuUsagePercent.toFixed(1)}%`;
   document.getElementById('memoryUsage').textContent = `${stats.memoryUsagePercent.toFixed(1)}%`;
 }
 
-// Update queue display
 function updateQueue() {
   const queueEl = document.getElementById('jobQueue');
   const queueItems = document.getElementById('queueItems');
 
-  if (cluster.jobQueue.length > 0) {
+  if (sim.state.yarnQueue.length > 0) {
     queueEl.style.display = 'block';
-    queueItems.innerHTML = cluster.jobQueue
+    queueItems.innerHTML = sim.state.yarnQueue
       .map((job) => {
-        if (job.jobId) {
-          return `<div class="queue-item">Job-${job.jobId}[${job.containerNum}/${job.totalContainers}] (${job.cpu}C, ${job.memory}GB)</div>`;
-        }
-        return `<div class="queue-item">Job-${job.id} (${job.cpu}C, ${job.memory}GB)</div>`;
+        const label = job.name || 'Job';
+        return `<div class="queue-item">${label} (${job.cpu}C, ${(job.memoryMb / 1024).toFixed(0)}GB)</div>`;
       })
       .join('');
   } else {
@@ -130,155 +141,67 @@ function updateQueue() {
   }
 }
 
-// Submit a job
 function submitJob() {
   const cpu = randomInt(1, 4);
-  const memory = randomInt(2, 9);
-  const job = { id: cluster.jobCounter++, cpu, memory };
+  const memoryMb = randomInt(2, 9) * 1024;
+  const jobId = sim.state.counters.job++;
+  const name = `Job-${jobId}`;
 
-  if (allocateJob(job)) {
-    notifier.success(`✅ Job-${job.id} allocated successfully!`);
+  const result = sim.actions.submitYarnJob({ name, cpu, memoryMb, jobId });
+  if (result.allocated) {
+    notify(`✅ ${name} allocated successfully!`, 'success');
+  } else if (result.queued) {
+    notify(`⏳ ${name} queued (waiting for resources)`, 'info');
   } else {
-    cluster.jobQueue.push(job);
-    notifier.info(`⏳ Job-${job.id} queued (waiting for resources)`);
+    notify(`❌ ${name} rejected (queue full)`, 'error');
   }
 
   renderCluster();
 }
 
-// Submit a big job (distributed across multiple nodes)
 function submitBigJob() {
-  const jobId = cluster.jobCounter++;
+  const jobId = sim.state.counters.job++;
   const numContainers = randomInt(3, 5);
+  const requests = [];
 
-  const containers = [];
   for (let i = 0; i < numContainers; i += 1) {
     const cpu = randomInt(2, 4);
-    const memory = randomInt(4, 9);
-    containers.push({
-      id: `${jobId}-${i + 1}`,
+    const memoryMb = randomInt(4, 9) * 1024;
+    requests.push({
+      name: `Job-${jobId}[${i + 1}/${numContainers}]`,
       cpu,
-      memory,
-      jobId,
-      containerNum: i + 1,
-      totalContainers: numContainers
+      memoryMb,
+      jobId
     });
   }
 
-  let allocatedContainers = 0;
-  const queuedContainers = [];
+  const results = sim.actions.submitDistributedJob(requests);
+  const allocated = results.filter((entry) => entry.allocated).length;
+  const queued = results.filter((entry) => entry.queued).length;
 
-  containers.forEach((container) => {
-    if (allocateBigJobContainer(container)) {
-      allocatedContainers += 1;
-    } else {
-      queuedContainers.push(container);
-    }
-  });
-
-  if (allocatedContainers === containers.length) {
-    notifier.success(`✅ Big Job-${jobId} distributed across ${allocatedContainers} nodes!`);
-  } else if (allocatedContainers > 0) {
-    queuedContainers.forEach((container) => cluster.jobQueue.push(container));
-    notifier.info(
-      `⚠️ Big Job-${jobId}: ${allocatedContainers}/${containers.length} containers running, ${queuedContainers.length} queued`
-    );
+  if (allocated === numContainers) {
+    notify(`✅ Big Job-${jobId} distributed across ${allocated} nodes!`, 'success');
+  } else if (allocated > 0) {
+    notify(`⚠️ Big Job-${jobId}: ${allocated}/${numContainers} running, ${queued} queued`, 'info');
   } else {
-    queuedContainers.forEach((container) => cluster.jobQueue.push(container));
-    notifier.info(`⏳ Big Job-${jobId} fully queued (${containers.length} containers waiting)`);
+    notify(`⏳ Big Job-${jobId} fully queued (${numContainers} containers)`, 'info');
   }
 
   renderCluster();
 }
 
-function allocateJob(job) {
-  const container = {
-    name: `Job-${job.id}`,
-    cpu: job.cpu,
-    memory: job.memory,
-    jobId: job.id
-  };
-
-  const node = allocateContainer({ nodes: cluster.nodes, container });
-  if (node) {
-    timers.timeout(() => completeJob(node.id, job), Math.random() * 5000 + 5000);
-    return true;
-  }
-  return false;
-}
-
-function allocateBigJobContainer(container) {
-  const containerRecord = {
-    name: `Job-${container.jobId}[${container.containerNum}/${container.totalContainers}]`,
-    cpu: container.cpu,
-    memory: container.memory,
-    jobId: container.jobId
-  };
-
-  const node = allocateContainer({ nodes: cluster.nodes, container: containerRecord });
-  if (node) {
-    timers.timeout(() => completeBigJobContainer(node.id, container), Math.random() * 7000 + 8000);
-    return true;
-  }
-  return false;
-}
-
-function completeJob(nodeId, job) {
-  releaseContainerByName(cluster.nodes, `Job-${job.id}`);
-  const node = cluster.nodes.find((entry) => entry.id === nodeId);
-  if (node) {
-    notifier.success(`✅ Job-${job.id} completed on ${node.name}!`);
-  }
-
-  drainQueue();
-  renderCluster();
-}
-
-function completeBigJobContainer(nodeId, container) {
-  releaseContainerByName(
-    cluster.nodes,
-    `Job-${container.jobId}[${container.containerNum}/${container.totalContainers}]`
-  );
-
-  const node = cluster.nodes.find((entry) => entry.id === nodeId);
-  if (node) {
-    notifier.success(
-      `✅ Job-${container.jobId}[${container.containerNum}/${container.totalContainers}] completed on ${node.name}!`
-    );
-  }
-
-  drainQueue();
-  renderCluster();
-}
-
-function drainQueue() {
-  if (cluster.jobQueue.length === 0) {
-    return;
-  }
-
-  const queuedJob = cluster.jobQueue[0];
-  if (queuedJob.jobId) {
-    if (allocateBigJobContainer(queuedJob)) {
-      cluster.jobQueue.shift();
-      notifier.info(`🚀 Queued container Job-${queuedJob.jobId}[${queuedJob.containerNum}] now running!`);
-    }
-  } else if (allocateJob(queuedJob)) {
-    cluster.jobQueue.shift();
-    notifier.info(`🚀 Queued Job-${queuedJob.id} now running!`);
-  }
-}
-
-// Reset cluster
 function resetCluster() {
-  timers.clearAll();
-  cluster.jobQueue = [];
-  initializeCluster();
-  notifier.info('🔄 Cluster reset!');
+  completionTimers.forEach((timeoutId) => clearTimeout(timeoutId));
+  completionTimers.clear();
+  sim.actions.reset();
+  notify('🔄 Cluster reset!', 'info');
+  renderCluster();
 }
 
-initializeCluster();
+renderCluster();
 
-window.cluster = cluster;
+window.simulation = sim;
+window.cluster = sim.state;
 window.submitJob = submitJob;
 window.submitBigJob = submitBigJob;
 window.resetCluster = resetCluster;

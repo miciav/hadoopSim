@@ -1,869 +1,609 @@
-import { createTimerManager } from './core/timers.js';
-import { createNotifier } from './core/notifications.js';
-import { createColorCycle } from './core/random.js';
-import {
-  allocateBlock as coreAllocateBlock,
-  rollbackFileAllocation as coreRollbackFileAllocation,
-  reReplicateBlocksDetailed
-} from './core/hdfs.js';
-import { allocateContainer as coreAllocateContainer, releaseContainerByName } from './core/yarn.js';
-import { runMapReduceJob, handleMapReduceNodeFailure } from './core/mapreduce.js';
+import { createSimulation } from './hadoop-sim/simulation.js';
+import { randomInt } from './hadoop-sim/random.js';
 
-// Configuration
-        const BLOCK_SIZE = 256; // MB
-        const REPLICATION_FACTOR = 2;
-        const NUM_NODES = 6;
-        
-        // Colors for blocks
-        const COLORS = ['#3182ce', '#38a169', '#d69e2e', '#e53e3e', '#805ad5', '#dd6b20'];
-        let nextColor = createColorCycle(COLORS);
-        
-        // Cluster state
-        let cluster = {
-            nodes: [],
-            files: [],
-            yarnJobs: [],
-            mapReduceJobs: [],
-            fileCounter: 1,
-            jobCounter: 1,
-            mapReduceCounter: 1,
-            blockCounter: 1,
-            jobQueue: []
-        };
+const COLORS = ['#3182ce', '#38a169', '#d69e2e', '#e53e3e', '#805ad5', '#dd6b20'];
+let colorIndex = 0;
+const fileColors = new Map();
 
-        const timers = createTimerManager();
-        const notifier = createNotifier({ root: document.body, ttlMs: 4000 });
+const sim = createSimulation({
+  nodeCount: 6,
+  replicationFactor: 2,
+  blockSizeMb: 256,
+  nodeTemplate: {
+    cpuTotal: 16,
+    memoryTotalMb: 32 * 1024,
+    storageTotalMb: 10 * 1024,
+    namePrefix: 'Node-'
+  }
+});
 
-        function scheduleClusterTimeout(callback, delay) {
-            return timers.timeout(callback, delay);
-        }
+const yarnCompletionTimers = new Map();
+const yarnJobsByContainer = new Map();
 
-        function scheduleClusterInterval(callback, delay) {
-            return timers.interval(callback, delay);
-        }
+function nextColor() {
+  const color = COLORS[colorIndex % COLORS.length];
+  colorIndex += 1;
+  return color;
+}
 
-        function clearClusterInterval(intervalId) {
-            timers.clearInterval(intervalId);
-        }
+function ensureFileColor(fileName) {
+  if (!fileColors.has(fileName)) {
+    fileColors.set(fileName, nextColor());
+  }
+}
 
-        function clearClusterTimers() {
-            timers.clearAll();
-        }
-        
-        // Initialize cluster
-        function initializeCluster() {
-            cluster.nodes = [];
-            cluster.files = [];
-            cluster.yarnJobs = [];
-            cluster.mapReduceJobs = [];
-            cluster.jobQueue = [];
-            
-            for (let i = 1; i <= NUM_NODES; i++) {
-                cluster.nodes.push({
-                    id: i,
-                    name: `Node-${i}`,
-                    storageTotal: 10, // GB
-                    storageUsed: 0,
-                    cpuTotal: 16, // cores
-                    cpuUsed: 0,
-                    memoryTotal: 32, // GB
-                    memoryUsed: 0,
-                    blocks: [],
-                    containers: [],
-                    failed: false
-                });
-            }
-            
-            renderCluster();
-        }
-        
-        // Get next color
-        function getNextColor() {
-            return nextColor();
-        }
-        
-        // Render entire cluster
-        function renderCluster() {
-            renderUnifiedNodes();
-            renderFilesList();
-            updateStats();
-            checkDataLocality();
-            renderMapReduceJobs();
-        }
-        
-        // Render unified nodes (HDFS + YARN together)
-        function renderUnifiedNodes() {
-            const container = document.getElementById('hdfsNodes');
-            
-            const nodesHTML = cluster.nodes.map(node => {
-                const storagePercent = (node.storageUsed / node.storageTotal) * 100;
-                const cpuPercent = (node.cpuUsed / node.cpuTotal) * 100;
-                const memPercent = (node.memoryUsed / node.memoryTotal) * 100;
-                const status = node.failed ? 'failed' : (storagePercent > 80 || cpuPercent > 70 ? 'busy' : 'active');
-                
-                // Check if this node has data locality
-                const hasDataLocality = checkNodeDataLocality(node);
-                
+function notify(message, type) {
+  const notification = document.createElement('div');
+  notification.className = `notification ${type}`;
+  notification.textContent = message;
+  notification.setAttribute('role', 'status');
+  notification.setAttribute('aria-live', 'polite');
+  document.body.appendChild(notification);
+
+  setTimeout(() => {
+    notification.style.opacity = '0';
+    setTimeout(() => notification.remove(), 300);
+  }, 4000);
+}
+
+function scheduleYarnCompletion(containerName, jobRecord = null) {
+  if (yarnCompletionTimers.has(containerName)) {
+    return;
+  }
+  const duration = randomInt(8000, 13000);
+  const timerId = setTimeout(() => {
+    yarnCompletionTimers.delete(containerName);
+    sim.yarn.releaseContainer(containerName);
+
+    if (jobRecord) {
+      jobRecord.completedContainers += 1;
+      if (jobRecord.completedContainers === jobRecord.numContainers) {
+        notify(`✅ ${jobRecord.name} completed!`, 'success');
+      }
+    }
+
+    renderCluster();
+  }, duration);
+
+  yarnCompletionTimers.set(containerName, timerId);
+}
+
+sim.on('mapreduce:started', renderCluster);
+sim.on('mapreduce:progress', renderCluster);
+sim.on('mapreduce:completed', renderCluster);
+sim.on('hdfs:uploadComplete', renderCluster);
+sim.on('hdfs:reReplicated', renderCluster);
+
+// Render entire cluster
+function renderCluster() {
+  renderUnifiedNodes();
+  renderFilesList();
+  updateStats();
+  checkDataLocality();
+  renderMapReduceJobs();
+}
+
+function renderUnifiedNodes() {
+  const container = document.getElementById('hdfsNodes');
+
+  const nodesHTML = sim.state.nodes
+    .map((node) => {
+      const storagePercent = (node.storageUsedMb / node.storageTotalMb) * 100;
+      const cpuPercent = (node.cpuUsed / node.cpuTotal) * 100;
+      const memPercent = (node.memoryUsedMb / node.memoryTotalMb) * 100;
+      const status = node.failed
+        ? 'failed'
+        : storagePercent > 80 || cpuPercent > 70
+          ? 'busy'
+          : 'active';
+
+      const hasDataLocality = checkNodeDataLocality(node);
+
+      const blocksHTML =
+        node.blocks.length > 0
+          ? node.blocks
+              .map((block) => {
+                const color = fileColors.get(block.fileName) || '#a0aec0';
                 return `
-                    <div class="node ${status} ${hasDataLocality ? 'data-locality' : ''}">
-                        <div class="node-header">
-                            <div class="node-name">🖥️ ${node.name}</div>
-                            <div class="node-status status-${status}">
-                                ${node.failed ? 'Failed' : (storagePercent > 80 || cpuPercent > 70 ? 'Busy' : 'Active')}
-                            </div>
-                        </div>
-                        
-                        <div class="node-resources">
-                            <div class="resource-bar">
-                                <div class="resource-label">
-                                    <span>💾 Storage</span>
-                                    <span>${node.storageUsed.toFixed(0)}/${node.storageTotal} GB</span>
-                                </div>
-                                <div class="progress-bar">
-                                    <div class="progress-fill ${storagePercent > 80 ? 'danger' : ''}" 
-                                         style="width: ${storagePercent}%"></div>
-                                </div>
-                            </div>
-                            
-                            <div class="resource-bar">
-                                <div class="resource-label">
-                                    <span>⚙️ CPU</span>
-                                    <span>${node.cpuUsed.toFixed(1)}/${node.cpuTotal} cores</span>
-                                </div>
-                                <div class="progress-bar">
-                                    <div class="progress-fill yarn ${cpuPercent > 70 ? 'warning' : ''}" 
-                                         style="width: ${cpuPercent}%"></div>
-                                </div>
-                            </div>
-                            
-                            <div class="resource-bar">
-                                <div class="resource-label">
-                                    <span>🧠 Memory</span>
-                                    <span>${node.memoryUsed.toFixed(1)}/${node.memoryTotal} GB</span>
-                                </div>
-                                <div class="progress-bar">
-                                    <div class="progress-fill yarn ${memPercent > 70 ? 'warning' : ''}" 
-                                         style="width: ${memPercent}%"></div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="blocks-section">
-                            <div class="section-title">
-                                📦 HDFS Blocks (${node.blocks.length})
-                            </div>
-                            <div class="blocks-container">
-                                ${node.blocks.length > 0 ? node.blocks.map(block => `
-                                    <div class="block-chip" style="background-color: ${block.color};">
-                                        ${block.id}${block.isReplica ? '★' : ''}
-                                    </div>
-                                `).join('') : '<span style="font-size: 0.8em; color: #a0aec0;">No blocks</span>'}
-                            </div>
-                        </div>
-                        
-                        <div class="containers-section">
-                            <div class="section-title">
-                                🔷 YARN Containers (${node.containers.length})
-                            </div>
-                            ${node.containers.length > 0 ? node.containers.map(container => {
-                                // Check if this is an ApplicationMaster
-                                const isAM = container.isApplicationMaster;
-                                
-                                // Find mapper progress if this is a MapReduce container
-                                let mapperProgress = null;
-                                let mapperFailed = false;
-                                if (container.isMapReduce && !isAM) {
-                                    for (let job of cluster.mapReduceJobs) {
-                                        if (job.status === 'running' || job.status === 'completed') {
-                                            const mapper = job.mappers.find(m => m.name === container.name);
-                                            if (mapper) {
-                                                if (mapper.progress === -1) {
-                                                    mapperFailed = true;
-                                                } else {
-                                                    mapperProgress = mapper.progress;
-                                                }
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                                
-                                return `
-                                    <div class="container-chip ${container.isMapReduce ? 'mapreduce' : ''} ${isAM ? 'appmaster' : ''} ${mapperFailed ? 'failed' : ''}" style="position: relative; overflow: hidden;">
-                                        ${mapperProgress !== null && !mapperFailed ? `
-                                            <div style="position: absolute; bottom: 0; left: 0; height: 3px; width: ${mapperProgress}%; background: #22543d; transition: width 0.3s;"></div>
-                                        ` : ''}
-                                        ${isAM ? '👑 ' : ''}${container.name}
-                                        ${mapperFailed ? ' ❌' : ''}
-                                        ${mapperProgress !== null && !mapperFailed ? ` (${Math.round(mapperProgress)}%)` : ''}
-                                    </div>
-                                `;
-                            }).join('') : '<span style="font-size: 0.8em; color: #a0aec0;">No containers</span>'}
-                        </div>
-                    </div>
+                  <div class="block-chip" style="background-color: ${color};">
+                    ${block.id}${block.isReplica ? '★' : ''}
+                  </div>
                 `;
-            }).join('');
-            
-            container.innerHTML = nodesHTML;
-        }
-        
-        // Check if a node has data locality
-        function checkNodeDataLocality(node) {
-            if (node.containers.length === 0 || node.blocks.length === 0) return false;
-            
-            // Check if any container is processing blocks on this node
-            for (let container of node.containers) {
-                if (container.isMapReduce && container.blockIds) {
-                    // Check if any of the blocks this container processes are on this node
-                    for (let blockId of container.blockIds) {
-                        if (node.blocks.some(b => b.id === blockId)) {
-                            return true;
-                        }
+              })
+              .join('')
+          : '<span style="font-size: 0.8em; color: #a0aec0;">No blocks</span>';
+
+      const containersHTML =
+        node.containers.length > 0
+          ? node.containers
+              .map((container) => {
+                const isAM = container.isApplicationMaster;
+                let mapperProgress = null;
+                let mapperFailed = false;
+
+                if (container.isMapReduce && !isAM) {
+                  for (const job of sim.state.mapReduceJobs) {
+                    const mapper = job.mappers.find((entry) => entry.name === container.name);
+                    if (mapper) {
+                      if (mapper.progress === -1) {
+                        mapperFailed = true;
+                      } else {
+                        mapperProgress = mapper.progress;
+                      }
+                      break;
                     }
+                  }
                 }
-            }
-            return false;
-        }
-        
-        // Check data locality across cluster
-        
-        
-        function checkDataLocality() {
-            let localityCount = 0;
-            let totalContainers = 0;
-            
-            cluster.nodes.forEach(node => {
-                node.containers.forEach(container => {
-                    if (container.isMapReduce) {
-                        totalContainers++;
-                        if (container.blockIds) {
-                            for (let blockId of container.blockIds) {
-                                if (node.blocks.some(b => b.id === blockId)) {
-                                    localityCount++;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                });
-            });
-            
-            const summaryEl = document.getElementById('dataLocalitySummary');
-            if (!summaryEl) return;
-            
-            if (totalContainers === 0) {
-                summaryEl.textContent = '-';
-                return;
-            }
-            
-            const percentage = ((localityCount / totalContainers) * 100).toFixed(0);
-            summaryEl.textContent = `${localityCount}/${totalContainers} (${percentage}%)`;
-        }
-        
 
-        // Try to schedule queued jobs when resources free up
-        
-        // Try to schedule queued jobs from a single unified queue
-        
-        // Try to schedule queued jobs from a single unified queue
-        function trySchedulePendingJobs() {
-            if (!cluster.jobQueue || cluster.jobQueue.length === 0) {
-                updateStats();
-                return;
-            }
-            
-            let progressed = true;
-            while (progressed) {
-                progressed = false;
-                
-                for (let i = 0; i < cluster.jobQueue.length; i++) {
-                    const entry = cluster.jobQueue[i];
-                    let started = false;
-                    
-                    if (entry.type === 'simple-yarn') {
-                        const cpu = Math.floor(Math.random() * 4) + 2;
-                        const memory = Math.floor(Math.random() * 8) + 4;
-                        const jobId = cluster.jobCounter++;
-                        
-                        if (allocateYarnContainer(`Job-${jobId}`, cpu, memory, false, null)) {
-                            showNotification(`✅ Queued YARN job started (${cpu} CPU, ${memory} GB RAM)`, 'success');
-                            started = true;
-                        }
-                    } else if (entry.type === 'big-yarn') {
-                        const jobId = cluster.jobCounter++;
-                        const numContainers = Math.floor(Math.random() * 2) + 3;
-                        
-                        const yarnJob = {
-                            id: jobId,
-                            name: `BigJob-${jobId}`,
-                            numContainers: numContainers,
-                            completedContainers: 0,
-                            containers: [],
-                            appMasterNode: null
-                        };
-                        
-                        cluster.yarnJobs.push(yarnJob);
-                        
-                        const amAllocated = allocateApplicationMaster(`BigJob-${jobId}`, yarnJob);
-                        if (!amAllocated) {
-                            cluster.yarnJobs.pop();
-                            cluster.jobCounter--; // rollback id
-                        } else {
-                            let allocated = 0;
-                            for (let j = 0; j < numContainers; j++) {
-                                const cpu = Math.floor(Math.random() * 3) + 2;
-                                const memory = Math.floor(Math.random() * 6) + 4;
-                                const containerName = `Job-${jobId}[${j+1}/${numContainers}]`;
-                                
-                                if (allocateYarnContainer(containerName, cpu, memory, false, null)) {
-                                    allocated++;
-                                    yarnJob.containers.push({
-                                        name: containerName,
-                                        cpu: cpu,
-                                        memory: memory,
-                                        completed: false
-                                    });
-                                    
-                                    scheduleClusterTimeout(() => completeYarnJobContainer(jobId, containerName, cpu, memory), Math.random() * 5000 + 8000);
-                                }
-                            }
-                            
-                            if (allocated === 0) {
-                                // Could not place any container: rollback
-                                cluster.yarnJobs.pop();
-                                cluster.jobCounter--;
-                            } else {
-                                showNotification(`✅ Queued Big YARN Job-${jobId} started (${allocated} containers)`, 'success');
-                                started = true;
-                            }
-                        }
-                    } else if (entry.type === 'mapreduce') {
-                        const prevJobs = cluster.mapReduceJobs.length;
-                        const prevCounter = cluster.mapReduceCounter;
-                        runMapReduce();
-                        if (cluster.mapReduceJobs.length > prevJobs) {
-                            showNotification('✅ Queued MapReduce job started', 'success');
-                            started = true;
-                        } else {
-                            // If runMapReduce couldn't start, restore counter to avoid skipping ids
-                            cluster.mapReduceCounter = prevCounter;
-                        }
-                    }
-                    
-                    if (started) {
-                        cluster.jobQueue.splice(i, 1);
-                        progressed = true;
-                        break; // restart scanning from the beginning
-                    }
-                }
-            }
-            
-            updateStats();
-        }
-
-
-        // Render files list
-        function renderFilesList() {
-            const container = document.getElementById('filesList');
-            
-            if (cluster.files.length === 0) {
-                container.innerHTML = '<p style="color: #718096; font-style: italic;">No files uploaded yet. Upload a file to start!</p>';
-                document.getElementById('mapReduceBtn').disabled = true;
-                return;
-            }
-            
-            document.getElementById('mapReduceBtn').disabled = false;
-            
-            container.innerHTML = cluster.files.map(file => `
-                <div class="file-item">
-                    <div class="file-name">📄 ${file.name} - ${file.size} MB</div>
-                    <div class="file-blocks-visual">
-                        ${file.blocks.map(block => `
-                            <div class="block-chip" style="background-color: ${block.color};">
-                                ${block.id}
-                            </div>
-                        `).join('')}
-                    </div>
-                    <div style="margin-top: 8px; font-size: 0.85em; color: #718096;">
-                        ${file.blocks.length} blocks × ${REPLICATION_FACTOR} replicas = ${file.blocks.length * REPLICATION_FACTOR} total blocks
-                    </div>
-                </div>
-            `).join('');
-        }
-        
-        // Render MapReduce jobs
-        function renderMapReduceJobs() {
-            const section = document.getElementById('mapReduceSection');
-            const container = document.getElementById('mapReduceJobs');
-            
-            const hasActiveJobs = cluster.mapReduceJobs.length > 0 || cluster.yarnJobs.length > 0;
-            
-            if (!hasActiveJobs) {
-                section.style.display = 'none';
-                return;
-            }
-            
-            section.style.display = 'block';
-            
-            let html = '';
-            
-            // Render MapReduce jobs
-            html += cluster.mapReduceJobs.map(job => {
-                // Compute locality: for each mapper, check if its node actually holds the block
-                let localityCount = 0;
-                job.mappers.forEach(m => {
-                    const node = cluster.nodes.find(n => n.id === m.nodeId);
-                    if (node && node.blocks.some(b => b.id === m.blockId)) {
-                        localityCount++;
-                    }
-                });
-                const localityPercent = job.numMappers > 0 ? Math.round((localityCount / job.numMappers) * 100) : 0;
-                const statusLabel = job.status === 'failed' ? 'Failed' : (job.status === 'running' ? 'Running' : 'Completed');
-                
                 return `
-                    <div class="mapreduce-job">
-                        <div class="job-header">
-                            <div class="job-name">🔄 ${job.name}</div>
-                            <div class="job-status status-${job.status}">
-                                ${statusLabel}
-                            </div>
-                        </div>
-                        <div style="font-size: 0.85em; color: #4a5568; margin-top: 4px;">
-                            File: ${job.fileName}
-                        </div>
-                        <div style="font-size: 0.85em; color: #4a5568;">
-                            ${job.numMappers} mappers in parallel (${localityPercent}% data locality)
-                        </div>
-                        <div class="job-progress">
-                            <div class="progress-bar">
-                                <div class="progress-fill" style="width: ${job.progress}%; background: #f6ad55;"></div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-            
-            // Render YARN jobs
-            html += cluster.yarnJobs.map(job => {
-                const progress = (job.completedContainers / job.numContainers) * 100;
-                const status = job.completedContainers === job.numContainers ? 'completed' : 'running';
-                
-                return `
-                    <div class="mapreduce-job">
-                        <div class="job-header">
-                            <div class="job-name">🎯 ${job.name}</div>
-                            <div class="job-status status-${status}">
-                                ${status === 'running' ? 'Running' : 'Completed'}
-                            </div>
-                        </div>
-                        <div style="font-size: 0.85em; color: #4a5568; margin-top: 4px;">
-                            Distributed YARN Job
-                        </div>
-                        <div style="font-size: 0.85em; color: #4a5568;">
-                            ${job.completedContainers}/${job.numContainers} containers completed
-                        </div>
-                        <div class="job-progress">
-                            <div class="progress-bar">
-                                <div class="progress-fill yarn" style="width: ${progress}%;"></div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-            
-            container.innerHTML = html;
-        }
-        
-        // Update statistics
-        function updateStats() {
-            const activeNodes = cluster.nodes.filter(n => !n.failed).length;
-            const totalBlocks = cluster.nodes.reduce((sum, n) => sum + n.blocks.length, 0);
-            const activeJobs = cluster.nodes.reduce((sum, n) => sum + n.containers.filter(c => !c.isMapReduce).length, 0);
-            const mapReduceJobs = cluster.mapReduceJobs.filter(j => j.status === 'running').length;
-            
-            document.getElementById('totalNodes').textContent = cluster.nodes.length;
-            document.getElementById('activeNodes').textContent = activeNodes;
-            document.getElementById('totalFiles').textContent = cluster.files.length;
-            document.getElementById('totalBlocks').textContent = totalBlocks;
-            document.getElementById('activeJobs').textContent = activeJobs;
-            document.getElementById('mapReduceJobsCount').textContent = mapReduceJobs;
-        
-            const queuedJobsEl = document.getElementById('queuedJobs');
-            if (queuedJobsEl && cluster.jobQueue) {
-                queuedJobsEl.textContent = cluster.jobQueue.length;
-            }
-        }
-        
-        // Upload file
-        function uploadFile() {
-            const size = Math.floor(Math.random() * 200) + 100; // 100-300 MB
-            const numBlocks = Math.ceil(size / BLOCK_SIZE);
-            
-            const fileName = `file${cluster.fileCounter++}.dat`;
-            const fileColor = getNextColor();
-            const file = {
-                name: fileName,
-                size: size,
-                color: fileColor,
-                blocks: []
-            };
-            
-            let success = true;
-            for (let i = 0; i < numBlocks; i++) {
-                const blockId = `B${cluster.blockCounter++}`;
-                const block = {
-                    id: blockId,
-                    fileName: fileName,
-                    blockNum: i + 1,
-                    size: Math.min(BLOCK_SIZE, size - (i * BLOCK_SIZE)),
-                    color: fileColor
-                };
-                
-                if (!allocateBlock(block, file)) {
-                    success = false;
-                    showNotification(`❌ Failed to upload ${fileName}: insufficient space!`, 'error');
-                    break;
-                }
-            }
-            
-            if (success) {
-                cluster.files.push(file);
-                showNotification(`✅ ${fileName} uploaded! ${numBlocks} blocks distributed with ${REPLICATION_FACTOR}x replication`, 'success');
-            } else {
-                rollbackFileAllocation(fileName);
-            }
-            
-            renderCluster();
-        }
-        
-        // Upload large file
-        function uploadLargeFile() {
-            const size = Math.floor(Math.random() * 400) + 400; // 400-800 MB
-            const numBlocks = Math.ceil(size / BLOCK_SIZE);
-            
-            const fileName = `largefile${cluster.fileCounter++}.dat`;
-            const fileColor = getNextColor();
-            const file = {
-                name: fileName,
-                size: size,
-                color: fileColor,
-                blocks: []
-            };
-            
-            let success = true;
-            for (let i = 0; i < numBlocks; i++) {
-                const blockId = `B${cluster.blockCounter++}`;
-                const block = {
-                    id: blockId,
-                    fileName: fileName,
-                    blockNum: i + 1,
-                    size: Math.min(BLOCK_SIZE, size - (i * BLOCK_SIZE)),
-                    color: fileColor
-                };
-                
-                if (!allocateBlock(block, file)) {
-                    success = false;
-                    showNotification(`❌ Failed to upload ${fileName}: insufficient space!`, 'error');
-                    break;
-                }
-            }
-            
-            if (success) {
-                cluster.files.push(file);
-                showNotification(`✅ ${fileName} uploaded! ${numBlocks} blocks, ${numBlocks * REPLICATION_FACTOR} total replicas`, 'success');
-            } else {
-                rollbackFileAllocation(fileName);
-            }
-            
-            renderCluster();
-        }
-        
-        // Allocate block with replication
-        function allocateBlock(block, file) {
-            return coreAllocateBlock({
-                nodes: cluster.nodes,
-                block,
-                file,
-                replicationFactor: REPLICATION_FACTOR,
-                storageUnitMb: 1024,
-                notifier
-            });
-        }
-
-        function rollbackFileAllocation(fileName) {
-            coreRollbackFileAllocation({ nodes: cluster.nodes, fileName, storageUnitMb: 1024 });
-        }
-
-        
-        // Submit YARN job
-        function submitYarnJob() {
-            const cpu = Math.floor(Math.random() * 4) + 2;
-            const memory = Math.floor(Math.random() * 8) + 4;
-            const jobId = cluster.jobCounter++;
-            
-            if (allocateYarnContainer(`Job-${jobId}`, cpu, memory, false, null)) {
-                showNotification(`✅ YARN Job-${jobId} allocated (${cpu} CPU, ${memory} GB RAM)`, 'success');
-            } else {
-                // enqueue simple YARN job request into unified queue
-                cluster.jobQueue.push({ type: 'simple-yarn' });
-                showNotification(`⏳ Job-${jobId} queued (insufficient resources)`, 'warning');
-            }
-            
-            renderCluster();
-        }
-        
-        // Submit big YARN job
-        function submitBigYarnJob() {
-            const jobId = cluster.jobCounter++;
-            const numContainers = Math.floor(Math.random() * 2) + 3; // 3-4 containers
-            
-            // Track the job
-            const yarnJob = {
-                id: jobId,
-                name: `BigJob-${jobId}`,
-                numContainers: numContainers,
-                completedContainers: 0,
-                containers: [],
-                appMasterNode: null
-            };
-            
-            cluster.yarnJobs.push(yarnJob);
-            
-            // First, allocate ApplicationMaster
-            const amAllocated = allocateApplicationMaster(`BigJob-${jobId}`, yarnJob);
-            
-            if (!amAllocated) {
-                cluster.yarnJobs.pop();
-                cluster.jobQueue.push({ type: 'big-yarn' });
-                showNotification(`⏳ BigJob-${jobId} queued: cannot allocate ApplicationMaster`, 'warning');
-                return;
-            }
-            
-            let allocated = 0;
-            for (let i = 0; i < numContainers; i++) {
-                const cpu = Math.floor(Math.random() * 3) + 2;
-                const memory = Math.floor(Math.random() * 6) + 4;
-                const containerName = `Job-${jobId}[${i+1}/${numContainers}]`;
-                
-                if (allocateYarnContainer(containerName, cpu, memory, false, null)) {
-                    allocated++;
-                    yarnJob.containers.push({
-                        name: containerName,
-                        cpu: cpu,
-                        memory: memory,
-                        completed: false
-                    });
-                    
-                    // Schedule completion
-                    scheduleClusterTimeout(() => completeYarnJobContainer(jobId, containerName, cpu, memory), Math.random() * 5000 + 8000);
-                }
-            }
-            
-            if (allocated === numContainers) {
-                showNotification(`✅ Big YARN Job-${jobId} distributed across ${allocated} nodes!`, 'success');
-            } else if (allocated > 0) {
-                showNotification(`⚠️ Big Job-${jobId}: only ${allocated}/${numContainers} containers allocated`, 'warning');
-            } else {
-                cluster.jobQueue.push({ type: 'big-yarn' });
-                showNotification(`⏳ Big Job-${jobId} queued: insufficient resources`, 'warning');
-            }
-            
-            renderCluster();
-        }
-        
-        // Complete a YARN job container
-        function completeYarnJobContainer(jobId, containerName, cpu, memory) {
-            const job = cluster.yarnJobs.find(j => j.id === jobId);
-            if (!job) return;
-            
-            const container = job.containers.find(c => c.name === containerName);
-            if (container) {
-                container.completed = true;
-                job.completedContainers++;
-                
-                // Free container resources
-                releaseContainerByName(cluster.nodes, containerName);
-                
-                // Check if job is complete
-                if (job.completedContainers === job.numContainers) {
-                    // Free ApplicationMaster
-                    releaseContainerByName(cluster.nodes, `AM-${job.name}`);
-                    
-                    showNotification(`✅ ${job.name} completed!`, 'success');
-                }
-                
-                renderCluster();
-            }
-        }
-        
-        // Allocate ApplicationMaster
-        function allocateApplicationMaster(jobName, job) {
-            const container = {
-                name: `AM-${jobName}`,
-                cpu: 1,
-                memory: 2,
-                isApplicationMaster: true,
-                jobName: jobName
-            };
-
-            const node = coreAllocateContainer({
-                nodes: cluster.nodes.filter(n => !n.failed),
-                container
-            });
-
-            if (node) {
-                job.appMasterNode = node.id;
-                return true;
-            }
-
-            return false;
-        }
-        
-        // Allocate YARN container
-        function allocateYarnContainer(name, cpu, memory, isMapReduce, blockIds) {
-            const container = {
-                name: name,
-                cpu: cpu,
-                memory: memory,
-                isMapReduce: isMapReduce,
-                blockIds: blockIds
-            };
-
-            const activeNodes = cluster.nodes.filter(n => !n.failed);
-
-            if (isMapReduce && blockIds && blockIds.length > 0) {
-                const preferredNodeIds = [];
-                blockIds.forEach(blockId => {
-                    activeNodes.forEach(node => {
-                        if (node.blocks.some(b => b.id === blockId) && !preferredNodeIds.includes(node.id)) {
-                            preferredNodeIds.push(node.id);
-                        }
-                    });
-                });
-
-                if (preferredNodeIds.length > 0) {
-                    const node = coreAllocateContainer({
-                        nodes: activeNodes,
-                        container,
-                        preferredNodeIds
-                    });
-
-                    if (node) {
-                        scheduleClusterTimeout(() => completeContainer(node.id, name, cpu, memory), Math.random() * 5000 + 8000);
-                        return true;
+                  <div class="container-chip ${container.isMapReduce ? 'mapreduce' : ''} ${
+                    isAM ? 'appmaster' : ''
+                  } ${mapperFailed ? 'failed' : ''}" style="position: relative; overflow: hidden;">
+                    ${
+                      mapperProgress !== null && !mapperFailed
+                        ? `
+                          <div style="position: absolute; bottom: 0; left: 0; height: 3px; width: ${
+                            mapperProgress
+                          }%; background: #22543d; transition: width 0.3s;"></div>
+                        `
+                        : ''
                     }
-                }
+                    ${isAM ? '👑 ' : ''}${container.name}
+                    ${mapperFailed ? ' ❌' : ''}
+                    ${
+                      mapperProgress !== null && !mapperFailed
+                        ? ` (${Math.round(mapperProgress)}%)`
+                        : ''
+                    }
+                  </div>
+                `;
+              })
+              .join('')
+          : '<span style="font-size: 0.8em; color: #a0aec0;">No containers</span>';
+
+      return `
+        <div class="node ${status} ${hasDataLocality ? 'data-locality' : ''}">
+          <div class="node-header">
+            <div class="node-name">🖥️ ${node.name}</div>
+            <div class="node-status status-${status}">
+              ${node.failed ? 'Failed' : storagePercent > 80 || cpuPercent > 70 ? 'Busy' : 'Active'}
+            </div>
+          </div>
+
+          <div class="node-resources">
+            <div class="resource-bar">
+              <div class="resource-label">
+                <span>💾 Storage</span>
+                <span>${(node.storageUsedMb / 1024).toFixed(1)}/${(node.storageTotalMb / 1024).toFixed(0)} GB</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill ${storagePercent > 80 ? 'danger' : ''}" style="width: ${storagePercent}%"></div>
+              </div>
+            </div>
+
+            <div class="resource-bar">
+              <div class="resource-label">
+                <span>⚙️ CPU</span>
+                <span>${node.cpuUsed.toFixed(1)}/${node.cpuTotal} cores</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill yarn ${cpuPercent > 70 ? 'warning' : ''}" style="width: ${cpuPercent}%"></div>
+              </div>
+            </div>
+
+            <div class="resource-bar">
+              <div class="resource-label">
+                <span>🧠 Memory</span>
+                <span>${(node.memoryUsedMb / 1024).toFixed(1)}/${(node.memoryTotalMb / 1024).toFixed(0)} GB</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill yarn ${memPercent > 70 ? 'warning' : ''}" style="width: ${memPercent}%"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="blocks-section">
+            <div class="section-title">📦 HDFS Blocks (${node.blocks.length})</div>
+            <div class="blocks-container">${blocksHTML}</div>
+          </div>
+
+          <div class="containers-section">
+            <div class="section-title">🔷 YARN Containers (${node.containers.length})</div>
+            ${containersHTML}
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+
+  container.innerHTML = nodesHTML;
+}
+
+function checkNodeDataLocality(node) {
+  if (node.containers.length === 0 || node.blocks.length === 0) return false;
+  for (const container of node.containers) {
+    if (container.isMapReduce && container.blockIds) {
+      for (const blockId of container.blockIds) {
+        if (node.blocks.some((block) => block.id === blockId)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+function checkDataLocality() {
+  let localityCount = 0;
+  let totalContainers = 0;
+
+  sim.state.nodes.forEach((node) => {
+    node.containers.forEach((container) => {
+      if (container.isMapReduce) {
+        totalContainers += 1;
+        if (container.blockIds) {
+          for (const blockId of container.blockIds) {
+            if (node.blocks.some((block) => block.id === blockId)) {
+              localityCount += 1;
+              break;
             }
-
-            const node = coreAllocateContainer({ nodes: activeNodes, container });
-            if (node) {
-                scheduleClusterTimeout(() => completeContainer(node.id, name, cpu, memory), Math.random() * 5000 + 8000);
-                return true;
-            }
-
-            return false;
+          }
         }
-        
-        // Complete a container
-        function completeContainer(nodeId, containerName, cpu, memory) {
-            releaseContainerByName(cluster.nodes, containerName);
-            renderCluster();
-        }
-        
-        // Run MapReduce job
-        function runMapReduce() {
-            const result = runMapReduceJob({
-                cluster,
-                notifier,
-                timers,
-                allocateApplicationMaster,
-                allocateContainerOnNodes: ({ nodes, container, preferredNodeIds }) => {
-                    return coreAllocateContainer({
-                        nodes: nodes.filter(node => !node.failed),
-                        container,
-                        preferredNodeIds
-                    });
-                },
-                onUpdate: renderCluster
-            });
+      }
+    });
+  });
 
-            if (result) {
-                renderCluster();
-            }
-        }
-        
-        // Simulate node failure
-        function simulateFailure() {
-            const activeNodes = cluster.nodes.filter(n => !n.failed);
-            if (activeNodes.length === 0) {
-                showNotification('❌ All nodes are already failed!', 'error');
-                return;
-            }
+  const summaryEl = document.getElementById('dataLocalitySummary');
+  if (!summaryEl) return;
 
-            // Pick a random active node to fail
-            const randomNode = activeNodes[Math.floor(Math.random() * activeNodes.length)];
-            randomNode.failed = true;
+  if (totalContainers === 0) {
+    summaryEl.textContent = '-';
+    return;
+  }
 
-            const affectedJobs = handleMapReduceNodeFailure({
-                cluster,
-                failedNode: randomNode,
-                notifier,
-                allocateApplicationMaster
-            });
+  const percentage = ((localityCount / totalContainers) * 100).toFixed(0);
+  summaryEl.textContent = `${localityCount}/${totalContainers} (${percentage}%)`;
+}
 
-            if (affectedJobs.length === 0) {
-                showNotification(`💥 ${randomNode.name} has failed! HDFS will re-replicate blocks...`, 'warning');
-            }
+function renderFilesList() {
+  const container = document.getElementById('filesList');
 
-            // Simulate re-replication after failure
-            scheduleClusterTimeout(() => {
-                reReplicateBlocks(randomNode);
-            }, 2000);
+  if (sim.state.files.length === 0) {
+    container.innerHTML =
+      '<p style="color: #718096; font-style: italic;">No files uploaded yet. Upload a file to start!</p>';
+    document.getElementById('mapReduceBtn').disabled = true;
+    return;
+  }
 
-            renderCluster();
-        }
+  document.getElementById('mapReduceBtn').disabled = false;
 
-        // Re-replicate blocks
-        function reReplicateBlocks(failedNode) {
-            reReplicateBlocksDetailed({
-                failedNode,
-                nodes: cluster.nodes,
-                replicationFactor: REPLICATION_FACTOR,
-                storageUnitMb: 1024,
-                notifier
-            });
+  container.innerHTML = sim.state.files
+    .map((file) => {
+      ensureFileColor(file.name);
+      const color = fileColors.get(file.name);
+      return `
+        <div class="file-item">
+          <div class="file-name">📄 ${file.name} - ${file.sizeMb} MB</div>
+          <div class="file-blocks-visual">
+            ${file.blocks
+              .map(
+                (block) => `
+                  <div class="block-chip" style="background-color: ${color};">
+                    ${block.id}
+                  </div>
+                `
+              )
+              .join('')}
+          </div>
+          <div style="margin-top: 8px; font-size: 0.85em; color: #718096;">
+            ${file.blocks.length} blocks × ${sim.state.config.replicationFactor} replicas = ${
+              file.blocks.length * sim.state.config.replicationFactor
+            } total blocks
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+}
 
-            renderCluster();
-        }
+function renderMapReduceJobs() {
+  const section = document.getElementById('mapReduceSection');
+  const container = document.getElementById('mapReduceJobs');
 
-        
-        // Reset cluster
-        function resetCluster() {
-            clearClusterTimers();
-            nextColor = createColorCycle(COLORS);
-            cluster.fileCounter = 1;
-            cluster.jobCounter = 1;
-            cluster.mapReduceCounter = 1;
-            cluster.blockCounter = 1;
-            initializeCluster();
-            showNotification('🔄 Cluster reset!', 'info');
-        }
-        
-        // Show notification
-        function showNotification(message, type) {
-            notifier.raw(message, type);
-        }
-        
-        // Initialize
-        initializeCluster();
+  const hasActiveJobs =
+    sim.state.mapReduceJobs.length > 0 || sim.state.yarnJobs.length > 0;
 
-        window.cluster = cluster;
-        window.REPLICATION_FACTOR = REPLICATION_FACTOR;
-        window.renderCluster = renderCluster;
-        window.uploadFile = uploadFile;
-        window.uploadLargeFile = uploadLargeFile;
-        window.submitYarnJob = submitYarnJob;
-        window.submitBigYarnJob = submitBigYarnJob;
-        window.runMapReduce = runMapReduce;
-        window.simulateFailure = simulateFailure;
-        window.resetCluster = resetCluster;
+  if (!hasActiveJobs) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+
+  let html = '';
+
+  html += sim.state.mapReduceJobs
+    .map((job) => {
+      const statusLabel =
+        job.status === 'failed'
+          ? 'Failed'
+          : job.status === 'running'
+            ? 'Running'
+            : job.status === 'queued'
+              ? 'Queued'
+              : 'Completed';
+      const localityPercent =
+        job.localityPercent ??
+        (job.mappers.length > 0
+          ? Math.round(
+              (job.mappers.filter((mapper) => {
+                const node = sim.state.nodes.find((n) => n.id === mapper.nodeId);
+                return node && node.blocks.some((b) => b.id === mapper.blockId);
+              }).length /
+                job.mappers.length) *
+                100
+            )
+          : 0);
+
+      return `
+        <div class="mapreduce-job">
+          <div class="job-header">
+            <div class="job-name">🔄 ${job.name}</div>
+            <div class="job-status status-${job.status}">
+              ${statusLabel}
+            </div>
+          </div>
+          <div style="font-size: 0.85em; color: #4a5568; margin-top: 4px;">
+            File: ${job.fileName}
+          </div>
+          <div style="font-size: 0.85em; color: #4a5568;">
+            ${job.mappers.length} mappers (${localityPercent}% data locality)
+          </div>
+          <div class="job-progress">
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: ${job.progress}%; background: #f6ad55;"></div>
+            </div>
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+
+  html += sim.state.yarnJobs
+    .map((job) => {
+      const progress = (job.completedContainers / job.numContainers) * 100;
+      const status = job.completedContainers === job.numContainers ? 'completed' : 'running';
+
+      return `
+        <div class="mapreduce-job">
+          <div class="job-header">
+            <div class="job-name">🎯 ${job.name}</div>
+            <div class="job-status status-${status}">
+              ${status === 'running' ? 'Running' : 'Completed'}
+            </div>
+          </div>
+          <div style="font-size: 0.85em; color: #4a5568; margin-top: 4px;">
+            Distributed YARN Job
+          </div>
+          <div style="font-size: 0.85em; color: #4a5568;">
+            ${job.completedContainers}/${job.numContainers} containers completed
+          </div>
+          <div class="job-progress">
+            <div class="progress-bar">
+              <div class="progress-fill yarn" style="width: ${progress}%;"></div>
+            </div>
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+
+  container.innerHTML = html;
+}
+
+function updateStats() {
+  const activeNodes = sim.state.nodes.filter((node) => !node.failed).length;
+  const totalBlocks = sim.state.nodes.reduce((sum, node) => sum + node.blocks.length, 0);
+  const activeJobs = sim.state.nodes.reduce(
+    (sum, node) => sum + node.containers.filter((c) => !c.isMapReduce).length,
+    0
+  );
+  const mapReduceJobs = sim.state.mapReduceJobs.filter((job) => job.status === 'running').length;
+
+  document.getElementById('totalNodes').textContent = sim.state.nodes.length;
+  document.getElementById('activeNodes').textContent = activeNodes;
+  document.getElementById('totalFiles').textContent = sim.state.files.length;
+  document.getElementById('totalBlocks').textContent = totalBlocks;
+  document.getElementById('activeJobs').textContent = activeJobs;
+  document.getElementById('mapReduceJobsCount').textContent = mapReduceJobs;
+
+  const queuedJobsEl = document.getElementById('queuedJobs');
+  if (queuedJobsEl) {
+    queuedJobsEl.textContent = sim.state.yarnQueue.length + sim.state.mapReduceQueue.length;
+  }
+}
+
+function uploadFile() {
+  const size = randomInt(100, 300);
+  const result = sim.actions.uploadFile(size);
+
+  if (!result.ok) {
+    notify(`❌ Failed to upload ${size} MB: insufficient space!`, 'error');
+    return;
+  }
+
+  ensureFileColor(result.file.name);
+
+  if (result.results.some((entry) => entry.underReplicated)) {
+    notify(`⚠️ ${result.file.name} uploaded with under-replicated blocks`, 'warning');
+  } else {
+    notify(`✅ ${result.file.name} uploaded!`, 'success');
+  }
+
+  renderCluster();
+}
+
+function uploadLargeFile() {
+  const size = randomInt(400, 800);
+  const result = sim.actions.uploadFile(size);
+
+  if (!result.ok) {
+    notify(`❌ Failed to upload ${size} MB: insufficient space!`, 'error');
+    return;
+  }
+
+  ensureFileColor(result.file.name);
+
+  if (result.results.some((entry) => entry.underReplicated)) {
+    notify(`⚠️ ${result.file.name} uploaded with under-replicated blocks`, 'warning');
+  } else {
+    notify(`✅ ${result.file.name} uploaded!`, 'success');
+  }
+
+  renderCluster();
+}
+
+function submitYarnJob() {
+  const cpu = randomInt(2, 5);
+  const memoryGb = randomInt(4, 12);
+  const jobId = sim.state.counters.job++;
+  const name = `Job-${jobId}`;
+
+  const result = sim.actions.submitYarnJob({
+    name,
+    cpu,
+    memoryMb: memoryGb * 1024,
+    jobId
+  });
+
+  if (result.allocated && result.container) {
+    notify(`✅ ${name} allocated (${cpu} CPU, ${memoryGb} GB RAM)`, 'success');
+    scheduleYarnCompletion(result.container.name, null);
+  } else if (result.queued) {
+    notify(`⏳ ${name} queued (insufficient resources)`, 'warning');
+  } else {
+    notify(`❌ ${name} rejected (queue full)`, 'error');
+  }
+
+  renderCluster();
+}
+
+function submitBigYarnJob() {
+  const jobId = sim.state.counters.job++;
+  const numContainers = randomInt(3, 4);
+  const jobRecord = {
+    id: jobId,
+    name: `BigJob-${jobId}`,
+    numContainers,
+    completedContainers: 0
+  };
+
+  sim.state.yarnJobs.push(jobRecord);
+
+  const requests = [];
+  for (let i = 0; i < numContainers; i += 1) {
+    const cpu = randomInt(2, 4);
+    const memoryGb = randomInt(4, 9);
+    const name = `Job-${jobId}[${i + 1}/${numContainers}]`;
+    requests.push({
+      name,
+      cpu,
+      memoryMb: memoryGb * 1024,
+      jobId
+    });
+    yarnJobsByContainer.set(name, jobRecord);
+  }
+
+  const results = sim.actions.submitDistributedJob(requests);
+  const allocated = results.filter((entry) => entry.allocated).length;
+
+  if (allocated === numContainers) {
+    notify(`✅ Big YARN ${jobRecord.name} started (${allocated} containers)`, 'success');
+  } else if (allocated > 0) {
+    notify(`⚠️ ${jobRecord.name}: ${allocated}/${numContainers} containers running`, 'warning');
+  } else {
+    notify(`⏳ ${jobRecord.name} queued: insufficient resources`, 'warning');
+  }
+
+  results.forEach((entry, index) => {
+    if (entry.allocated && entry.container) {
+      const containerName = entry.container.name || requests[index].name;
+      scheduleYarnCompletion(containerName, jobRecord);
+    }
+  });
+
+  renderCluster();
+}
+
+sim.on('yarn:allocated', ({ container }) => {
+  const jobRecord = yarnJobsByContainer.get(container.name) || null;
+  scheduleYarnCompletion(container.name, jobRecord);
+  renderCluster();
+});
+
+function runMapReduce() {
+  const job = sim.actions.submitMapReduce({});
+  if (!job) {
+    notify('⚠️ Upload an HDFS file first!', 'warning');
+    return;
+  }
+
+  if (job.status === 'queued') {
+    notify(`⏳ ${job.name} queued: insufficient resources`, 'warning');
+  } else {
+    notify(`✅ ${job.name} started`, 'success');
+  }
+
+  renderCluster();
+}
+
+function simulateFailure() {
+  const activeNodes = sim.state.nodes.filter((node) => !node.failed);
+  if (activeNodes.length === 0) {
+    notify('❌ All nodes are already failed!', 'error');
+    return;
+  }
+
+  const randomNode = activeNodes[Math.floor(Math.random() * activeNodes.length)];
+  sim.actions.failNode(randomNode.id);
+  notify(`💥 ${randomNode.name} failed! HDFS will re-replicate blocks...`, 'warning');
+
+  setTimeout(() => {
+    const summary = sim.actions.reReplicate();
+    if (summary.lost > 0) {
+      notify(`❌ ${summary.lost} blocks permanently lost!`, 'error');
+    } else if (summary.reReplicated > 0) {
+      notify(`✅ Re-replication complete! ${summary.reReplicated} replicas added`, 'success');
+    }
+    renderCluster();
+  }, 2000);
+
+  renderCluster();
+}
+
+function resetCluster() {
+  yarnCompletionTimers.forEach((timerId) => clearTimeout(timerId));
+  yarnCompletionTimers.clear();
+  yarnJobsByContainer.clear();
+  fileColors.clear();
+  colorIndex = 0;
+
+  sim.actions.reset();
+  sim.state.yarnJobs = [];
+  notify('🔄 Cluster reset!', 'info');
+  renderCluster();
+}
+
+renderCluster();
+
+window.simulation = sim;
+window.cluster = sim.state;
+window.REPLICATION_FACTOR = sim.state.config.replicationFactor;
+window.uploadFile = uploadFile;
+window.uploadLargeFile = uploadLargeFile;
+window.submitYarnJob = submitYarnJob;
+window.submitBigYarnJob = submitBigYarnJob;
+window.runMapReduce = runMapReduce;
+window.simulateFailure = simulateFailure;
+window.resetCluster = resetCluster;
+window.renderCluster = renderCluster;

@@ -7,8 +7,8 @@
   - `hdfs_interactive.html`
   - `yarn_interactive.html`
   - `hadoop-map-side-pipeline-dual_nodes.html`
-- Page logic is in `assets/js/`; shared helpers live under `assets/js/core/`.
-- Static pages load ES modules via `<script type="module" src="./assets/js/...">`.
+- Page logic is in `assets/js/`; shared library lives under `assets/js/hadoop-sim/`.
+- Static pages load ES modules via `<script type="module" src="./assets/js/...">` (React page uses the `hadoop-sim/bridge.js` module).
 - The React/Babel simulator keeps JSX in `assets/js/hadoop-ecosystem-simulator.js` and compiles at runtime with the Babel CDN.
 - If you split functionality further, keep new modules under `assets/js/` and import them with ES modules to keep pages static-host friendly.
 
@@ -16,6 +16,7 @@
 - `open hadoop-ecosystem-simulator.html` — launch the simulator directly in Safari.
 - `python3 -m http.server 5173` — serve the folder and open pages via `http://localhost:5173/...` to avoid CSP issues with inline Babel.
 - `npx prettier --write hadoop-ecosystem-simulator.html` — reformat JSX/JS after sizable edits (two-space indentation).
+- `npm run test:unit` — run Node unit tests for the core library.
 
 ## Coding Style & Naming Conventions
 - Use functional React components with hooks and immutable updates, e.g. `setCluster(prev => ({ ...prev, ... }))`.

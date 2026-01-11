@@ -26,7 +26,7 @@ An interactive, browser-based playground that visualizes how Hadoop HDFS, YARN, 
 > Tip: When editing JSX, keep DevTools open; Babel transpiles on the fly, so syntax errors are logged immediately.
 
 ## Development Notes
-- HTML entry points live in the repo root and load logic from `assets/js/` (shared helpers in `assets/js/core/`).
+- HTML entry points live in the repo root and load logic from `assets/js/` (shared library in `assets/js/hadoop-sim/`).
 - The React/Babel simulator uses `assets/js/hadoop-ecosystem-simulator.js` and compiles at runtime via Babel CDN.
 - Formatting: two-space indentation, `const`/`let`, `camelCase` for functions/state, `PascalCase` for components, and `UPPER_SNAKE_CASE` for shared constants.
 - Run `npx prettier --write hadoop-ecosystem-simulator.html` after large JSX edits.
@@ -47,6 +47,11 @@ Automated smoke tests are available via Playwright (not run by default).
 npm install
 npx playwright install --with-deps
 npm test
+```
+
+Core library unit tests:
+```bash
+npm run test:unit
 ```
 
 After changes, manually verify:
