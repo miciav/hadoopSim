@@ -52,7 +52,8 @@ export function createInitialState(dataA = RAW_DATA_A, dataB = RAW_DATA_B) {
       createMapperState(0, dataA),
       createMapperState(1, dataB)
     ],
-    reducers: { 0: [], 1: [], 2: [] }
+    reducers: { 0: [], 1: [], 2: [] },
+    reduceOutput: { 0: [], 1: [], 2: [] }
   };
 }
 

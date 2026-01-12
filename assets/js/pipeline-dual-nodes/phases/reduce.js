@@ -38,15 +38,21 @@ export async function runReduce(state, tick, isRunning) {
     // Aggregate by key
     const aggregated = aggregateByKey(rawRecs);
 
+    // Save aggregated results to state for output phase
+    const partition = PARTITIONS[p];
+    state.reduceOutput[p] = Array.from(aggregated.entries()).map(([k, v]) => ({
+      k,
+      count: v,
+      p,
+      c: partition.cssClass
+    }));
+
     // Display final aggregated records
     for (const [k, v] of aggregated.entries()) {
       if (!isRunning()) return;
 
-      const partition = PARTITIONS[p];
       const r = createRecordElement({ k, c: partition.cssClass }, v);
-      r.style.border = '2px solid #1e293b';
-      r.style.zIndex = 100;
-      r.style.transform = 'scale(1.1)';
+      r.classList.add('reduce-output');
       box.appendChild(r);
       showRecord(r);
 

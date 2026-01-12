@@ -13,6 +13,7 @@ import { runMapper } from './phases/mapper.js';
 import { runMergeAnimation, runMergeCombine } from './phases/merge.js';
 import { runNetworkShuffle } from './phases/shuffle.js';
 import { runReduce } from './phases/reduce.js';
+import { runOutput } from './phases/output.js';
 
 /**
  * Creates a simulation instance.
@@ -73,6 +74,10 @@ export function createSimulation() {
     // Phase 5: REDUCE
     if (!state.running) return;
     await runReducePhase(tick);
+
+    // Phase 6: OUTPUT
+    if (!state.running) return;
+    await runOutputPhase(tick);
 
     // Complete
     finishSimulation();
@@ -159,10 +164,23 @@ export function createSimulation() {
     if (!state.running) return;
 
     highlightNodes(null, 'Reduce Phase');
-    highlightBoxes([ELEMENT_IDS.BOX_REDUCE]);
+    highlightBoxes([ELEMENT_IDS.BOX_RED_0, ELEMENT_IDS.BOX_RED_1, ELEMENT_IDS.BOX_RED_2]);
     log('<strong>Reduce Phase:</strong> Sort/Group & Aggregation started.', 'RED');
 
     await runReduce(state, tick, callbacks.isRunning);
+  }
+
+  /**
+   * Phase 6: Output to HDFS.
+   */
+  async function runOutputPhase(tick) {
+    if (!state.running) return;
+
+    highlightNodes(null, 'Output Phase');
+    highlightBoxes([ELEMENT_IDS.BOX_HDFS_OUTPUT]);
+    log('<strong>Output Phase:</strong> Writing results to HDFS...', 'SYS');
+
+    await runOutput(state, tick, callbacks.isRunning);
   }
 
   /**

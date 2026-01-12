@@ -61,7 +61,7 @@ export function markAsPersistent(element) {
  */
 export function turnActiveToGhosts(container) {
   if (!container) return;
-  const records = container.querySelectorAll('.kv-record:not(.ghost):not(.persistent)');
+  const records = container.querySelectorAll('.kv-record:not(.ghost):not(.persistent):not(.reduce-output)');
   records.forEach(markAsGhost);
 }
 
@@ -71,7 +71,7 @@ export function turnActiveToGhosts(container) {
  */
 export function turnActiveToPersistent(container) {
   if (!container) return;
-  const records = container.querySelectorAll('.kv-record:not(.ghost):not(.persistent)');
+  const records = container.querySelectorAll('.kv-record:not(.ghost):not(.persistent):not(.reduce-output)');
   records.forEach(markAsPersistent);
 }
 

@@ -15,6 +15,40 @@ import { highlightNodes, setNetworkActive } from './highlights.js';
 import { unfoldIntermediateRows } from './fold.js';
 
 /**
+ * Resets simulation state data structures while preserving running flag.
+ * @param {Object} state - Simulation state
+ */
+export function resetState(state) {
+  if (!state) return;
+
+  state.shuffleComplete = false;
+
+  if (Array.isArray(state.mappers)) {
+    state.mappers = state.mappers.map((mapper, index) => ({
+      ...mapper,
+      id: mapper.id ?? index,
+      buffer: [],
+      spills: [],
+      final: [],
+      _mergeAll: null,
+      data: Array.isArray(mapper.data) ? [...mapper.data] : []
+    }));
+  } else {
+    state.mappers = [];
+  }
+
+  const reducerKeys = state.reducers ? Object.keys(state.reducers) : ['0', '1', '2'];
+  state.reducers = reducerKeys.reduce((acc, key) => {
+    acc[key] = [];
+    return acc;
+  }, {});
+  state.reduceOutput = reducerKeys.reduce((acc, key) => {
+    acc[key] = [];
+    return acc;
+  }, {});
+}
+
+/**
  * Resets all metrics counters to zero.
  */
 export function resetMetrics() {
@@ -79,6 +113,7 @@ export function populateInputs(state) {
  * @param {Object} state - Simulation state
  */
 export function resetUI(state) {
+  resetState(state);
   clearLog();
   resetMetrics();
   clearAllContainers();

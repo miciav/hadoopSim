@@ -41,6 +41,14 @@ export async function foldIntermediateRows() {
       if (row) row.classList.add('folded');
     }
   });
+
+  await wait(300);
+
+  // Fold Reducer boxes (keep labels visible)
+  ['boxRed0', 'boxRed1', 'boxRed2'].forEach(id => {
+    const box = el(id);
+    if (box) box.classList.add('folded');
+  });
 }
 
 /**
@@ -49,5 +57,8 @@ export async function foldIntermediateRows() {
 export function unfoldIntermediateRows() {
   document.querySelectorAll('.node-row.folded').forEach(r =>
     r.classList.remove('folded')
+  );
+  document.querySelectorAll('.box-content.folded').forEach(box =>
+    box.classList.remove('folded')
   );
 }

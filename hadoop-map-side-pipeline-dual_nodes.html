@@ -22,6 +22,30 @@
       --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
       --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
       --font-mono: 'JetBrains Mono', 'Fira Code', 'Monaco', monospace;
+
+      /* Typography Scale (1.25 ratio - Major Third) */
+      --text-xs: 12px;      /* Mini labels, badges */
+      --text-sm: 14px;      /* Secondary text, captions */
+      --text-base: 16px;    /* Body text */
+      --text-lg: 18px;      /* Emphasized text */
+      --text-xl: 20px;      /* Section headers */
+      --text-2xl: 28px;     /* Page title */
+      --text-3xl: 36px;     /* Hero text */
+
+      /* Icon sizes (proportional to text) */
+      --icon-sm: 18px;
+      --icon-md: 20px;
+      --icon-lg: 24px;
+
+      /* Accessible text colors (WCAG AA compliant on white bg) */
+      --text-label: #475569;     /* 7:1 contrast - for labels */
+      --text-caption: #64748b;   /* 4.6:1 contrast - for captions */
+      --text-disabled: #94a3b8;  /* 3.5:1 - only for decorative/disabled */
+
+      /* Partition colors (adjusted for white text contrast) */
+      --partition-0: #7c3aed;    /* Violet-600 - better contrast */
+      --partition-1: #db2777;    /* Pink-600 - better contrast */
+      --partition-2: #d97706;    /* Amber-600 - better contrast */
     }
 
     * { box-sizing: border-box; }
@@ -36,25 +60,25 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    .app { 
-      max-width: 1400px; width: 100%; 
-      background: var(--bg-card); 
-      border-radius: 16px; 
-      padding: 32px; 
-      box-shadow: var(--shadow-lg); 
-      border: 1px solid var(--border-color); 
+    .app {
+      max-width: 1600px; width: 100%;
+      background: var(--bg-card);
+      border-radius: 16px;
+      padding: 32px 40px;
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--border-color);
     }
     
     /* Typography */
-    h1 { 
-      font-size: 24px; margin: 0 0 8px; 
-      color: #0f172a; font-weight: 700; 
-      letter-spacing: -0.025em; 
+    h1 {
+      font-size: var(--text-2xl); margin: 0 0 8px;
+      color: #0f172a; font-weight: 700;
+      letter-spacing: -0.025em;
     }
-    .subtitle { 
-      font-size: 14px; color: var(--text-muted); 
+    .subtitle {
+      font-size: var(--text-sm); color: var(--text-muted);
       margin-bottom: 24px; font-weight: 400;
-      display: flex; align-items: center; gap: 8px;
+      display: flex; align-items: center; gap: 10px;
     }
 
     /* Controls Header */
@@ -67,14 +91,15 @@
       border: 1px solid var(--border-color);
     }
     
-    button { 
-      border-radius: 8px; padding: 10px 20px; 
-      font-size: 14px; border: none; cursor: pointer; 
-      background: var(--primary); color: #fff; 
-      font-weight: 600; transition: all 0.2s ease; 
-      display: flex; align-items: center; gap: 8px;
+    button {
+      border-radius: 8px; padding: 12px 24px;
+      font-size: var(--text-sm); border: none; cursor: pointer;
+      background: var(--primary); color: #fff;
+      font-weight: 600; transition: all 0.2s ease;
+      display: flex; align-items: center; gap: 10px;
       box-shadow: var(--shadow-sm);
     }
+    button svg { width: var(--icon-sm); height: var(--icon-sm); }
     button:hover:not(:disabled) { 
       background: var(--primary-hover); 
       transform: translateY(-1px); 
@@ -91,32 +116,34 @@
       background: #f1f5f9; border-color: #cbd5e1;
     }
     
-    .options { 
-      margin-left: auto; display: flex; gap: 24px; 
-      align-items: center; font-size: 13px; 
-      color: var(--text-muted); font-weight: 500; 
+    .options {
+      margin-left: auto; display: flex; gap: 28px;
+      align-items: center; font-size: var(--text-sm);
+      color: var(--text-muted); font-weight: 500;
     }
-    .options label { cursor: pointer; display: flex; align-items: center; gap: 6px; }
+    .options label { cursor: pointer; display: flex; align-items: center; gap: 8px; }
+    .options input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
+    .options input[type="range"] { height: 6px; cursor: pointer; }
     
     /* Metrics Grid */
     .metrics { 
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 24px 0; 
     }
-    .metric-card { 
-      background: #fff; border: 1px solid var(--border-color); 
-      border-radius: var(--radius); padding: 16px; 
-      display: flex; flex-direction: column; align-items: center; 
+    .metric-card {
+      background: #fff; border: 1px solid var(--border-color);
+      border-radius: var(--radius); padding: 20px;
+      display: flex; flex-direction: column; align-items: center;
       box-shadow: var(--shadow-sm); transition: transform 0.2s;
     }
     .metric-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
-    .metric-value { 
-      font-size: 24px; font-weight: 700; 
-      color: #0f172a; font-family: var(--font-mono); 
+    .metric-value {
+      font-size: var(--text-2xl); font-weight: 700;
+      color: #0f172a; font-family: var(--font-mono);
     }
-    .metric-label { 
-      font-size: 11px; text-transform: uppercase; 
-      letter-spacing: 0.05em; color: #94a3b8; 
-      margin-top: 4px; font-weight: 600; 
+    .metric-label {
+      font-size: var(--text-xs); text-transform: uppercase;
+      letter-spacing: 0.05em; color: #64748b;
+      margin-top: 6px; font-weight: 600;
     }
 
     /* Main Layout */
@@ -129,8 +156,9 @@
     .cluster-rack { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }
     
     .node-container {
-      border: 1px solid var(--border-color); border-radius: 16px; padding: 20px; 
-      position: relative; background: #fff; 
+      border: 1px solid var(--border-color); border-radius: 16px;
+      padding: 38px 20px 20px 20px;  /* Extra top padding for node-tag */
+      position: relative; background: #fff;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       display: flex; flex-direction: column; gap: 16px;
       box-shadow: var(--shadow-sm);
@@ -144,25 +172,27 @@
     }
 
     .node-tag {
-      position: absolute; top: -12px; left: 20px; 
-      background: #fff; padding: 4px 12px;
-      font-size: 12px; font-weight: 700; color: var(--text-muted); 
-      text-transform: uppercase; border: 1px solid var(--border-color); 
-      border-radius: 20px; display: flex; align-items: center; gap: 6px; 
+      position: absolute; top: -14px; left: 20px;
+      background: #fff; padding: 6px 14px;
+      font-size: var(--text-sm); font-weight: 700; color: var(--text-muted);
+      text-transform: uppercase; border: 1px solid var(--border-color);
+      border-radius: 20px; display: flex; align-items: center; gap: 8px;
       box-shadow: var(--shadow-sm); z-index: 2;
     }
+    .node-tag span { font-size: var(--text-base); }
     
     /* Specific Node Styles */
     .node-map { border-top: 4px solid #10b981; } /* Green top accent */
     .node-reduce { border-top: 4px solid #8b5cf6; } /* Purple top accent */
 
     /* Components & Icons */
-    .box-label { 
-      font-size: 11px; text-transform: uppercase; 
-      color: #64748b; margin-bottom: 8px; 
+    .box-label {
+      font-size: var(--text-xs); text-transform: uppercase;
+      color: #64748b; margin-bottom: 10px;
       font-weight: 700; display: flex; justify-content: space-between; align-items: center;
     }
-    .box-label svg { width: 14px; height: 14px; margin-right: 6px; stroke-width: 2px; }
+    .box-label svg { width: var(--icon-sm); height: var(--icon-sm); margin-right: 8px; stroke-width: 2px; }
+    .box-label span { font-size: var(--text-sm); }
     
     .box-content { 
       border-radius: 8px; border: 1px solid #cbd5e1; 
@@ -196,15 +226,15 @@
     .label-disk { color: #d97706; }
 
     /* Mappers */
-    .mapper-card { 
+    .mapper-card {
       border: 1px solid #bbf7d0; /* Green tint border */
       border-radius: 8px; background: #ffffff;
-      padding: 10px; display: flex; flex-direction: column; min-height: 140px;
+      padding: 12px; display: flex; flex-direction: column; min-height: 140px;
       box-shadow: 0 2px 4px rgba(16, 185, 129, 0.05);
     }
-    .mapper-header { 
-      display: flex; justify-content: space-between; 
-      font-size: 12px; font-weight: 700; margin-bottom: 8px; color: #166534;
+    .mapper-header {
+      display: flex; justify-content: space-between;
+      font-size: var(--text-sm); font-weight: 700; margin-bottom: 10px; color: #166534;
     }
 
     .buffer-inner {
@@ -231,10 +261,10 @@
       position: relative; display: flex; flex-wrap: wrap; align-content: flex-start;
       box-shadow: 0 1px 2px rgba(245, 158, 11, 0.1);
     }
-    .mini-label { 
-      position: absolute; top: 4px; left: 6px; 
-      font-size: 9px; text-transform: uppercase; 
-      color: #94a3b8; font-weight: 700; 
+    .mini-label {
+      position: absolute; top: 6px; left: 8px;
+      font-size: var(--text-xs); text-transform: uppercase;
+      color: #64748b; font-weight: 700;
     }
     
     .final-output {
@@ -246,12 +276,12 @@
 
     /* Network Layer - Light Theme */
     .network-layer {
-      height: 48px; margin: 0; 
+      height: 56px; margin: 0;
       background: #f8fafc; /* Slate-50 */
       border-radius: 12px; display: flex; align-items: center; justify-content: center;
-      color: #64748b; font-size: 12px; font-family: var(--font-mono); letter-spacing: 1px; font-weight: 600;
-      position: relative; overflow: hidden; 
-      border: 1px solid #cbd5e1; 
+      color: #64748b; font-size: var(--text-sm); font-family: var(--font-mono); letter-spacing: 1px; font-weight: 600;
+      position: relative; overflow: hidden;
+      border: 1px solid #cbd5e1;
       box-shadow: inset 0 2px 4px rgba(0,0,0,0.03); /* Softer inset */
       z-index: 5;
     }
@@ -264,34 +294,72 @@
     .network-pulse.active { animation: netPulse 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
     @keyframes netPulse { 0% { transform: translateX(-150%); } 100% { transform: translateX(450%); } }
 
-    /* Reducers */
-    .reducers-inner { display: flex; gap: 12px; }
-    .reducer-box { 
-      flex: 1; border-radius: 8px; border: 1px solid #e2e8f0; background: #fff; 
-      min-height: 120px; padding: 20px 4px; position: relative; 
-      display: flex; flex-wrap: wrap; align-content: flex-start;
-      box-shadow: var(--shadow-sm);
+    /* Reducer Rack (3 columns) */
+    .reducer-rack {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
     }
+
+    /* Reducer inner container */
+    .reducer-inner {
+      min-height: 100px;
+      display: flex;
+      flex-wrap: wrap;
+      align-content: flex-start;
+      padding: 4px;
+      position: relative;
+    }
+
+    /* Reduce box style */
+    .label-reduce { color: var(--partition-0); }
+    .box-reduce {
+      background: #faf5ff;
+      border-color: #e9d5ff;
+      border-left: 3px solid var(--partition-0);
+    }
+
+    /* Output files container */
+    .output-files {
+      display: flex;
+      gap: 12px;
+    }
+
+    .output-file {
+      flex: 1;
+      min-height: 80px;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      background: linear-gradient(135deg, #fff 0%, #f0fdf4 100%);
+      padding: 24px 8px 8px;
+      position: relative;
+      display: flex;
+      flex-wrap: wrap;
+      align-content: flex-start;
+    }
+
+    /* Output node accent */
+    .node-output { border-top: 4px solid var(--success); }
 
     /* --- LOG PANEL (Light Theme) --- */
     .log-panel {
-      background: #ffffff; color: #334155; border-radius: 12px; 
+      background: #ffffff; color: #334155; border-radius: 12px;
       height: 680px; display: flex; flex-direction: column; overflow: hidden;
       box-shadow: var(--shadow-md); border: 1px solid #e2e8f0;
     }
     .log-header {
-      background: #f8fafc; padding: 12px 16px; font-size: 12px; 
-      text-transform: uppercase; font-weight: 700; color: #64748b; 
+      background: #f8fafc; padding: 14px 18px; font-size: var(--text-sm);
+      text-transform: uppercase; font-weight: 700; color: #475569;
       border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between;
     }
     .log-content {
-      flex: 1; overflow-y: auto; padding: 16px; 
-      font-family: var(--font-mono); font-size: 12px; line-height: 1.6;
+      flex: 1; overflow-y: auto; padding: 16px;
+      font-family: var(--font-mono); font-size: var(--text-sm); line-height: 1.7;
     }
-    .log-entry { 
-      margin-bottom: 8px; padding: 8px 12px; border-radius: 6px; 
-      background: #f8fafc; border-left: 3px solid #cbd5e1; 
-      border: 1px solid #f1f5f9; border-left-width: 3px;
+    .log-entry {
+      margin-bottom: 10px; padding: 10px 14px; border-radius: 6px;
+      background: #f8fafc; border-left: 4px solid #cbd5e1;
+      border: 1px solid #f1f5f9; border-left-width: 4px;
       animation: fadeIn 0.2s ease-out;
     }
     .log-entry strong { color: #0f172a; font-weight: 600; }
@@ -303,27 +371,33 @@
     
     @keyframes fadeIn { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
 
-    /* --- RECORDS (ZOOMED +15%) --- */
+    /* --- RECORDS --- */
     .kv-record {
-      font-size: 11px;    /* Increased from 9px */
-      padding: 0 6px;     /* Increased from 4px */
-      height: 22px;       /* Increased from 18px */
-      min-width: 44px;    /* Increased from 36px */
-      border-radius: 4px; 
+      font-size: var(--text-xs);
+      padding: 0 8px;
+      height: 26px;
+      min-width: 52px;
+      border-radius: 5px;
       color: white; font-weight: 700;
-      margin: 3px;        /* Slightly more spacing */
+      margin: 4px;
       display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.1); 
-      opacity: 0; transform: scale(0.8); flex-shrink: 0; 
-      z-index: 10; position: relative; 
+      box-shadow: 0 2px 4px rgba(0,0,0,0.12);
+      opacity: 0; transform: scale(0.8); flex-shrink: 0;
+      z-index: 10; position: relative;
       font-family: var(--font-mono);
-      border: 1px solid rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.25);
+      transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
     }
     .kv-record.show { opacity: 1; transform: scale(1); transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
     
-    .bg-p0 { background: #8b5cf6; } /* Violet */
-    .bg-p1 { background: #ec4899; } /* Pink */
-    .bg-p2 { background: #f59e0b; } /* Amber */
+    .bg-p0 { background: var(--partition-0); } /* Violet - 4.5:1 contrast with white */
+    .bg-p1 { background: var(--partition-1); } /* Pink - 4.5:1 contrast with white */
+    .bg-p2 { background: var(--partition-2); } /* Amber - 4.5:1 contrast with white */
+
+    /* Text color variants for partition labels */
+    .color-p0 { color: var(--partition-0) !important; }
+    .color-p1 { color: var(--partition-1) !important; }
+    .color-p2 { color: var(--partition-2) !important; }
 
     .flying-record {
       position: absolute; z-index: 9999; pointer-events: none;
@@ -332,11 +406,6 @@
     }
 
     /* --- GHOST & PERSISTENT STATES --- */
-
-    /* Smooth transitions for state changes */
-    .kv-record {
-      transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
-    }
 
     /* Teaching Mode OFF: collapse ghost/persistent to zero */
     .app:not(.teaching-mode-active) .kv-record.ghost,
@@ -349,8 +418,8 @@
       overflow: hidden;
     }
 
-    /* Teaching Mode ON: show ghost (faded) */
-    .app.teaching-mode-active .kv-record.ghost {
+    /* Ghost style (shared across all boxes) */
+    .kv-record.ghost {
       opacity: 0.4;
       transform: scale(0.85);
       filter: saturate(0.2) brightness(1.1);
@@ -358,26 +427,19 @@
       box-shadow: none;
     }
 
-    /* Teaching Mode ON: show persistent (semi-visible) */
-    .app.teaching-mode-active .kv-record.persistent {
-      opacity: 0.8;
-      transform: scale(0.95);
-      filter: saturate(0.5) brightness(1.1);
-      border: 1px solid rgba(0,0,0,0.1) !important;
-      box-shadow: none;
-    }
-
     /* HDFS Inputs: always fully visible (override collapse) */
-    #boxInput0 .kv-record, #boxInput1 .kv-record {
+    #boxInput0 .kv-record.persistent,
+    #boxInput1 .kv-record.persistent,
+    #boxHdfsOutput .kv-record.persistent {
       opacity: 1 !important;
       width: auto !important;
-      min-width: 44px !important;
-      height: 22px !important;
-      margin: 3px !important;
-      padding: 0 6px !important;
+      min-width: 52px !important;
+      height: 26px !important;
+      margin: 4px !important;
+      padding: 0 8px !important;
       transform: scale(1) !important;
       filter: none !important;
-      border: 1px solid rgba(255,255,255,0.2) !important;
+      border: 1px solid rgba(255,255,255,0.25) !important;
       pointer-events: auto !important;
       overflow: visible !important;
     }
@@ -411,6 +473,24 @@
       padding-top: 0 !important;
       padding-bottom: 0 !important;
       pointer-events: none;
+    }
+
+    .box-content.folded {
+      display: none;
+      max-height: 0 !important;
+      min-height: 0 !important;
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+      border-width: 0 !important;
+      opacity: 0 !important;
+      margin-top: 0 !important;
+      pointer-events: none;
+      overflow: hidden;
+      transition: max-height 0.35s cubic-bezier(0.25, 0.8, 0.25, 1),
+                  opacity 0.25s ease,
+                  margin 0.25s ease,
+                  padding 0.25s ease,
+                  border 0.25s ease;
     }
 
     /* --- COMBINE SWEEP EFFECT --- */
@@ -670,15 +750,64 @@
         <div id="netHub" style="position:absolute; left:50%; top:50%; width:1px; height:1px;"></div>
       </div>
 
-      <div class="node-container node-reduce" style="margin-top: 32px;">
-        <div class="node-tag" style="color:#8b5cf6; border-color:#ddd6fe;"><span>🚀</span> Reduce Cluster</div>
-        <div class="box-label">Reduce Tasks (Aggregation)</div>
-        <div class="box-content" id="boxReduce">
-           <div class="reducers-inner">
-             <div class="reducer-box" id="red0"><div class="mini-label" style="color:#8b5cf6">R-0 (Part 0)</div></div>
-             <div class="reducer-box" id="red1"><div class="mini-label" style="color:#ec4899">R-1 (Part 1)</div></div>
-             <div class="reducer-box" id="red2"><div class="mini-label" style="color:#f59e0b">R-2 (Part 2)</div></div>
-           </div>
+      <!-- REDUCER NODES (3 separate nodes) -->
+      <div class="cluster-rack reducer-rack" style="margin-top: 32px;">
+
+        <!-- REDUCER NODE 0 -->
+        <div class="node-container node-reduce" id="nodeRed0">
+          <div class="node-tag color-p0"><span>🖥️</span> Node 03</div>
+          <div class="node-row">
+            <div class="box-label label-reduce">
+              <span>Reduce Task (Partition 0)</span>
+            </div>
+            <div class="box-content box-reduce" id="boxRed0">
+              <div class="reducer-inner" id="red0"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- REDUCER NODE 1 -->
+        <div class="node-container node-reduce" id="nodeRed1">
+          <div class="node-tag color-p1"><span>🖥️</span> Node 04</div>
+          <div class="node-row">
+            <div class="box-label label-reduce" style="color:var(--partition-1);">
+              <span>Reduce Task (Partition 1)</span>
+            </div>
+            <div class="box-content box-reduce" id="boxRed1" style="border-left-color:var(--partition-1);">
+              <div class="reducer-inner" id="red1"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- REDUCER NODE 2 -->
+        <div class="node-container node-reduce" id="nodeRed2">
+          <div class="node-tag color-p2"><span>🖥️</span> Node 05</div>
+          <div class="node-row">
+            <div class="box-label label-reduce" style="color:var(--partition-2);">
+              <span>Reduce Task (Partition 2)</span>
+            </div>
+            <div class="box-content box-reduce" id="boxRed2" style="border-left-color:var(--partition-2);">
+              <div class="reducer-inner" id="red2"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- HDFS OUTPUT -->
+      <div class="node-container node-output">
+        <div class="node-tag"><span>💾</span> HDFS Output</div>
+        <div class="node-row">
+          <div class="box-label label-hdfs">
+            <span>Final Output Files</span>
+          </div>
+          <div class="box-content box-hdfs" id="boxHdfsOutput">
+            <div class="output-files">
+              <div class="output-file" id="hdfsOut0"><div class="mini-label color-p0">part-r-00000</div></div>
+              <div class="output-file" id="hdfsOut1"><div class="mini-label color-p1">part-r-00001</div></div>
+              <div class="output-file" id="hdfsOut2"><div class="mini-label color-p2">part-r-00002</div></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -687,9 +816,9 @@
     <div class="log-panel">
       <div class="log-header">
         <span>Job History Log</span>
-        <div style="display:flex; align-items:center; gap:6px;">
-          <span style="width:6px; height:6px; background:#10b981; border-radius:50%; animation: pulse 2s infinite;"></span>
-          <span style="opacity:0.5; font-size:10px;">Live</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="width:8px; height:8px; background:var(--success); border-radius:50%; animation: pulse 2s infinite;"></span>
+          <span style="color:var(--text-caption); font-size:var(--text-xs);">Live</span>
         </div>
       </div>
       <div class="log-content" id="consoleLog">

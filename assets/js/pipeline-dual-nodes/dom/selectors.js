@@ -50,11 +50,22 @@ export const ELEMENT_IDS = Object.freeze({
   NET_PULSE: 'netPulse',
   NET_HUB: 'netHub',
 
-  // Reducers
-  BOX_REDUCE: 'boxReduce',
+  // Reducer Nodes
+  NODE_RED_0: 'nodeRed0',
+  NODE_RED_1: 'nodeRed1',
+  NODE_RED_2: 'nodeRed2',
+  BOX_RED_0: 'boxRed0',
+  BOX_RED_1: 'boxRed1',
+  BOX_RED_2: 'boxRed2',
   RED_0: 'red0',
   RED_1: 'red1',
   RED_2: 'red2',
+
+  // HDFS Output
+  BOX_HDFS_OUTPUT: 'boxHdfsOutput',
+  HDFS_OUT_0: 'hdfsOut0',
+  HDFS_OUT_1: 'hdfsOut1',
+  HDFS_OUT_2: 'hdfsOut2',
 
   // Log
   CONSOLE_LOG: 'consoleLog'
@@ -98,6 +109,18 @@ export function getReducerId(partition) {
   return `red${partition}`;
 }
 
+export function getNodeRedId(partition) {
+  return `nodeRed${partition}`;
+}
+
+export function getBoxRedId(partition) {
+  return `boxRed${partition}`;
+}
+
+export function getHdfsOutId(partition) {
+  return `hdfsOut${partition}`;
+}
+
 // Simple element getter (no caching to avoid stale references)
 export function el(id) {
   return document.getElementById(id);
@@ -108,7 +131,8 @@ export const CLEARABLE_CONTAINERS = Object.freeze([
   'buf0', 'buf1',
   'spillA0', 'spillA1', 'spillB0', 'spillB1',
   'finalA', 'finalB',
-  'red0', 'red1', 'red2'
+  'red0', 'red1', 'red2',
+  'hdfsOut0', 'hdfsOut1', 'hdfsOut2'
 ]);
 
 // Box pairs for height sync
@@ -120,5 +144,6 @@ export const HEIGHT_SYNC_GROUPS = Object.freeze([
   ['spillA0', 'spillB0'],
   ['spillA1', 'spillB1'],
   ['finalA', 'finalB'],
-  ['red0', 'red1', 'red2']
+  ['boxRed0', 'boxRed1', 'boxRed2'],
+  ['hdfsOut0', 'hdfsOut1', 'hdfsOut2']
 ]);
