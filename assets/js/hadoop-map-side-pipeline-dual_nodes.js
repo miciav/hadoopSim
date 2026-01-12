@@ -17,6 +17,7 @@ const RAW_DATA_B = [
 const CONFIG = { BUFFER_CAPACITY: 6, SPILL_THRESHOLD: 0.75 };
 let state = {
   running: false,
+  shuffleComplete: false,
   mappers: [
     { id: 0, buffer: [], spills: [], final: [], data: [...RAW_DATA_A] },
     { id: 1, buffer: [], spills: [], final: [], data: [...RAW_DATA_B] }
@@ -125,6 +126,66 @@ async function flyRecord(sourceId, targetId, recordData, duration) {
   flyer.remove();
 }
 
+/* --- COMBINE SWEEP EFFECT --- */
+
+function triggerCombineSweep(elementId, colorVariant = '') {
+  const container = el(elementId);
+  if (!container) return;
+
+  // Remove any existing sweep
+  const existingSweep = container.querySelector('.combine-sweep');
+  if (existingSweep) existingSweep.remove();
+
+  // Create sweep overlay
+  const sweep = document.createElement('div');
+  sweep.className = `combine-sweep ${colorVariant}`;
+  container.appendChild(sweep);
+
+  // Remove after animation completes
+  setTimeout(() => sweep.remove(), 1100);
+}
+
+/* --- FOLD FUNCTIONS --- */
+
+async function foldIntermediateRows() {
+  await wait(400);
+
+  // Fold Spills
+  ['boxSpill0', 'boxSpill1'].forEach(id => {
+      const box = el(id);
+      if (box) {
+          const row = box.closest('.node-row');
+          if (row) row.classList.add('folded');
+      }
+  });
+
+  await wait(300);
+
+  // Fold Map Output
+  ['boxMerge0', 'boxMerge1'].forEach(id => {
+      const box = el(id);
+      if (box) {
+          const row = box.closest('.node-row');
+          if (row) row.classList.add('folded');
+      }
+  });
+
+  await wait(300);
+
+  // Fold Map Task (RAM)
+  ['boxMap0', 'boxMap1'].forEach(id => {
+      const box = el(id);
+      if (box) {
+          const row = box.closest('.node-row');
+          if (row) row.classList.add('folded');
+      }
+  });
+}
+
+function unfoldIntermediateRows() {
+  document.querySelectorAll('.node-row.folded').forEach(r => r.classList.remove('folded'));
+}
+
 /* --- ENGINE --- */
 
 async function runSimulation() {
@@ -155,12 +216,24 @@ async function runSimulation() {
   await Promise.all([p1, p2]);
   if(!state.running) return;
 
-  // 3. MERGE
+  // 3. MERGE (parallel)
   highlightNodes(['node01', 'node02'], 'Merge Sort');
   highlightBox(['boxMerge0', 'boxMerge1']);
   log("<strong>Merge Phase:</strong> Map tasks finished input. Merging spills...", "DISK");
-  await runMerge(0, tick);
-  await runMerge(1, tick);
+
+  // Phase 1: Animate records flying (parallel)
+  const m1 = runMergeAnimation(0, tick);
+  const m2 = runMergeAnimation(1, tick * 1.05);
+  await Promise.all([m1, m2]);
+  if(!state.running) return;
+
+  await wait(tick);
+
+  // Phase 2: Combine with sweep effect (synchronized)
+  log("<strong>Merge Phase:</strong> Combining sorted spills...", "DISK");
+  const c1 = runMergeCombine(0, tick);
+  const c2 = runMergeCombine(1, tick);
+  await Promise.all([c1, c2]);
   if(!state.running) return;
 
   // 4. SHUFFLE (PARALLEL)
@@ -174,6 +247,14 @@ async function runSimulation() {
   
   el('netPulse').classList.remove('active');
   el('networkLayer').style.borderColor = "#475569";
+
+  // Mark shuffle as complete for reactive fold
+  state.shuffleComplete = true;
+
+  // Fold if teaching mode is OFF
+  if (!el('teachingMode').checked) {
+      await foldIntermediateRows();
+  }
 
   // 5. REDUCE
   highlightNodes(null, 'Reduce Phase');
@@ -256,16 +337,20 @@ async function spill(mapperId, spillIdx, delay) {
   const bufId = `buf${mapperId}`; // Source buffer ID
   const slotId = `spill${mapperId==0?'A':'B'}${spillIdx}`; // Target slot ID
   
-  // Animation: Fly records SEQUENTIALLY from Buffer to Spill Slot
+  // Animation: Fly records SEQUENTIALLY (Stop-and-Go like runMapper)
+  const slot = el(slotId);
   for (const rec of mapper.buffer) {
       if(!state.running) return;
-      // Fly and wait a bit for stream effect
-      flyRecord(bufId, slotId, rec, delay * 0.5); 
-      await wait(delay * 0.15); // Stagger the launches
+      await flyRecord(bufId, slotId, rec, delay * 0.5); 
+      
+      // Land immediately (Like runMapper)
+      if (slot) {
+        const r = createRecord(rec, 1);
+        slot.appendChild(r);
+        r.classList.add('show');
+      }
+      await wait(delay * 0.1);
   }
-  
-  // Wait for all flights to land roughly
-  await wait(delay * 0.5);
   
   if(!state.running) return;
 
@@ -276,19 +361,16 @@ async function spill(mapperId, spillIdx, delay) {
   if(spillEl) spillEl.innerText = parseInt(spillEl.innerText) + 1;
 
   // slotId is already defined above
-  const slot = el(slotId);
   if (slot) {
-    sorted.forEach(rec => {
-        const r = createRecord(rec, 1);
-        slot.appendChild(r);
-        setTimeout(() => r.classList.add('show'), 20);
-    });
-    await wait(delay * 1.2);
+    await wait(delay * 0.5);
     if(!state.running) return;
 
     turnActiveToGhosts(slot);
-    // Explicit removal removed to support CSS-only toggling
-    
+
+    // Sweep effect for combine
+    triggerCombineSweep(slotId, 'sweep-amber');
+    await wait(800);
+
     combined.forEach(rec => {
       const r = createRecord(rec, rec.count);
       r.style.zIndex = 100; slot.appendChild(r);
@@ -297,47 +379,55 @@ async function spill(mapperId, spillIdx, delay) {
   }
 }
 
-async function runMerge(mapperId, tick) {
+async function runMergeAnimation(mapperId, tick) {
   if(!state.running) return;
   const mapper = state.mappers[mapperId];
   const targetId = `final${mapperId==0?'A':'B'}`;
   const target = el(targetId);
   const labelA = mapperId===0 ? 'A' : 'B';
-  
+
   let all = [];
-  
-  // Animation: Fly from all spills to target
-  const mergeFlights = [];
-  
+
+  // 1. Flatten all records to process them sequentially
+  const processingQueue = [];
   mapper.spills.forEach((spillData, spillIdx) => {
       const sourceId = `spill${labelA}${spillIdx}`;
       spillData.forEach(rec => {
+          processingQueue.push({ rec, sourceId });
           all.push(rec);
-          // Fly with slight stagger for effect
-          const p = async () => {
-              await wait(Math.random() * tick * 0.5);
-              await flyRecord(sourceId, targetId, rec, tick * 0.6);
-          };
-          mergeFlights.push(p());
       });
   });
-  
-  await Promise.all(mergeFlights);
+
+  // 2. Animate sequentially (Like runMapper)
+  for (const item of processingQueue) {
+      if(!state.running) return;
+
+      // Fly
+      await flyRecord(item.sourceId, targetId, item.rec, tick * 0.6);
+
+      // Land immediately (Show immediately in target to mimic runMapper)
+      const r = createRecord(item.rec, item.rec.count);
+      target.appendChild(r);
+      r.classList.add('show');
+      await wait(tick * 0.1);
+  }
+
+  // Store all records for combine phase
+  mapper._mergeAll = all;
+}
+
+async function runMergeCombine(mapperId, tick) {
   if(!state.running) return;
-  
-  // Show merged result (transient step before final sort/combine)
-  all.forEach(rec => {
-    const r = createRecord(rec, rec.count);
-    target.appendChild(r);
-    setTimeout(()=>r.classList.add('show'), 10);
-  });
-  await wait(tick);
-  if(!state.running) return;
-  
+  const mapper = state.mappers[mapperId];
+  const targetId = `final${mapperId==0?'A':'B'}`;
+  const target = el(targetId);
+  const labelA = mapperId===0 ? 'A' : 'B';
+  const all = mapper._mergeAll || [];
+
+  // Finalize (Sort & Combine visual refresh)
   turnActiveToGhosts(target);
-  // Explicit removal removed to support CSS-only toggling
-  
-  // labelA is already defined at the top
+
+  // Mark spills as persistent
   for(let i=0; i<mapper.spills.length; i++) {
       const s = el(`spill${labelA}${i}`);
       if(s) turnActiveToPersistent(s);
@@ -345,6 +435,10 @@ async function runMerge(mapperId, tick) {
 
   const merged = combine(all.sort((a,b) => (a.p - b.p) || a.k.localeCompare(b.k)));
   mapper.final = merged;
+
+  // Sweep effect for merge
+  triggerCombineSweep(targetId, 'sweep-green');
+  await wait(800);
 
   merged.forEach(rec => {
     const r = createRecord(rec, rec.count);
@@ -362,7 +456,7 @@ async function runNetworkShuffle(tick) {
 
   const transmitNodeData = async (records, sourceId, nodeName) => {
     const localQueue = [...records].sort((a,b) => a.p - b.p);
-    const nodePromises = [];
+    const nodePromises = []; // Collect all packet flights
     const nicSpeed = tick / 4;
     let currentP = -1;
 
@@ -393,14 +487,15 @@ async function runNetworkShuffle(tick) {
             const targetBox = el(targetId);
             const r = createRecord(rec, rec.count);
             targetBox.appendChild(r);
-            setTimeout(()=>r.classList.add('show'), 10);
+            r.classList.add('show');
         };
 
-        // We don't await the packet journey fully here to allow pipelining,
-        // but we push it to promises list
+        // Parallel transmission: launch and continue
         nodePromises.push(packetJourney());
-        await wait(nicSpeed);
+        await wait(nicSpeed); // Small stagger for "stream" effect
     }
+    
+    // Await all packets for this node to arrive
     await Promise.all(nodePromises);
   };
 
@@ -426,8 +521,10 @@ async function runReduce(tick) {
       const rawRecs = state.reducers[p] || [];
 
       turnActiveToGhosts(box);
-      // Explicit removal removed to support CSS-only toggling
-      await wait(tick);
+
+      // Sweep effect for reduce aggregation
+      triggerCombineSweep(`red${p}`, 'sweep-purple');
+      await wait(Math.max(tick, 800));
       if(!state.running) return;
 
       const map = new Map();
@@ -435,15 +532,17 @@ async function runReduce(tick) {
           const prev = map.get(x.k) || 0;
           map.set(x.k, prev + (x.count || 1));
       });
-      
-      Array.from(map.entries()).forEach(([k, v]) => {
+
+      for (const [k, v] of map.entries()) {
+         if(!state.running) return;
          const colors = {'0':'bg-p0','1':'bg-p1','2':'bg-p2'};
          const r = createRecord({k, c: colors[p]}, v);
          r.style.border = "2px solid #1e293b";
          r.style.zIndex = 100; r.style.transform = "scale(1.1)";
          box.appendChild(r);
-         setTimeout(()=>r.classList.add('show'), 10);
-      });
+         r.classList.add('show');
+         await wait(tick * 0.3);
+      }
   });
   await Promise.all(reducePromises);
 }
@@ -463,6 +562,7 @@ function resetUI() {
       { id: 1, buffer: [], spills: [], final: [], data: [...RAW_DATA_B] }
   ];
   state.reducers = {0: [], 1: [], 2: []};
+  state.shuffleComplete = false;
   
   el('consoleLog').innerHTML = '<div class="log-entry log-sys">> Cluster Daemon Started. Waiting for job...</div>';
   ['mRecords','mSpills','mNet'].forEach(id => el(id).innerText = '0');
@@ -530,6 +630,9 @@ function resetUI() {
   if(el('fill0')) el('fill0').classList.remove('limit');
   if(el('fill1')) el('fill1').classList.remove('limit');
 
+  // Unfold everything
+  document.querySelectorAll('.node-row.folded').forEach(r => r.classList.remove('folded'));
+
   highlightNodes(null, 'IDLE');
 }
 
@@ -542,10 +645,19 @@ document.addEventListener('DOMContentLoaded', () => {
   // Init Teaching Mode State
   if(teachingCheck && appContainer) {
     if(teachingCheck.checked) appContainer.classList.add('teaching-mode-active');
-    
+
     teachingCheck.addEventListener('change', (e) => {
-      if(e.target.checked) appContainer.classList.add('teaching-mode-active');
-      else appContainer.classList.remove('teaching-mode-active');
+      if(e.target.checked) {
+        appContainer.classList.add('teaching-mode-active');
+        // Unfold when teaching mode is turned ON
+        unfoldIntermediateRows();
+      } else {
+        appContainer.classList.remove('teaching-mode-active');
+        // Fold when teaching mode is turned OFF (if shuffle is complete)
+        if (state.shuffleComplete) {
+          foldIntermediateRows();
+        }
+      }
     });
   }
 

@@ -324,15 +324,6 @@
     .bg-p0 { background: #8b5cf6; } /* Violet */
     .bg-p1 { background: #ec4899; } /* Pink */
     .bg-p2 { background: #f59e0b; } /* Amber */
-    
-    .kv-record.ghost { 
-      background: #f1f5f9 !important; color: #cbd5e1; 
-      border: 1px dashed #cbd5e1; box-shadow: none;
-      filter: none; opacity: 0.6; transform: scale(0.9);
-    } 
-    .kv-record.persistent { 
-      opacity: 0.8; transform: scale(0.95); z-index: 5; box-shadow: none; 
-    }
 
     .flying-record {
       position: absolute; z-index: 9999; pointer-events: none;
@@ -340,59 +331,55 @@
       transition: top 0.4s cubic-bezier(0.25, 1, 0.5, 1), left 0.4s cubic-bezier(0.25, 1, 0.5, 1);
     }
 
-    /* --- TEACHING MODE TOGGLE --- */
-    /* Common transition for smooth reflow */
+    /* --- GHOST & PERSISTENT STATES --- */
+
+    /* Smooth transitions for state changes */
     .kv-record {
       transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
     }
 
-    /* Hidden State: Collapse fully to reflow layout */
-    .app:not(.teaching-mode-active) .kv-record.ghost, 
+    /* Teaching Mode OFF: collapse ghost/persistent to zero */
+    .app:not(.teaching-mode-active) .kv-record.ghost,
     .app:not(.teaching-mode-active) .kv-record.persistent {
       opacity: 0;
-      pointer-events: none;
-      /* Critical for reflow: collapse space */
-      width: 0 !important;
-      min-width: 0 !important;
-      height: 0 !important; 
-      margin: 0 !important; 
-      padding: 0 !important; 
-      border: 0 !important;
+      width: 0 !important; min-width: 0 !important; height: 0 !important;
+      margin: 0 !important; padding: 0 !important; border: 0 !important;
       transform: scale(0);
+      pointer-events: none;
       overflow: hidden;
     }
 
-    /* Visible State: Expand back to original position */
-    .app.teaching-mode-active .kv-record.ghost,
-    .app.teaching-mode-active .kv-record.persistent {
-      opacity: 0.6; /* Ghost look */
-      width: auto;
-      min-width: 48px; /* Restore base size */
-      height: 24px;
-      margin: 3px; 
-      padding: 2px 8px; 
-      border: 1px dashed #cbd5e1;
-      transform: scale(0.9);
-    }
-    
-    .app.teaching-mode-active .kv-record.persistent {
-      opacity: 0.8;
-      border: 1px solid rgba(0,0,0,0.1);
-      transform: scale(0.95);
+    /* Teaching Mode ON: show ghost (faded) */
+    .app.teaching-mode-active .kv-record.ghost {
+      opacity: 0.4;
+      transform: scale(0.85);
+      filter: saturate(0.2) brightness(1.1);
+      border: 1px dashed rgba(0,0,0,0.15) !important;
+      box-shadow: none;
     }
 
-    /* FORCE VISIBILITY FOR HDFS INPUTS (Ground Truth) */
+    /* Teaching Mode ON: show persistent (semi-visible) */
+    .app.teaching-mode-active .kv-record.persistent {
+      opacity: 0.8;
+      transform: scale(0.95);
+      filter: saturate(0.5) brightness(1.1);
+      border: 1px solid rgba(0,0,0,0.1) !important;
+      box-shadow: none;
+    }
+
+    /* HDFS Inputs: always fully visible (override collapse) */
     #boxInput0 .kv-record, #boxInput1 .kv-record {
       opacity: 1 !important;
       width: auto !important;
-      min-width: 48px !important;
-      height: 24px !important;
+      min-width: 44px !important;
+      height: 22px !important;
       margin: 3px !important;
-      padding: 2px 8px !important;
-      pointer-events: auto !important;
+      padding: 0 6px !important;
       transform: scale(1) !important;
-      border: 1px solid #cbd5e1 !important;
-      display: flex !important;
+      filter: none !important;
+      border: 1px solid rgba(255,255,255,0.2) !important;
+      pointer-events: auto !important;
+      overflow: visible !important;
     }
 
     /* Progress Bar */
@@ -403,6 +390,102 @@
     .progress-fill { 
       height: 100%; width: 0%; background: var(--success); 
       transition: width 0.3s ease-out; 
+    }
+
+    /* --- FOLD ANIMATION --- */
+    .node-row {
+      transition: max-height 0.35s cubic-bezier(0.25, 0.8, 0.25, 1),
+                  opacity 0.25s ease,
+                  margin 0.25s ease,
+                  padding 0.25s ease;
+      overflow: hidden;
+      max-height: 500px; /* Must be larger than actual content height */
+      opacity: 1;
+    }
+
+    .node-row.folded {
+      max-height: 0 !important;
+      opacity: 0 !important;
+      margin-top: 0 !important;
+      margin-bottom: 0 !important;
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+      pointer-events: none;
+    }
+
+    /* --- COMBINE SWEEP EFFECT --- */
+    .combine-sweep {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+      overflow: hidden;
+      border-radius: inherit;
+      z-index: 50;
+    }
+
+    .combine-sweep::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.1) 25%,
+        rgba(255, 255, 255, 0.4) 50%,
+        rgba(255, 255, 255, 0.1) 75%,
+        transparent 100%
+      );
+      animation: sweepAcross 1s ease-in-out forwards;
+    }
+
+    /* Color variants */
+    .combine-sweep.sweep-amber::after {
+      background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(245, 158, 11, 0.1) 25%,
+        rgba(245, 158, 11, 0.5) 50%,
+        rgba(245, 158, 11, 0.1) 75%,
+        transparent 100%
+      );
+    }
+
+    .combine-sweep.sweep-green::after {
+      background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(16, 185, 129, 0.1) 25%,
+        rgba(16, 185, 129, 0.5) 50%,
+        rgba(16, 185, 129, 0.1) 75%,
+        transparent 100%
+      );
+    }
+
+    .combine-sweep.sweep-purple::after {
+      background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(139, 92, 246, 0.1) 25%,
+        rgba(139, 92, 246, 0.5) 50%,
+        rgba(139, 92, 246, 0.1) 75%,
+        transparent 100%
+      );
+    }
+
+    @keyframes sweepAcross {
+      0% { left: -100%; }
+      100% { left: 100%; }
+    }
+
+    /* Ensure containers have position relative for the sweep overlay */
+    .spill-slot, .final-output, .reducer-box {
+      position: relative;
     }
 
     /* Scrollbar for logs */
@@ -625,6 +708,6 @@
 }
 </style>
 
-  <script src="./assets/js/hadoop-map-side-pipeline-dual_nodes.js"></script>
+  <script type="module" src="./assets/js/pipeline-dual-nodes/index.js"></script>
 </body>
 </html>
