@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runMapper } from '../../../assets/js/pipeline-dual-nodes/phases/mapper.js';
 import { runSpill } from '../../../assets/js/pipeline-dual-nodes/phases/spill.js';
-import { runMergeAnimation, runMergeCombine } from '../../../assets/js/pipeline-dual-nodes/phases/merge.js';
+import { runMergeAnimation, runMergeSortOutput } from '../../../assets/js/pipeline-dual-nodes/phases/merge.js';
 import { runNetworkShuffle } from '../../../assets/js/pipeline-dual-nodes/phases/shuffle.js';
-import { runReduce } from '../../../assets/js/pipeline-dual-nodes/phases/reduce.js';
+import { runReduce, runReduceMergeSort } from '../../../assets/js/pipeline-dual-nodes/phases/reduce.js';
 import { runOutput } from '../../../assets/js/pipeline-dual-nodes/phases/output.js';
 import { setupMockDom, createElement, useImmediateTimers } from './dom-helpers.js';
 
@@ -85,6 +85,7 @@ test('runMergeAnimation captures merged records', async () => {
   state.mappers[0].spills = [[{ k: 'cat', p: 0, c: 'bg-p0', count: 1 }]];
 
   createElement(document, { id: 'spillA0' });
+  createElement(document, { id: 'combineA0' });
   createElement(document, { id: 'finalA' });
 
   await runMergeAnimation(state, 0, 1, () => true);
@@ -96,7 +97,7 @@ test('runMergeAnimation captures merged records', async () => {
   restore();
 });
 
-test('runMergeCombine writes final merged output', async () => {
+test('runMergeSortOutput writes final merged output', async () => {
   const { document, restore } = setupMockDom();
   const restoreTimers = useImmediateTimers();
   const state = createBaseState();
@@ -107,12 +108,14 @@ test('runMergeCombine writes final merged output', async () => {
   ];
 
   createElement(document, { id: 'spillA0' });
+  createElement(document, { id: 'combineA0' });
   createElement(document, { id: 'finalA' });
 
-  await runMergeCombine(state, 0, 1, () => true);
+  await runMergeSortOutput(state, 0, 1, () => true);
 
-  assert.equal(state.mappers[0].final.length, 1);
-  assert.equal(state.mappers[0].final[0].count, 3);
+  assert.equal(state.mappers[0].final.length, 2);
+  assert.equal(state.mappers[0].final[0].count, 1);
+  assert.equal(state.mappers[0].final[1].count, 2);
 
   restoreTimers();
   restore();
@@ -165,12 +168,46 @@ test('runReduce aggregates reducer data', async () => {
   createElement(document, { id: 'red0' });
   createElement(document, { id: 'red1' });
   createElement(document, { id: 'red2' });
+  createElement(document, { id: 'red0Reduce' });
+  createElement(document, { id: 'red1Reduce' });
+  createElement(document, { id: 'red2Reduce' });
 
   await runReduce(state, 1, () => true);
 
   assert.equal(state.reduceOutput[0].length, 1);
   assert.equal(state.reduceOutput[0][0].count, 3);
-  assert.ok(document.getElementById('red0').children.length >= 1);
+  assert.ok(document.getElementById('red0Reduce').children.length >= 1);
+
+  restoreTimers();
+  restore();
+});
+
+test('runReduceMergeSort sorts reducer inputs by key', async () => {
+  const { document, restore } = setupMockDom();
+  const restoreTimers = useImmediateTimers();
+  const state = createBaseState();
+  state.reducers[0] = [
+    { k: 'dog', p: 0, c: 'bg-p0', count: 1, source: 1 },
+    { k: 'ant', p: 0, c: 'bg-p0', count: 1, source: 0 },
+    { k: 'cat', p: 0, c: 'bg-p0', count: 1, source: 1 }
+  ];
+
+  createElement(document, { id: 'red0' });
+  createElement(document, { id: 'red0Segments' });
+  createElement(document, { id: 'red0Seg0' });
+  createElement(document, { id: 'red0Seg1' });
+  createElement(document, { id: 'red0Merge' });
+
+  await runReduceMergeSort(state, 1, () => true, () => true);
+
+  assert.equal(state.reducers[0][0].k, 'ant');
+  assert.equal(state.reducers[0][1].k, 'cat');
+  assert.equal(state.reducers[0][2].k, 'dog');
+
+  const box = document.getElementById('red0');
+  const mergeBox = document.getElementById('red0Merge');
+  assert.equal(mergeBox.children.length, 3);
+  assert.equal(box.children.length, 0);
 
   restoreTimers();
   restore();
@@ -182,9 +219,9 @@ test('runOutput writes final records to HDFS outputs', async () => {
   const state = createBaseState();
   state.reduceOutput[0] = [{ k: 'cat', count: 3, p: 0, c: 'bg-p0' }];
 
-  createElement(document, { id: 'red0' });
-  createElement(document, { id: 'red1' });
-  createElement(document, { id: 'red2' });
+  createElement(document, { id: 'red0Reduce' });
+  createElement(document, { id: 'red1Reduce' });
+  createElement(document, { id: 'red2Reduce' });
   createElement(document, { id: 'hdfsOut0' });
   createElement(document, { id: 'hdfsOut1' });
   createElement(document, { id: 'hdfsOut2' });

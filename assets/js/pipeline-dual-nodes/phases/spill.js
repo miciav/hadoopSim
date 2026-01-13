@@ -2,8 +2,8 @@
  * Spill phase: writes buffer contents to disk with sorting and combining.
  */
 
-import { el, getBufferId, getSpillSlotId } from '../dom/selectors.js';
-import { createRecordElement, showRecord, turnActiveToGhosts } from '../dom/records.js';
+import { el, getBufferId, getSpillSlotId, getCombineSlotId } from '../dom/selectors.js';
+import { createRecordElement, showRecord, turnActiveToGhosts, clearRecords } from '../dom/records.js';
 import { flyRecord, wait, triggerCombineSweep } from '../dom/animations.js';
 import { sortAndCombineBuffer } from '../combiner.js';
 import { SWEEP_COLORS } from '../config.js';
@@ -26,6 +26,8 @@ export async function runSpill(state, mapperId, spillIdx, delay, callbacks) {
   const bufId = getBufferId(mapperId);
   const slotId = getSpillSlotId(mapperId, spillIdx);
   const slot = el(slotId);
+  const combineSlotId = getCombineSlotId(mapperId, spillIdx);
+  const combineSlot = el(combineSlotId);
 
   // Animate records flying sequentially from buffer to spill slot
   for (const rec of mapper.buffer) {
@@ -60,14 +62,15 @@ export async function runSpill(state, mapperId, spillIdx, delay, callbacks) {
     turnActiveToGhosts(slot);
 
     // Sweep effect for combine
-    triggerCombineSweep(slotId, SWEEP_COLORS.AMBER);
+    if (combineSlot) clearRecords(combineSlot);
+    const sweepTargetId = combineSlot ? combineSlotId : slotId;
+    triggerCombineSweep(sweepTargetId, SWEEP_COLORS.AMBER);
     await wait(800);
 
     // Show combined records
     combined.forEach(rec => {
       const r = createRecordElement(rec, rec.count);
-      r.style.zIndex = 100;
-      slot.appendChild(r);
+      (combineSlot || slot).appendChild(r);
       setTimeout(() => showRecord(r), 20);
     });
   }

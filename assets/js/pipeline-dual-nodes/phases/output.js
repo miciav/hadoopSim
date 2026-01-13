@@ -2,7 +2,7 @@
  * Output phase: writes reduce results to HDFS output files.
  */
 
-import { el, getReducerId } from '../dom/selectors.js';
+import { el, getReducerOutputId } from '../dom/selectors.js';
 import { createRecordElement, showRecord } from '../dom/records.js';
 import { flyRecord, wait } from '../dom/animations.js';
 
@@ -23,7 +23,7 @@ export async function runOutput(state, tick, isRunning) {
   const outputPromises = partitions.map(async (p) => {
     if (!isRunning()) return;
 
-    const sourceId = getReducerId(p);
+    const sourceId = getReducerOutputId(p);
     const targetId = `hdfsOut${p}`;
     const records = state.reduceOutput[p] || [];
 

@@ -70,7 +70,7 @@ export async function runMapper(state, mapperId, delay, nodeId, callbacks) {
       if (!isRunning()) return;
 
       if (isTeaching()) {
-        log(`Node 0${mapperId + 1}: <strong>Combiner</strong> running... Writing Spill to Disk.`, 'DISK');
+        log(`Node 0${mapperId + 1}: <strong>Combiner</strong> running... Writing Combine output.`, 'DISK');
       }
 
       await runSpill(state, mapperId, mapper.spills.length, delay, callbacks);

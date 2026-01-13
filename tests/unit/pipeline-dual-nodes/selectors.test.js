@@ -9,10 +9,16 @@ import {
   getPctId,
   getBoxMapId,
   getBoxSpillId,
+  getBoxCombineId,
   getSpillSlotId,
+  getCombineSlotId,
   getFinalId,
   getSourceRecordId,
   getReducerId,
+  getReducerSegmentsId,
+  getReducerSegmentId,
+  getReducerMergeId,
+  getReducerOutputId,
   getNodeRedId,
   getBoxRedId,
   getHdfsOutId,
@@ -26,10 +32,16 @@ test('selector helpers build predictable IDs', () => {
   assert.equal(getPctId(0), 'pct0');
   assert.equal(getBoxMapId(1), 'boxMap1');
   assert.equal(getBoxSpillId(0), 'boxSpill0');
+  assert.equal(getBoxCombineId(1), 'boxCombine1');
   assert.equal(getSpillSlotId(1, 1), 'spillB1');
+  assert.equal(getCombineSlotId(0, 1), 'combineA1');
   assert.equal(getFinalId(0), 'finalA');
   assert.equal(getSourceRecordId(1, 3), 'src-1-3');
   assert.equal(getReducerId(2), 'red2');
+  assert.equal(getReducerSegmentsId(1), 'red1Segments');
+  assert.equal(getReducerSegmentId(2, 0), 'red2Seg0');
+  assert.equal(getReducerMergeId(0), 'red0Merge');
+  assert.equal(getReducerOutputId(1), 'red1Reduce');
   assert.equal(getNodeRedId(0), 'nodeRed0');
   assert.equal(getBoxRedId(2), 'boxRed2');
   assert.equal(getHdfsOutId(1), 'hdfsOut1');

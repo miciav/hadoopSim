@@ -10,9 +10,9 @@ import { wait } from './dom/animations.js';
 import { resetUI } from './dom/reset.js';
 import { foldIntermediateRows, unfoldIntermediateRows } from './dom/fold.js';
 import { runMapper } from './phases/mapper.js';
-import { runMergeAnimation, runMergeCombine } from './phases/merge.js';
+import { runMergeAnimation, runMergeSortOutput } from './phases/merge.js';
 import { runNetworkShuffle } from './phases/shuffle.js';
-import { runReduce } from './phases/reduce.js';
+import { runReduce, runReduceMergeSort } from './phases/reduce.js';
 import { runOutput } from './phases/output.js';
 
 /**
@@ -40,6 +40,8 @@ export function createSimulation() {
     }
   };
 
+  let activeCallbacks = callbacks;
+
   /**
    * Runs the complete simulation.
    */
@@ -51,6 +53,12 @@ export function createSimulation() {
     if (startBtn) startBtn.disabled = true;
 
     resetUI(state);
+
+    const teachingLatched = callbacks.isTeaching();
+    activeCallbacks = {
+      ...callbacks,
+      isTeaching: () => teachingLatched
+    };
 
     const speed = parseFloat(el(ELEMENT_IDS.SPEED_SLIDER)?.value ?? 1.5);
     const tick = 1000 / speed;
@@ -71,11 +79,15 @@ export function createSimulation() {
     if (!state.running) return;
     await runShufflePhase(tick);
 
-    // Phase 5: REDUCE
+    // Phase 5: REDUCE MERGE SORT
+    if (!state.running) return;
+    await runReduceMergeSortPhase(tick);
+
+    // Phase 6: REDUCE
     if (!state.running) return;
     await runReducePhase(tick);
 
-    // Phase 6: OUTPUT
+    // Phase 7: OUTPUT
     if (!state.running) return;
     await runOutputPhase(tick);
 
@@ -102,8 +114,8 @@ export function createSimulation() {
     log('<strong>Map Phase:</strong> Tasks started. Filling JVM Heap Buffers.', 'MAP');
 
     await Promise.all([
-      runMapper(state, 0, tick, ELEMENT_IDS.NODE_01, callbacks),
-      runMapper(state, 1, tick * 1.1, ELEMENT_IDS.NODE_02, callbacks)
+      runMapper(state, 0, tick, ELEMENT_IDS.NODE_01, activeCallbacks),
+      runMapper(state, 1, tick * 1.1, ELEMENT_IDS.NODE_02, activeCallbacks)
     ]);
   }
 
@@ -119,18 +131,18 @@ export function createSimulation() {
 
     // Animation: fly records to merge output
     await Promise.all([
-      runMergeAnimation(state, 0, tick, callbacks.isRunning),
-      runMergeAnimation(state, 1, tick * 1.05, callbacks.isRunning)
+      runMergeAnimation(state, 0, tick, activeCallbacks.isRunning),
+      runMergeAnimation(state, 1, tick * 1.05, activeCallbacks.isRunning)
     ]);
 
     if (!state.running) return;
     await wait(tick);
 
-    // Combine with sweep effect
-    log('<strong>Merge Phase:</strong> Combining sorted spills...', 'DISK');
+    // Sort merged spills with sweep effect
+    log('<strong>Merge Phase:</strong> Sorting combined spills...', 'DISK');
     await Promise.all([
-      runMergeCombine(state, 0, tick, callbacks.isRunning),
-      runMergeCombine(state, 1, tick, callbacks.isRunning)
+      runMergeSortOutput(state, 0, tick, activeCallbacks.isRunning),
+      runMergeSortOutput(state, 1, tick, activeCallbacks.isRunning)
     ]);
   }
 
@@ -144,7 +156,7 @@ export function createSimulation() {
     setNetworkActive(true);
     log('<strong>Shuffle Phase:</strong> Nodes streaming partitions in parallel via HTTP.', 'NET');
 
-    await runNetworkShuffle(state, tick, callbacks);
+    await runNetworkShuffle(state, tick, activeCallbacks);
 
     if (!state.running) return;
 
@@ -152,7 +164,7 @@ export function createSimulation() {
     state.shuffleComplete = true;
 
     // Fold if teaching mode is OFF
-    if (!callbacks.isTeaching()) {
+    if (!activeCallbacks.isTeaching()) {
       await foldIntermediateRows();
     }
   }
@@ -167,7 +179,20 @@ export function createSimulation() {
     highlightBoxes([ELEMENT_IDS.BOX_RED_0, ELEMENT_IDS.BOX_RED_1, ELEMENT_IDS.BOX_RED_2]);
     log('<strong>Reduce Phase:</strong> Sort/Group & Aggregation started.', 'RED');
 
-    await runReduce(state, tick, callbacks.isRunning);
+    await runReduce(state, tick, activeCallbacks.isRunning);
+  }
+
+  /**
+   * Phase 5: Reducer merge sort.
+   */
+  async function runReduceMergeSortPhase(tick) {
+    if (!state.running) return;
+
+    highlightNodes(null, 'Reduce Merge Sort');
+    highlightBoxes([ELEMENT_IDS.BOX_RED_0, ELEMENT_IDS.BOX_RED_1, ELEMENT_IDS.BOX_RED_2]);
+    log('<strong>Reduce Merge Sort:</strong> Merging sorted map outputs...', 'RED');
+
+    await runReduceMergeSort(state, tick, activeCallbacks.isRunning, activeCallbacks.isTeaching);
   }
 
   /**
@@ -180,7 +205,7 @@ export function createSimulation() {
     highlightBoxes([ELEMENT_IDS.BOX_HDFS_OUTPUT]);
     log('<strong>Output Phase:</strong> Writing results to HDFS...', 'SYS');
 
-    await runOutput(state, tick, callbacks.isRunning);
+    await runOutput(state, tick, activeCallbacks.isRunning);
   }
 
   /**

@@ -22,6 +22,17 @@ export async function foldIntermediateRows() {
 
   await wait(300);
 
+  // Fold Combine
+  ['boxCombine0', 'boxCombine1'].forEach(id => {
+    const box = el(id);
+    if (box) {
+      const row = box.closest('.node-row');
+      if (row) row.classList.add('folded');
+    }
+  });
+
+  await wait(300);
+
   // Fold Map Output
   ['boxMerge0', 'boxMerge1'].forEach(id => {
     const box = el(id);

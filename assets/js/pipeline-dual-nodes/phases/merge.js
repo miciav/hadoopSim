@@ -1,11 +1,11 @@
 /**
- * Merge phase: combines spills into final mapper output.
+ * Merge phase: sorts spills into final mapper output.
  */
 
-import { el, getSpillSlotId, getFinalId } from '../dom/selectors.js';
-import { createRecordElement, showRecord, turnActiveToGhosts, turnActiveToPersistent } from '../dom/records.js';
+import { el, getSpillSlotId, getCombineSlotId, getFinalId } from '../dom/selectors.js';
+import { createRecordElement, showRecord, turnActiveToGhosts } from '../dom/records.js';
 import { flyRecord, wait, triggerCombineSweep } from '../dom/animations.js';
-import { combine, sortByPartitionThenKey } from '../combiner.js';
+import { sortByPartitionThenKey } from '../combiner.js';
 import { SWEEP_COLORS } from '../config.js';
 
 /**
@@ -22,14 +22,13 @@ export async function runMergeAnimation(state, mapperId, tick, isRunning) {
   const mapper = state.mappers[mapperId];
   const targetId = getFinalId(mapperId);
   const target = el(targetId);
-  const labelA = mapperId === 0 ? 'A' : 'B';
-
   const all = [];
 
   // Build processing queue from all spills
   const processingQueue = [];
   mapper.spills.forEach((spillData, spillIdx) => {
-    const sourceId = getSpillSlotId(mapperId, spillIdx);
+    const combineId = getCombineSlotId(mapperId, spillIdx);
+    const sourceId = el(combineId) ? combineId : getSpillSlotId(mapperId, spillIdx);
     spillData.forEach(rec => {
       processingQueue.push({ rec, sourceId });
       all.push(rec);
@@ -55,34 +54,33 @@ export async function runMergeAnimation(state, mapperId, tick, isRunning) {
 }
 
 /**
- * Combines merged records into final sorted output.
+ * Sorts merged spills into final mapper output.
  * @param {Object} state - Simulation state
  * @param {number} mapperId - Mapper ID
  * @param {number} tick - Base timing
  * @param {Function} isRunning - Check if simulation is running
  * @returns {Promise<void>}
  */
-export async function runMergeCombine(state, mapperId, tick, isRunning) {
+export async function runMergeSortOutput(state, mapperId, tick, isRunning) {
   if (!isRunning()) return;
 
   const mapper = state.mappers[mapperId];
   const targetId = getFinalId(mapperId);
   const target = el(targetId);
-  const labelA = mapperId === 0 ? 'A' : 'B';
   const all = mapper._mergeAll || [];
 
   // Fade out unsorted records
   turnActiveToGhosts(target);
 
-  // Mark spills as persistent
+  // Ghost combined spills so they remain visible without staying active
   for (let i = 0; i < mapper.spills.length; i++) {
-    const s = el(getSpillSlotId(mapperId, i));
-    if (s) turnActiveToPersistent(s);
+    const combineId = getCombineSlotId(mapperId, i);
+    const slot = el(combineId) || el(getSpillSlotId(mapperId, i));
+    if (slot) turnActiveToGhosts(slot);
   }
 
-  // Sort and combine all records
-  const sorted = sortByPartitionThenKey(all);
-  const merged = combine(sorted);
+  // Sort merged records (combiner already ran during spill)
+  const merged = sortByPartitionThenKey(all);
   mapper.final = merged;
 
   // Sweep effect for merge
@@ -92,7 +90,6 @@ export async function runMergeCombine(state, mapperId, tick, isRunning) {
   // Show final merged records
   merged.forEach(rec => {
     const r = createRecordElement(rec, rec.count);
-    r.style.zIndex = 100;
     target.appendChild(r);
     setTimeout(() => showRecord(r), 10);
   });

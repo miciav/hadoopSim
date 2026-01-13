@@ -82,9 +82,7 @@ export function populateInputs(state) {
   if (input0) {
     input0.innerHTML = '';
     const div = document.createElement('div');
-    div.style.display = 'flex';
-    div.style.flexWrap = 'wrap';
-    div.style.justifyContent = 'center';
+    div.className = 'input-records';
     input0.appendChild(div);
 
     state.mappers[0].data.forEach((rec, i) => {
@@ -96,9 +94,7 @@ export function populateInputs(state) {
   if (input1) {
     input1.innerHTML = '';
     const div = document.createElement('div');
-    div.style.display = 'flex';
-    div.style.flexWrap = 'wrap';
-    div.style.justifyContent = 'center';
+    div.className = 'input-records';
     input1.appendChild(div);
 
     state.mappers[1].data.forEach((rec, i) => {
@@ -117,6 +113,12 @@ export function resetUI(state) {
   clearLog();
   resetMetrics();
   clearAllContainers();
+  document.querySelectorAll('.reducer-segments.active, .reducer-merge.active').forEach(el => {
+    el.classList.remove('active');
+  });
+  document.querySelectorAll('.reducer-inner.is-hidden').forEach(el => {
+    el.classList.remove('is-hidden');
+  });
   populateInputs(state);
   resetAllBufferFills();
   setNetworkActive(false);

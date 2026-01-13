@@ -2,8 +2,15 @@
  * Shuffle phase: network transfer of partitioned data to reducers.
  */
 
-import { el, getFinalId, getReducerId, ELEMENT_IDS } from '../dom/selectors.js';
-import { createRecordElement, showRecord, turnActiveToPersistent } from '../dom/records.js';
+import {
+  el,
+  getFinalId,
+  getReducerId,
+  getReducerSegmentId,
+  getReducerSegmentsId,
+  ELEMENT_IDS
+} from '../dom/selectors.js';
+import { createRecordElement, showRecord, turnActiveToPersistent, clearRecords } from '../dom/records.js';
 import { flyRecord, wait } from '../dom/animations.js';
 import { log } from '../dom/log.js';
 import { sortByPartitionThenKey } from '../combiner.js';
@@ -20,13 +27,32 @@ export async function runNetworkShuffle(state, tick, callbacks) {
 
   if (!isRunning()) return;
 
+  const teachingEnabled = isTeaching();
+  const segmentTargets = {};
+  if (teachingEnabled) {
+    [0, 1, 2].forEach(p => {
+      const segmentsBox = el(getReducerSegmentsId(p));
+      const seg0 = el(getReducerSegmentId(p, 0));
+      const seg1 = el(getReducerSegmentId(p, 1));
+      const ready = !!(segmentsBox && seg0 && seg1);
+      segmentTargets[String(p)] = ready;
+      if (ready) {
+        segmentsBox.classList.add('active');
+        clearRecords(seg0);
+        clearRecords(seg1);
+        const reducerBox = el(getReducerId(p));
+        if (reducerBox) clearRecords(reducerBox);
+      }
+    });
+  }
+
   const m0 = state.mappers[0].final;
   const m1 = state.mappers[1].final;
 
   /**
    * Transmits data from a single node to reducers.
    */
-  const transmitNodeData = async (records, sourceId, nodeName) => {
+  const transmitNodeData = async (records, sourceId, nodeName, sourceIndex) => {
     const localQueue = sortByPartitionThenKey(records);
     const nodePromises = [];
     const nicSpeed = tick / 4;
@@ -36,7 +62,7 @@ export async function runNetworkShuffle(state, tick, callbacks) {
       if (!isRunning()) break;
 
       // Log partition changes in teaching mode
-      if (isTeaching() && rec.p !== currentP) {
+      if (teachingEnabled && rec.p !== currentP) {
         currentP = rec.p;
         await wait(Math.random() * 100);
         log(`${nodeName}: Streaming batch for <strong>Partition ${currentP}</strong>...`, 'NET');
@@ -56,23 +82,26 @@ export async function runNetworkShuffle(state, tick, callbacks) {
         await wait((tick * 0.1) + Math.random() * 80);
         if (!isRunning()) return;
 
-        // Fly to reducer
-        const targetId = getReducerId(rec.p);
+        const recordPayload = { ...rec, source: sourceIndex };
+        const segmentId = getReducerSegmentId(rec.p, sourceIndex);
+        const useSegments = teachingEnabled && segmentTargets[String(rec.p)] === true;
+        const targetId = useSegments ? segmentId : getReducerId(rec.p);
 
         // Update state
         if (state.reducers[rec.p]) {
-          state.reducers[rec.p].push(rec);
+          state.reducers[rec.p].push(recordPayload);
         }
 
-        await flyRecord(ELEMENT_IDS.NET_HUB, targetId, rec, tick * 0.5);
+        await flyRecord(ELEMENT_IDS.NET_HUB, targetId, recordPayload, tick * 0.5);
 
         // Land in reducer
         const targetBox = el(targetId);
         if (targetBox) {
-          const r = createRecordElement(rec, rec.count);
+          const r = createRecordElement(recordPayload, recordPayload.count);
           targetBox.appendChild(r);
           showRecord(r);
         }
+
       };
 
       // Launch packet and continue (parallel transmission)
@@ -86,8 +115,8 @@ export async function runNetworkShuffle(state, tick, callbacks) {
 
   // Transmit from both nodes in parallel
   await Promise.all([
-    transmitNodeData(m0, getFinalId(0), 'Node 01'),
-    transmitNodeData(m1, getFinalId(1), 'Node 02')
+    transmitNodeData(m0, getFinalId(0), 'Node 01', 0),
+    transmitNodeData(m1, getFinalId(1), 'Node 02', 1)
   ]);
 
   if (!isRunning()) return;

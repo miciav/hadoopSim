@@ -22,6 +22,7 @@
       --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
       --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
       --font-mono: 'JetBrains Mono', 'Fira Code', 'Monaco', monospace;
+      --record-gap: 8px;
 
       /* Typography Scale (1.25 ratio - Major Third) */
       --text-xs: 12px;      /* Mini labels, badges */
@@ -61,7 +62,7 @@
     }
 
     .app {
-      max-width: 1600px; width: 100%;
+      max-width: 2000px; width: 100%;
       background: var(--bg-card);
       border-radius: 16px;
       padding: 32px 40px;
@@ -225,6 +226,14 @@
     }
     .label-disk { color: #d97706; }
 
+    /* Combine (Optional) - Blue/Compute */
+    .box-combine {
+      background: #eff6ff; /* Blue-50 */
+      border: 1px solid #bfdbfe;
+      border-left: 3px solid #3b82f6;
+    }
+    .label-combine { color: #1d4ed8; }
+
     /* Mappers */
     .mapper-card {
       border: 1px solid #bbf7d0; /* Green tint border */
@@ -239,8 +248,8 @@
 
     .buffer-inner {
       position: relative; border-radius: 6px; border: 1px solid #bbf7d0; background: #f0fdf4;
-      height: 90px; padding: 4px; display: flex; flex-wrap: wrap; 
-      align-content: flex-start; overflow: hidden;
+      height: 90px; padding: 4px; display: flex; flex-wrap: wrap; gap: var(--record-gap);
+      align-content: flex-start; justify-content: center; overflow: hidden;
     }
     .buffer-fill {
       position: absolute; bottom: 0; left: 0; right: 0; height: 0%;
@@ -252,13 +261,16 @@
       background: rgba(249, 115, 22, 0.15); border-color: var(--warning); 
     }
 
-    /* Spills */
-    .spill-container { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
-    .spill-slot {
+    /* Spills + Combine */
+    .spill-container,
+    .combine-container { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+    .spill-slot,
+    .combine-slot {
       flex: 1; min-width: 60px; border-radius: 6px; 
       border: 1px solid #fcd34d; background: #ffffff;
       min-height: 80px; padding: 20px 4px 4px; 
-      position: relative; display: flex; flex-wrap: wrap; align-content: flex-start;
+      position: relative; display: flex; flex-wrap: wrap; gap: var(--record-gap);
+      align-content: flex-start; justify-content: center;
       box-shadow: 0 1px 2px rgba(245, 158, 11, 0.1);
     }
     .mini-label {
@@ -271,7 +283,8 @@
       border-radius: 6px; border: 1px solid #cbd5e1; 
       background: linear-gradient(135deg, #fff 0%, #fff7ed 100%);
       min-height: 80px; padding: 20px 4px 4px; 
-      position: relative; display: flex; flex-wrap: wrap; align-content: flex-start;
+      position: relative; display: flex; flex-wrap: wrap; gap: var(--record-gap);
+      align-content: flex-start; justify-content: center;
     }
 
     /* Network Layer - Light Theme */
@@ -306,7 +319,9 @@
       min-height: 100px;
       display: flex;
       flex-wrap: wrap;
+      gap: var(--record-gap);
       align-content: flex-start;
+      justify-content: center;
       padding: 4px;
       position: relative;
     }
@@ -317,6 +332,42 @@
       background: #faf5ff;
       border-color: #e9d5ff;
       border-left: 3px solid var(--partition-0);
+    }
+
+    .reducer-segments {
+      display: none;
+      flex-direction: column;
+      gap: var(--record-gap);
+      margin-bottom: var(--record-gap);
+    }
+    .reducer-segments.active {
+      display: flex;
+    }
+
+    .reducer-stage {
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      background: #ffffff;
+      min-height: 60px;
+      padding: 20px 4px 4px;
+      position: relative;
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--record-gap);
+      align-content: flex-start;
+      justify-content: center;
+    }
+
+    .reducer-merge {
+      display: none;
+      margin-top: var(--record-gap);
+    }
+    .reducer-merge.active {
+      display: flex;
+    }
+
+    .reducer-output {
+      margin-top: var(--record-gap);
     }
 
     /* Output files container */
@@ -335,7 +386,15 @@
       position: relative;
       display: flex;
       flex-wrap: wrap;
+      gap: var(--record-gap);
       align-content: flex-start;
+      justify-content: center;
+    }
+
+    .reducer-inner.is-hidden {
+      display: none;
+      min-height: 0;
+      padding: 0;
     }
 
     /* Output node accent */
@@ -372,6 +431,14 @@
     @keyframes fadeIn { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
 
     /* --- RECORDS --- */
+    .input-records {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-content: flex-start;
+      gap: var(--record-gap);
+    }
+
     .kv-record {
       font-size: var(--text-xs);
       padding: 0 8px;
@@ -379,7 +446,7 @@
       min-width: 52px;
       border-radius: 5px;
       color: white; font-weight: 700;
-      margin: 4px;
+      margin: 0;
       display: flex; align-items: center; justify-content: center;
       box-shadow: 0 2px 4px rgba(0,0,0,0.12);
       opacity: 0; transform: scale(0.8); flex-shrink: 0;
@@ -401,7 +468,6 @@
 
     .flying-record {
       position: absolute; z-index: 9999; pointer-events: none;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.15); transform: scale(1.1) !important;
       transition: top 0.4s cubic-bezier(0.25, 1, 0.5, 1), left 0.4s cubic-bezier(0.25, 1, 0.5, 1);
     }
 
@@ -421,7 +487,7 @@
     /* Ghost style (shared across all boxes) */
     .kv-record.ghost {
       opacity: 0.4;
-      transform: scale(0.85);
+      transform: scale(1);
       filter: saturate(0.2) brightness(1.1);
       border: 1px dashed rgba(0,0,0,0.15) !important;
       box-shadow: none;
@@ -435,7 +501,7 @@
       width: auto !important;
       min-width: 52px !important;
       height: 26px !important;
-      margin: 4px !important;
+      margin: 0 !important;
       padding: 0 8px !important;
       transform: scale(1) !important;
       filter: none !important;
@@ -667,12 +733,25 @@
           <!-- DISK Spills -->
           <div class="node-row">
             <div class="box-label label-disk">
-              <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="12" x2="2" y2="12"></line><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path><line x1="6" y1="16" x2="6.01" y2="16"></line><line x1="10" y1="16" x2="10.01" y2="16"></line></svg> Local FS (Spills)</span>
+              <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="12" x2="2" y2="12"></line><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path><line x1="6" y1="16" x2="6.01" y2="16"></line><line x1="10" y1="16" x2="10.01" y2="16"></line></svg> Spill (Local FS)</span>
             </div>
             <div class="box-content box-disk" id="boxSpill0">
               <div class="spill-container">
                 <div class="spill-slot" id="spillA0"><div class="mini-label">Spill 0</div></div>
                 <div class="spill-slot" id="spillA1"><div class="mini-label">Spill 1</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Combine -->
+          <div class="node-row">
+            <div class="box-label label-combine">
+              <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg> Combine (Optional)</span>
+            </div>
+            <div class="box-content box-combine" id="boxCombine0">
+              <div class="combine-container">
+                <div class="combine-slot" id="combineA0"><div class="mini-label">Combine 0</div></div>
+                <div class="combine-slot" id="combineA1"><div class="mini-label">Combine 1</div></div>
               </div>
             </div>
           </div>
@@ -721,12 +800,25 @@
           <!-- DISK Spills -->
           <div class="node-row">
             <div class="box-label label-disk">
-              <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="12" x2="2" y2="12"></line><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path><line x1="6" y1="16" x2="6.01" y2="16"></line><line x1="10" y1="16" x2="10.01" y2="16"></line></svg> Local FS (Spills)</span>
+              <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="12" x2="2" y2="12"></line><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path><line x1="6" y1="16" x2="6.01" y2="16"></line><line x1="10" y1="16" x2="10.01" y2="16"></line></svg> Spill (Local FS)</span>
             </div>
             <div class="box-content box-disk" id="boxSpill1">
               <div class="spill-container">
                 <div class="spill-slot" id="spillB0"><div class="mini-label">Spill 0</div></div>
                 <div class="spill-slot" id="spillB1"><div class="mini-label">Spill 1</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Combine -->
+          <div class="node-row">
+            <div class="box-label label-combine">
+              <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg> Combine (Optional)</span>
+            </div>
+            <div class="box-content box-combine" id="boxCombine1">
+              <div class="combine-container">
+                <div class="combine-slot" id="combineB0"><div class="mini-label">Combine 0</div></div>
+                <div class="combine-slot" id="combineB1"><div class="mini-label">Combine 1</div></div>
               </div>
             </div>
           </div>
@@ -761,7 +853,13 @@
               <span>Reduce Task (Partition 0)</span>
             </div>
             <div class="box-content box-reduce" id="boxRed0">
+              <div class="reducer-segments" id="red0Segments">
+                <div class="segment-row reducer-stage" id="red0Seg0"><div class="mini-label">Segmento Node 01</div></div>
+                <div class="segment-row reducer-stage" id="red0Seg1"><div class="mini-label">Segmento Node 02</div></div>
+              </div>
+              <div class="reducer-merge reducer-stage" id="red0Merge"><div class="mini-label">Merge sort</div></div>
               <div class="reducer-inner" id="red0"></div>
+              <div class="reducer-output reducer-stage" id="red0Reduce"><div class="mini-label color-p0">Reduce</div></div>
             </div>
           </div>
         </div>
@@ -774,7 +872,13 @@
               <span>Reduce Task (Partition 1)</span>
             </div>
             <div class="box-content box-reduce" id="boxRed1" style="border-left-color:var(--partition-1);">
+              <div class="reducer-segments" id="red1Segments">
+                <div class="segment-row reducer-stage" id="red1Seg0"><div class="mini-label">Segmento Node 01</div></div>
+                <div class="segment-row reducer-stage" id="red1Seg1"><div class="mini-label">Segmento Node 02</div></div>
+              </div>
+              <div class="reducer-merge reducer-stage" id="red1Merge"><div class="mini-label">Merge sort</div></div>
               <div class="reducer-inner" id="red1"></div>
+              <div class="reducer-output reducer-stage" id="red1Reduce"><div class="mini-label color-p1">Reduce</div></div>
             </div>
           </div>
         </div>
@@ -787,7 +891,13 @@
               <span>Reduce Task (Partition 2)</span>
             </div>
             <div class="box-content box-reduce" id="boxRed2" style="border-left-color:var(--partition-2);">
+              <div class="reducer-segments" id="red2Segments">
+                <div class="segment-row reducer-stage" id="red2Seg0"><div class="mini-label">Segmento Node 01</div></div>
+                <div class="segment-row reducer-stage" id="red2Seg1"><div class="mini-label">Segmento Node 02</div></div>
+              </div>
+              <div class="reducer-merge reducer-stage" id="red2Merge"><div class="mini-label">Merge sort</div></div>
               <div class="reducer-inner" id="red2"></div>
+              <div class="reducer-output reducer-stage" id="red2Reduce"><div class="mini-label color-p2">Reduce</div></div>
             </div>
           </div>
         </div>
