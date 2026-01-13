@@ -2,7 +2,16 @@
  * Map phase: processes input records and fills buffers.
  */
 
-import { el, getBufferId, getFillId, getPctId, getBoxSpillId, getSourceRecordId } from '../dom/selectors.js';
+import {
+  el,
+  getBufferId,
+  getFillId,
+  getPctId,
+  getBoxSpillId,
+  getBoxCombineId,
+  getSpillSlotId,
+  getSourceRecordId
+} from '../dom/selectors.js';
 import { createRecordElement, showRecord, turnActiveToGhosts } from '../dom/records.js';
 import { flyRecord, wait } from '../dom/animations.js';
 import { log } from '../dom/log.js';
@@ -69,11 +78,21 @@ export async function runMapper(state, mapperId, delay, nodeId, callbacks) {
       await wait(delay);
       if (!isRunning()) return;
 
+      const spillIdx = mapper.spills.length;
+      const spillSlot = el(getSpillSlotId(mapperId, spillIdx));
+      if (spillSlot) spillSlot.classList.remove('is-hidden');
+
+      if (spillIdx === 1) {
+        const combineBox = el(getBoxCombineId(mapperId));
+        const combineRow = combineBox ? combineBox.closest('.node-row') : null;
+        if (combineRow) combineRow.classList.remove('is-hidden');
+      }
+
       if (isTeaching()) {
         log(`Node 0${mapperId + 1}: <strong>Combiner</strong> running... Writing Combine output.`, 'DISK');
       }
 
-      await runSpill(state, mapperId, mapper.spills.length, delay, callbacks);
+      await runSpill(state, mapperId, spillIdx, delay, callbacks);
       if (!isRunning()) return;
 
       if (spillBox) spillBox.classList.remove('active');

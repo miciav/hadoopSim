@@ -2,7 +2,7 @@
  * Spill phase: writes buffer contents to disk with sorting and combining.
  */
 
-import { el, getBufferId, getSpillSlotId, getCombineSlotId } from '../dom/selectors.js';
+import { el, getBufferId, getSpillSlotId, getCombineSlotId, getBoxCombineId } from '../dom/selectors.js';
 import { createRecordElement, showRecord, turnActiveToGhosts, clearRecords } from '../dom/records.js';
 import { flyRecord, wait, triggerCombineSweep } from '../dom/animations.js';
 import { sortAndCombineBuffer } from '../combiner.js';
@@ -28,6 +28,12 @@ export async function runSpill(state, mapperId, spillIdx, delay, callbacks) {
   const slot = el(slotId);
   const combineSlotId = getCombineSlotId(mapperId, spillIdx);
   const combineSlot = el(combineSlotId);
+  const combineBox = el(getBoxCombineId(mapperId));
+  const combineRow = combineBox ? combineBox.closest('.node-row') : null;
+
+  if (slot) {
+    slot.classList.remove('is-hidden');
+  }
 
   // Animate records flying sequentially from buffer to spill slot
   for (const rec of mapper.buffer) {
@@ -57,6 +63,10 @@ export async function runSpill(state, mapperId, spillIdx, delay, callbacks) {
   if (slot) {
     await wait(delay * 0.5);
     if (!isRunning()) return;
+
+    if (spillIdx === 1 && combineRow) {
+      combineRow.classList.remove('is-hidden');
+    }
 
     // Fade out unsorted records
     turnActiveToGhosts(slot);

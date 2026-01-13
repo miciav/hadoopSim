@@ -116,6 +116,12 @@ export function resetUI(state) {
   document.querySelectorAll('.reducer-segments.active, .reducer-merge.active').forEach(el => {
     el.classList.remove('active');
   });
+  document.querySelectorAll('.spill-slot').forEach(el => {
+    el.classList.add('is-hidden');
+  });
+  document.querySelectorAll('.combine-row').forEach(el => {
+    el.classList.add('is-hidden');
+  });
   document.querySelectorAll('.reducer-inner.is-hidden').forEach(el => {
     el.classList.remove('is-hidden');
   });

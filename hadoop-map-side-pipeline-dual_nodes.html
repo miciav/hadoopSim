@@ -130,21 +130,37 @@
     .metrics { 
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 24px 0; 
     }
+    .metrics.compact {
+      grid-template-columns: repeat(4, minmax(90px, 1fr));
+      gap: 8px;
+      margin: 0;
+    }
     .metric-card {
       background: #fff; border: 1px solid var(--border-color);
       border-radius: var(--radius); padding: 20px;
       display: flex; flex-direction: column; align-items: center;
       box-shadow: var(--shadow-sm); transition: transform 0.2s;
     }
+    .metrics.compact .metric-card {
+      padding: 8px 10px;
+      min-height: 52px;
+    }
     .metric-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
     .metric-value {
       font-size: var(--text-2xl); font-weight: 700;
       color: #0f172a; font-family: var(--font-mono);
     }
+    .metrics.compact .metric-value {
+      font-size: var(--text-lg);
+    }
     .metric-label {
       font-size: var(--text-xs); text-transform: uppercase;
       letter-spacing: 0.05em; color: #64748b;
       margin-top: 6px; font-weight: 600;
+    }
+    .metrics.compact .metric-label {
+      margin-top: 2px;
+      letter-spacing: 0.04em;
     }
 
     /* Main Layout */
@@ -262,9 +278,20 @@
     }
 
     /* Spills + Combine */
-    .spill-container,
+    .spill-container {
+      display: flex;
+      flex-direction: column;
+      gap: var(--record-gap);
+    }
     .combine-container { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
-    .spill-slot,
+    .spill-slot {
+      border-radius: 6px; 
+      border: 1px solid #cbd5e1; background: #ffffff;
+      min-height: 60px; padding: 20px 4px 4px;
+      position: relative; display: flex; flex-wrap: wrap; gap: var(--record-gap);
+      align-content: flex-start; justify-content: center;
+      width: 100%;
+    }
     .combine-slot {
       flex: 1; min-width: 60px; border-radius: 6px; 
       border: 1px solid #fcd34d; background: #ffffff;
@@ -389,6 +416,10 @@
       gap: var(--record-gap);
       align-content: flex-start;
       justify-content: center;
+    }
+
+    .is-hidden {
+      display: none !important;
     }
 
     .reducer-inner.is-hidden {
@@ -673,24 +704,23 @@
         <input type="range" id="speedSlider" min="0.5" max="3.0" step="0.5" value="1.5" style="width:80px; cursor:pointer;">
       </span>
     </div>
-  </div>
-
-  <div class="metrics">
-    <div class="metric-card">
-      <span class="metric-value" id="mRecords">0</span>
-      <span class="metric-label">📥 Records In</span>
-    </div>
-    <div class="metric-card">
-      <span class="metric-value" id="mSpills">0</span>
-      <span class="metric-label">💾 Disk Spills</span>
-    </div>
-    <div class="metric-card">
-      <span class="metric-value" id="mNet">0</span>
-      <span class="metric-label">🔌 Net Packets</span>
-    </div>
-    <div class="metric-card">
-      <span class="metric-value" id="mPhase" style="color:var(--primary)">IDLE</span>
-      <span class="metric-label">⚙️ Status</span>
+    <div class="metrics compact">
+      <div class="metric-card">
+        <span class="metric-value" id="mRecords">0</span>
+        <span class="metric-label">📥 Records In</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-value" id="mSpills">0</span>
+        <span class="metric-label">💾 Disk Spills</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-value" id="mNet">0</span>
+        <span class="metric-label">🔌 Net Packets</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-value" id="mPhase" style="color:var(--primary)">IDLE</span>
+        <span class="metric-label">⚙️ Status</span>
+      </div>
     </div>
   </div>
 
@@ -737,14 +767,14 @@
             </div>
             <div class="box-content box-disk" id="boxSpill0">
               <div class="spill-container">
-                <div class="spill-slot" id="spillA0"><div class="mini-label">Spill 0</div></div>
-                <div class="spill-slot" id="spillA1"><div class="mini-label">Spill 1</div></div>
-              </div>
+              <div class="spill-slot is-hidden" id="spillA0"><div class="mini-label">Spill 0</div></div>
+              <div class="spill-slot is-hidden" id="spillA1"><div class="mini-label">Spill 1</div></div>
             </div>
           </div>
+        </div>
 
           <!-- Combine -->
-          <div class="node-row">
+          <div class="node-row combine-row is-hidden">
             <div class="box-label label-combine">
               <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg> Combine (Optional)</span>
             </div>
@@ -804,14 +834,14 @@
             </div>
             <div class="box-content box-disk" id="boxSpill1">
               <div class="spill-container">
-                <div class="spill-slot" id="spillB0"><div class="mini-label">Spill 0</div></div>
-                <div class="spill-slot" id="spillB1"><div class="mini-label">Spill 1</div></div>
-              </div>
+              <div class="spill-slot is-hidden" id="spillB0"><div class="mini-label">Spill 0</div></div>
+              <div class="spill-slot is-hidden" id="spillB1"><div class="mini-label">Spill 1</div></div>
             </div>
           </div>
+        </div>
 
           <!-- Combine -->
-          <div class="node-row">
+          <div class="node-row combine-row is-hidden">
             <div class="box-label label-combine">
               <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg> Combine (Optional)</span>
             </div>
@@ -854,8 +884,8 @@
             </div>
             <div class="box-content box-reduce" id="boxRed0">
               <div class="reducer-segments" id="red0Segments">
-                <div class="segment-row reducer-stage" id="red0Seg0"><div class="mini-label">Segmento Node 01</div></div>
-                <div class="segment-row reducer-stage" id="red0Seg1"><div class="mini-label">Segmento Node 02</div></div>
+                <div class="segment-row reducer-stage" id="red0Seg0"><div class="mini-label">Segment Node 01</div></div>
+                <div class="segment-row reducer-stage" id="red0Seg1"><div class="mini-label">Segment Node 02</div></div>
               </div>
               <div class="reducer-merge reducer-stage" id="red0Merge"><div class="mini-label">Merge sort</div></div>
               <div class="reducer-inner" id="red0"></div>
@@ -873,8 +903,8 @@
             </div>
             <div class="box-content box-reduce" id="boxRed1" style="border-left-color:var(--partition-1);">
               <div class="reducer-segments" id="red1Segments">
-                <div class="segment-row reducer-stage" id="red1Seg0"><div class="mini-label">Segmento Node 01</div></div>
-                <div class="segment-row reducer-stage" id="red1Seg1"><div class="mini-label">Segmento Node 02</div></div>
+                <div class="segment-row reducer-stage" id="red1Seg0"><div class="mini-label">Segment Node 01</div></div>
+                <div class="segment-row reducer-stage" id="red1Seg1"><div class="mini-label">Segment Node 02</div></div>
               </div>
               <div class="reducer-merge reducer-stage" id="red1Merge"><div class="mini-label">Merge sort</div></div>
               <div class="reducer-inner" id="red1"></div>

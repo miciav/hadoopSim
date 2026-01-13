@@ -3,7 +3,7 @@
  */
 
 import { el, getReducerOutputId } from '../dom/selectors.js';
-import { createRecordElement, showRecord } from '../dom/records.js';
+import { createRecordElement, showRecord, markAsGhost } from '../dom/records.js';
 import { flyRecord, wait } from '../dom/animations.js';
 
 /**
@@ -46,6 +46,11 @@ export async function runOutput(state, tick, isRunning) {
       }
 
       await wait(tick * 0.25);
+    }
+
+    const sourceBox = el(sourceId);
+    if (sourceBox) {
+      sourceBox.querySelectorAll('.kv-record').forEach(markAsGhost);
     }
   });
 
