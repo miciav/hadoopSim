@@ -9,6 +9,7 @@ export const ELEMENT_IDS = Object.freeze({
   RESET_BTN: 'resetBtn',
   TEACHING_MODE: 'teachingMode',
   SPEED_SLIDER: 'speedSlider',
+  SPLIT_SIZE_INPUT: 'splitSizeInput',
 
   // Metrics
   RECORDS_COUNT: 'mRecords',
@@ -159,10 +160,8 @@ export function el(id) {
 // All container IDs that need to be cleared on reset
 export const CLEARABLE_CONTAINERS = Object.freeze([
   'buf0', 'buf1',
-  'spillA0', 'spillA1', 'spillB0', 'spillB1',
-  'combineA0', 'combineA1', 'combineB0', 'combineB1',
-  'finalA', 'finalB',
-  'red0', 'red1', 'red2',
+  'finalA-p0', 'finalA-p1', 'finalA-p2', 'finalB-p0', 'finalB-p1', 'finalB-p2',
+  'mergeInner0', 'mergeInner1', 'red0', 'red1', 'red2',
   'red0Reduce', 'red1Reduce', 'red2Reduce',
   'red0Seg0', 'red0Seg1', 'red1Seg0', 'red1Seg1', 'red2Seg0', 'red2Seg1',
   'red0Merge', 'red1Merge', 'red2Merge',
@@ -176,12 +175,21 @@ export const HEIGHT_SYNC_GROUPS = Object.freeze([
   ['boxSpill0', 'boxSpill1'],
   ['boxCombine0', 'boxCombine1'],
   ['boxMerge0', 'boxMerge1'],
-  ['spillA0', 'spillB0'],
-  ['spillA1', 'spillB1'],
-  ['combineA0', 'combineB0'],
-  ['combineA1', 'combineB1'],
   ['finalA', 'finalB'],
   ['boxRed0', 'boxRed1', 'boxRed2'],
   ['red0Reduce', 'red1Reduce', 'red2Reduce'],
   ['hdfsOut0', 'hdfsOut1', 'hdfsOut2']
 ]);
+
+export function getFinalSegmentId(mapperId, partition) {
+  const label = mapperId === 0 ? 'A' : 'B';
+  return 'final' + label + '-p' + partition;
+}
+
+export function getBoxLocalMergeId(mapperId) {
+  return 'boxLocalMerge' + mapperId;
+}
+
+export function getMergeInnerId(mapperId) {
+  return 'mergeInner' + mapperId;
+}

@@ -54,6 +54,14 @@ export function initPipeline() {
       resetBtn.addEventListener('click', () => simulation.reset());
     }
 
+    const splitInput = el(ELEMENT_IDS.SPLIT_SIZE_INPUT);
+    if (splitInput) {
+      splitInput.addEventListener('change', (e) => {
+        const val = parseInt(e.target.value, 10);
+        if (val > 0) simulation.updateSplitSize(val);
+      });
+    }
+
     // Initialize layout sync
     initHeightSync();
   });

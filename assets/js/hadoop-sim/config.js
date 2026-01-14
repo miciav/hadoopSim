@@ -8,7 +8,7 @@ export const DEFAULT_NODE_TEMPLATE = {
 export const DEFAULT_CONFIG = {
   nodeCount: 6,
   replicationFactor: 3,
-  blockSizeMb: 128,
+  blockSizeMb: 10,
   nodeTemplate: DEFAULT_NODE_TEMPLATE,
   hdfs: {
     placementPolicy: 'balanced'

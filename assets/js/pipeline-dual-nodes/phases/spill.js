@@ -5,7 +5,7 @@
 import { el, getBufferId, getSpillSlotId, getCombineSlotId, getBoxCombineId } from '../dom/selectors.js';
 import { createRecordElement, showRecord, turnActiveToGhosts, clearRecords } from '../dom/records.js';
 import { flyRecord, wait, triggerCombineSweep } from '../dom/animations.js';
-import { sortAndCombineBuffer } from '../combiner.js';
+import { sortAndCombineBuffer, sortByPartitionThenKey } from '../combiner.js';
 import { SWEEP_COLORS } from '../config.js';
 
 /**
@@ -35,8 +35,11 @@ export async function runSpill(state, mapperId, spillIdx, delay, callbacks) {
     slot.classList.remove('is-hidden');
   }
 
+  // Sort buffer contents before spilling (Hadoop behavior: buffer is sorted before writing to disk)
+  const sortedBuffer = sortByPartitionThenKey(mapper.buffer);
+
   // Animate records flying sequentially from buffer to spill slot
-  for (const rec of mapper.buffer) {
+  for (const rec of sortedBuffer) {
     if (!isRunning()) return;
 
     await flyRecord(bufId, slotId, rec, delay * 0.5);
@@ -64,7 +67,7 @@ export async function runSpill(state, mapperId, spillIdx, delay, callbacks) {
     await wait(delay * 0.5);
     if (!isRunning()) return;
 
-    if (spillIdx === 1 && combineRow) {
+    if (combineRow) {
       combineRow.classList.remove('is-hidden');
     }
 

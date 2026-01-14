@@ -2,14 +2,20 @@
  * Merge phase: sorts spills into final mapper output.
  */
 
-import { el, getSpillSlotId, getCombineSlotId, getFinalId } from '../dom/selectors.js';
-import { createRecordElement, showRecord, turnActiveToGhosts } from '../dom/records.js';
-import { flyRecord, wait, triggerCombineSweep } from '../dom/animations.js';
-import { sortByPartitionThenKey } from '../combiner.js';
-import { SWEEP_COLORS } from '../config.js';
+import { 
+  el, 
+  getSpillSlotId, 
+  getCombineSlotId, 
+  getFinalId, 
+  getFinalSegmentId,
+  getBoxLocalMergeId,
+  getMergeInnerId
+} from '../dom/selectors.js';
+import { createRecordElement, showRecord, turnActiveToGhosts, markAsGhost } from '../dom/records.js';
+import { flyRecord, wait } from '../dom/animations.js';
 
 /**
- * Animates records flying from spills to merge output.
+ * Animates records flying from spills to Local Merge Sort box.
  * @param {Object} state - Simulation state
  * @param {number} mapperId - Mapper ID
  * @param {number} tick - Base timing
@@ -20,77 +26,89 @@ export async function runMergeAnimation(state, mapperId, tick, isRunning) {
   if (!isRunning()) return;
 
   const mapper = state.mappers[mapperId];
-  const targetId = getFinalId(mapperId);
-  const target = el(targetId);
-  const all = [];
+  const mergeBoxId = getBoxLocalMergeId(mapperId);
+  const mergeInnerId = getMergeInnerId(mapperId);
+  const mergeBox = el(mergeBoxId);
+  const mergeInner = el(mergeInnerId);
 
-  // Build processing queue from all spills
-  const processingQueue = [];
-  mapper.spills.forEach((spillData, spillIdx) => {
-    const combineId = getCombineSlotId(mapperId, spillIdx);
-    const sourceId = el(combineId) ? combineId : getSpillSlotId(mapperId, spillIdx);
-    spillData.forEach(rec => {
-      processingQueue.push({ rec, sourceId });
-      all.push(rec);
-    });
+  if (mergeBox) {
+    const row = mergeBox.closest('.node-row');
+    if (row) row.classList.remove('is-hidden');
+  }
+
+  // 1. Multi-way merge from spills
+  const spills = mapper.spills.map((data, idx) => {
+    const combineId = getCombineSlotId(mapperId, idx);
+    const sourceId = el(combineId) ? combineId : getSpillSlotId(mapperId, idx);
+    return { data: [...data], sourceId, pos: 0 };
   });
 
-  // Animate records flying sequentially
-  for (const item of processingQueue) {
+  const mergedOrder = [];
+  while (true) {
+    let minIdx = -1;
+    let minRec = null;
+    spills.forEach((s, idx) => {
+      if (s.pos >= s.data.length) return;
+      const cand = s.data[s.pos];
+      if (!minRec || cand.p < minRec.p || (cand.p === minRec.p && String(cand.k).localeCompare(String(minRec.k)) < 0)) {
+        minRec = cand;
+        minIdx = idx;
+      }
+    });
+    if (minIdx === -1) break;
+    mergedOrder.push({ rec: spills[minIdx].data[spills[minIdx].pos], sourceId: spills[minIdx].sourceId });
+    spills[minIdx].pos++;
+  }
+
+  // 2. Fly to Merge Sort box
+  for (const item of mergedOrder) {
     if (!isRunning()) return;
-
-    await flyRecord(item.sourceId, targetId, item.rec, tick * 0.6);
-
-    // Land record in merge output
-    const r = createRecordElement(item.rec, item.rec.count);
-    target.appendChild(r);
-    showRecord(r);
-
+    await flyRecord(item.sourceId, mergeInnerId, item.rec, tick * 0.5);
+    if (mergeInner) {
+      const r = createRecordElement(item.rec, item.rec.count);
+      mergeInner.appendChild(r);
+      showRecord(r);
+      item.mergeEl = r; // Keep reference to ghost it later
+    }
     await wait(tick * 0.1);
   }
 
-  // Store all records for combine phase
-  mapper._mergeAll = all;
+  // 3. Pause for sort completion
+  await wait(tick * 0.5);
+
+  // 4. Save to Disk (Copy to final segments and ghost in merge box)
+  for (const item of mergedOrder) {
+    if (!isRunning()) return;
+    const segmentId = getFinalSegmentId(mapperId, item.rec.p);
+    
+    // Fly to segment
+    await flyRecord(mergeInnerId, segmentId, item.rec, tick * 0.5);
+    
+    // Ghost the record in Local Merge box instead of removing it
+    if (item.mergeEl) markAsGhost(item.mergeEl);
+
+    const segment = el(segmentId);
+    if (segment) {
+      const r = createRecordElement(item.rec, item.rec.count);
+      segment.appendChild(r);
+      showRecord(r);
+    }
+    await wait(tick * 0.05);
+  }
+
+  mapper.final = mergedOrder.map(i => i.rec);
 }
 
 /**
- * Sorts merged spills into final mapper output.
- * @param {Object} state - Simulation state
- * @param {number} mapperId - Mapper ID
- * @param {number} tick - Base timing
- * @param {Function} isRunning - Check if simulation is running
- * @returns {Promise<void>}
+ * Finalizes the merge phase.
  */
 export async function runMergeSortOutput(state, mapperId, tick, isRunning) {
   if (!isRunning()) return;
-
   const mapper = state.mappers[mapperId];
-  const targetId = getFinalId(mapperId);
-  const target = el(targetId);
-  const all = mapper._mergeAll || [];
-
-  // Fade out unsorted records
-  turnActiveToGhosts(target);
-
-  // Ghost combined spills so they remain visible without staying active
+  
+  // Ghost source spills
   for (let i = 0; i < mapper.spills.length; i++) {
-    const combineId = getCombineSlotId(mapperId, i);
-    const slot = el(combineId) || el(getSpillSlotId(mapperId, i));
+    const slot = el(getCombineSlotId(mapperId, i)) || el(getSpillSlotId(mapperId, i));
     if (slot) turnActiveToGhosts(slot);
   }
-
-  // Sort merged records (combiner already ran during spill)
-  const merged = sortByPartitionThenKey(all);
-  mapper.final = merged;
-
-  // Sweep effect for merge
-  triggerCombineSweep(targetId, SWEEP_COLORS.GREEN);
-  await wait(800);
-
-  // Show final merged records
-  merged.forEach(rec => {
-    const r = createRecordElement(rec, rec.count);
-    target.appendChild(r);
-    setTimeout(() => showRecord(r), 10);
-  });
 }

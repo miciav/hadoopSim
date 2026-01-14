@@ -50,7 +50,9 @@ export function createSimulation() {
 
     state.running = true;
     const startBtn = el(ELEMENT_IDS.START_BTN);
+    const splitInput = el(ELEMENT_IDS.SPLIT_SIZE_INPUT);
     if (startBtn) startBtn.disabled = true;
+    if (splitInput) splitInput.disabled = true;
 
     resetUI(state);
 
@@ -125,11 +127,11 @@ export function createSimulation() {
   async function runMergePhase(tick) {
     if (!state.running) return;
 
-    highlightNodes([ELEMENT_IDS.NODE_01, ELEMENT_IDS.NODE_02], 'Merge Sort');
+    highlightNodes([ELEMENT_IDS.NODE_01, ELEMENT_IDS.NODE_02], 'Merge Phase');
     highlightBoxes([ELEMENT_IDS.BOX_MERGE_0, ELEMENT_IDS.BOX_MERGE_1]);
-    log('<strong>Merge Phase:</strong> Map tasks finished input. Merging spills...', 'DISK');
+    log('<strong>Merge Phase:</strong> Multi-way merge of sorted spills...', 'DISK');
 
-    // Animation: fly records to merge output
+    // Animation: fly records to merge output in sorted order
     await Promise.all([
       runMergeAnimation(state, 0, tick, activeCallbacks.isRunning),
       runMergeAnimation(state, 1, tick * 1.05, activeCallbacks.isRunning)
@@ -138,8 +140,7 @@ export function createSimulation() {
     if (!state.running) return;
     await wait(tick);
 
-    // Sort merged spills with sweep effect
-    log('<strong>Merge Phase:</strong> Sorting combined spills...', 'DISK');
+    // Finalize merge output (ghost source spills)
     await Promise.all([
       runMergeSortOutput(state, 0, tick, activeCallbacks.isRunning),
       runMergeSortOutput(state, 1, tick, activeCallbacks.isRunning)
@@ -218,7 +219,9 @@ export function createSimulation() {
     if (phaseEl) phaseEl.textContent = 'FINISHED';
 
     const startBtn = el(ELEMENT_IDS.START_BTN);
+    const splitInput = el(ELEMENT_IDS.SPLIT_SIZE_INPUT);
     if (startBtn) startBtn.disabled = false;
+    if (splitInput) splitInput.disabled = false;
 
     state.running = false;
 
@@ -238,11 +241,14 @@ export function createSimulation() {
    */
   function reset() {
     state.running = false;
-    state = createInitialState();
+    const splitSize = parseInt(el(ELEMENT_IDS.SPLIT_SIZE_INPUT)?.value ?? CONFIG.INPUT_SPLIT_RECORDS, 10);
+    state = createInitialState(undefined, undefined, splitSize);
     resetUI(state);
 
     const startBtn = el(ELEMENT_IDS.START_BTN);
+    const splitInput = el(ELEMENT_IDS.SPLIT_SIZE_INPUT);
     if (startBtn) startBtn.disabled = false;
+    if (splitInput) splitInput.disabled = false;
   }
 
   /**
@@ -252,7 +258,13 @@ export function createSimulation() {
     return state;
   }
 
-  return { run, stop, reset, getState };
+  function updateSplitSize(size) {
+    if (state.running) return;
+    state = createInitialState(undefined, undefined, size);
+    resetUI(state);
+  }
+
+  return { run, stop, reset, getState, updateSplitSize };
 }
 
 /**

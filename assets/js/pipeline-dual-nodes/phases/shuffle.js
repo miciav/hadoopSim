@@ -4,7 +4,7 @@
 
 import {
   el,
-  getFinalId,
+  getFinalId, getFinalSegmentId,
   getReducerId,
   getReducerSegmentId,
   getReducerSegmentsId,
@@ -52,7 +52,7 @@ export async function runNetworkShuffle(state, tick, callbacks) {
   /**
    * Transmits data from a single node to reducers.
    */
-  const transmitNodeData = async (records, sourceId, nodeName, sourceIndex) => {
+  const transmitNodeData = async (records, baseSourceId, nodeName, sourceIndex) => {
     const localQueue = sortByPartitionThenKey(records);
     const nodePromises = [];
     const nicSpeed = tick / 4;
@@ -72,7 +72,8 @@ export async function runNetworkShuffle(state, tick, callbacks) {
       const packetJourney = async () => {
         if (!isRunning()) return;
 
-        // Fly to network hub
+        // Fly to network hub from specific partition segment
+        const sourceId = getFinalSegmentId(sourceIndex, rec.p);
         await flyRecord(sourceId, ELEMENT_IDS.NET_HUB, rec, tick * 0.5);
 
         // Update network counter

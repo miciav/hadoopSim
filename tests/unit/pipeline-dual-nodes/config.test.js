@@ -9,6 +9,7 @@ test('CONFIG is frozen', () => {
 test('CONFIG has expected values', () => {
   assert.equal(CONFIG.BUFFER_CAPACITY, 6);
   assert.equal(CONFIG.SPILL_THRESHOLD, 0.75);
+  assert.equal(CONFIG.INPUT_SPLIT_RECORDS, 10);
   assert.equal(CONFIG.DEFAULT_SPEED, 1.5);
   assert.equal(CONFIG.MAX_LOG_ENTRIES, 30);
 });

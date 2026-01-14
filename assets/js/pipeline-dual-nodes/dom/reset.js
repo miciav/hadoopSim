@@ -6,13 +6,18 @@ import {
   el,
   ELEMENT_IDS,
   CLEARABLE_CONTAINERS,
-  getSourceRecordId
+  getSourceRecordId,
+  getBoxSpillId,
+  getBoxCombineId,
+  getSpillSlotId,
+  getCombineSlotId
 } from './selectors.js';
 import { clearLog } from './log.js';
 import { resetAllBufferFills } from './buffers.js';
 import { clearRecords, clearFlyingRecords, createInputRecordElement } from './records.js';
 import { highlightNodes, setNetworkActive } from './highlights.js';
 import { unfoldIntermediateRows } from './fold.js';
+import { splitInputData, calculateSpillCount } from '../state.js';
 
 /**
  * Resets simulation state data structures while preserving running flag.
@@ -36,6 +41,10 @@ export function resetState(state) {
   } else {
     state.mappers = [];
   }
+
+  const size = state.splitSize || 10;
+  state.inputSplits = state.mappers.map(mapper => splitInputData(mapper.data || [], size));
+  state.spillCounts = state.mappers.map(mapper => calculateSpillCount(mapper.data.length));
 
   const reducerKeys = state.reducers ? Object.keys(state.reducers) : ['0', '1', '2'];
   state.reducers = reducerKeys.reduce((acc, key) => {
@@ -71,6 +80,47 @@ export function clearAllContainers() {
   clearFlyingRecords();
 }
 
+function buildSlot(id, label, className, isHidden = false) {
+  const slot = document.createElement('div');
+  slot.id = id;
+  slot.className = className;
+  if (isHidden) {
+    slot.classList.add('is-hidden');
+  }
+  const mini = document.createElement('div');
+  mini.className = 'mini-label';
+  mini.textContent = label;
+  slot.appendChild(mini);
+  return slot;
+}
+
+function renderSpillCombineSlots(state) {
+  if (!state?.mappers?.length) return;
+
+  state.mappers.forEach((mapper, mapperId) => {
+    const spillCount = state.spillCounts?.[mapperId] ?? calculateSpillCount(mapper.data.length);
+    const spillBox = el(getBoxSpillId(mapperId));
+    const spillContainer = spillBox ? spillBox.querySelector('.spill-container') : null;
+    if (spillContainer) {
+      spillContainer.innerHTML = '';
+      for (let i = 0; i < spillCount; i += 1) {
+        const slot = buildSlot(getSpillSlotId(mapperId, i), `Spill ${i}`, 'spill-slot', true);
+        spillContainer.appendChild(slot);
+      }
+    }
+
+    const combineBox = el(getBoxCombineId(mapperId));
+    const combineContainer = combineBox ? combineBox.querySelector('.combine-container') : null;
+    if (combineContainer) {
+      combineContainer.innerHTML = '';
+      for (let i = 0; i < spillCount; i += 1) {
+        const slot = buildSlot(getCombineSlotId(mapperId, i), `Combine ${i}`, 'combine-slot');
+        combineContainer.appendChild(slot);
+      }
+    }
+  });
+}
+
 /**
  * Populates HDFS input boxes with source records.
  * @param {Object} state - Simulation state
@@ -79,29 +129,33 @@ export function populateInputs(state) {
   const input0 = el(ELEMENT_IDS.BOX_INPUT_0);
   const input1 = el(ELEMENT_IDS.BOX_INPUT_1);
 
-  if (input0) {
-    input0.innerHTML = '';
-    const div = document.createElement('div');
-    div.className = 'input-records';
-    input0.appendChild(div);
+  [input0, input1].forEach((box, mapperId) => {
+    if (!box) return;
 
-    state.mappers[0].data.forEach((rec, i) => {
-      const r = createInputRecordElement(rec, getSourceRecordId(0, i));
-      div.appendChild(r);
+    const splits = state.inputSplits?.[mapperId] ?? splitInputData(state.mappers?.[mapperId]?.data || []);
+    box.innerHTML = '';
+    const container = document.createElement('div');
+    container.className = 'input-splits';
+    box.appendChild(container);
+
+    let recordIndex = 0;
+    splits.forEach((split, splitIndex) => {
+      const splitBox = document.createElement('div');
+      splitBox.className = 'input-split input-records';
+      const label = document.createElement('div');
+      label.className = 'mini-label';
+      label.textContent = `Split ${splitIndex}`;
+      splitBox.appendChild(label);
+
+      split.forEach(rec => {
+        const r = createInputRecordElement(rec, getSourceRecordId(mapperId, recordIndex));
+        splitBox.appendChild(r);
+        recordIndex += 1;
+      });
+
+      container.appendChild(splitBox);
     });
-  }
-
-  if (input1) {
-    input1.innerHTML = '';
-    const div = document.createElement('div');
-    div.className = 'input-records';
-    input1.appendChild(div);
-
-    state.mappers[1].data.forEach((rec, i) => {
-      const r = createInputRecordElement(rec, getSourceRecordId(1, i));
-      div.appendChild(r);
-    });
-  }
+  });
 }
 
 /**
@@ -113,6 +167,7 @@ export function resetUI(state) {
   clearLog();
   resetMetrics();
   clearAllContainers();
+  renderSpillCombineSlots(state);
   document.querySelectorAll('.reducer-segments.active, .reducer-merge.active').forEach(el => {
     el.classList.remove('active');
   });

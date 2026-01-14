@@ -7,6 +7,9 @@ import {
   addSpill,
   setFinal,
   addToReducer,
+  splitInputData,
+  getSpillTriggerCount,
+  calculateSpillCount,
   calculateBufferUsage,
   shouldSpill,
   calculateBufferPercentage,
@@ -33,6 +36,11 @@ test('createInitialState produces clean state', () => {
   assert.equal(state.mappers[0].buffer.length, 0);
   assert.equal(state.mappers[0].spills.length, 0);
   assert.equal(state.mappers[0].final.length, 0);
+  assert.equal(state.inputSplits.length, 2);
+  assert.equal(state.inputSplits[0].length, 1);
+  assert.equal(state.inputSplits[1].length, 1);
+  assert.equal(state.spillCounts[0], 2);
+  assert.equal(state.spillCounts[1], 2);
   assert.deepEqual(Object.keys(state.reducers), ['0', '1', '2']);
 });
 
@@ -53,6 +61,10 @@ test('createInitialState uses provided data', () => {
   assert.equal(state.mappers[0].data[0].k, 'test');
   assert.equal(state.mappers[1].data.length, 1);
   assert.equal(state.mappers[1].data[0].k, 'test2');
+  assert.equal(state.inputSplits[0].length, 1);
+  assert.equal(state.inputSplits[1].length, 1);
+  assert.equal(state.spillCounts[0], 1);
+  assert.equal(state.spillCounts[1], 1);
 });
 
 test('createInitialState copies data arrays', () => {
@@ -198,4 +210,28 @@ test('calculateBufferPercentage caps at 100', () => {
 test('calculateBufferPercentage rounds to nearest integer', () => {
   const buffer = [1, 2];
   assert.equal(calculateBufferPercentage(buffer, 6), 33);
+});
+
+test('splitInputData chunks records by split size', () => {
+  const data = [{ k: 'a' }, { k: 'b' }, { k: 'c' }, { k: 'd' }, { k: 'e' }];
+  const splits = splitInputData(data, 2);
+
+  assert.equal(splits.length, 3);
+  assert.equal(splits[0].length, 2);
+  assert.equal(splits[2].length, 1);
+});
+
+test('getSpillTriggerCount respects capacity and threshold', () => {
+  assert.equal(getSpillTriggerCount(6, 0.75), 5);
+  assert.equal(getSpillTriggerCount(4, 0.5), 2);
+});
+
+test('calculateSpillCount returns 0 for empty data', () => {
+  assert.equal(calculateSpillCount(0, 6, 0.75), 0);
+});
+
+test('calculateSpillCount rounds up for partial spills', () => {
+  assert.equal(calculateSpillCount(9, 6, 0.75), 2);
+  assert.equal(calculateSpillCount(10, 6, 0.75), 2);
+  assert.equal(calculateSpillCount(11, 6, 0.75), 3);
 });

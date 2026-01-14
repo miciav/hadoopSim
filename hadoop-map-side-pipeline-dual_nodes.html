@@ -469,6 +469,19 @@
       align-content: flex-start;
       gap: var(--record-gap);
     }
+    .input-splits {
+      display: flex;
+      flex-direction: column;
+      gap: var(--record-gap);
+    }
+    .input-split {
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      background: #ffffff;
+      min-height: 60px;
+      padding: 20px 4px 4px;
+      position: relative;
+    }
 
     .kv-record {
       font-size: var(--text-xs);
@@ -516,6 +529,7 @@
     }
 
     /* Ghost style (shared across all boxes) */
+    .kv-record.persistent { opacity: 1; transform: scale(1); }
     .kv-record.ghost {
       opacity: 0.4;
       transform: scale(1);
@@ -671,6 +685,48 @@
     ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: #475569; }
 
+  
+    .final-output {
+      display: flex !important;
+      flex-direction: column;
+      gap: 4px;
+      padding: 22px 4px 4px 4px !important;
+    }
+    .mapper-output-segment {
+      flex: 1;
+      border: 1px solid rgba(0,0,0,0.05);
+      border-radius: 4px;
+      background: rgba(255,255,255,0.3);
+      min-height: 30px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 4px;
+      position: relative;
+    }
+    .mapper-output-segment::after {
+      content: attr(data-label);
+      position: absolute;
+      right: 4px;
+      bottom: 2px;
+      font-size: 8px;
+      text-transform: uppercase;
+      opacity: 0.5;
+      font-weight: 800;
+    }
+
+  
+    .mapper-merge-inner {
+      min-height: 60px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--record-gap);
+      align-content: flex-start;
+      justify-content: center;
+      padding: 4px;
+      position: relative;
+    }
+
   </style>
 </head>
 <body>
@@ -702,6 +758,10 @@
       <span style="display:flex; align-items:center; gap:8px;">
         Speed 
         <input type="range" id="speedSlider" min="0.5" max="3.0" step="0.5" value="1.5" style="width:80px; cursor:pointer;">
+      </span>
+      <span style="display:flex; align-items:center; gap:8px;">
+        Split Size
+        <input type="number" id="splitSizeInput" min="1" max="20" value="10" style="width:50px;">
       </span>
     </div>
     <div class="metrics compact">
@@ -738,7 +798,7 @@
           <!-- HDFS Input -->
           <div class="node-row">
             <div class="box-label label-hdfs">
-              <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg> Input Split (HDFS Source)</span> 
+              <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg> Input Splits (HDFS Source)</span> 
               <span>64 MB</span>
             </div>
             <div class="box-content box-hdfs" id="boxInput0">
@@ -767,11 +827,10 @@
             </div>
             <div class="box-content box-disk" id="boxSpill0">
               <div class="spill-container">
-              <div class="spill-slot is-hidden" id="spillA0"><div class="mini-label">Spill 0</div></div>
-              <div class="spill-slot is-hidden" id="spillA1"><div class="mini-label">Spill 1</div></div>
+                <!-- Populated by JS -->
+              </div>
             </div>
           </div>
-        </div>
 
           <!-- Combine -->
           <div class="node-row combine-row is-hidden">
@@ -780,19 +839,33 @@
             </div>
             <div class="box-content box-combine" id="boxCombine0">
               <div class="combine-container">
-                <div class="combine-slot" id="combineA0"><div class="mini-label">Combine 0</div></div>
-                <div class="combine-slot" id="combineA1"><div class="mini-label">Combine 1</div></div>
+                <!-- Populated by JS -->
               </div>
             </div>
           </div>
 
-          <!-- Output -->
+          
+          <!-- Local Merge Sort -->
+          <div class="node-row mapper-merge-row is-hidden">
+            <div class="box-label label-disk">
+              <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;margin-right:8px;"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg> Local Merge Sort</span>
+            </div>
+            <div class="box-content box-disk" id="boxLocalMerge0">
+              <div class="mapper-merge-inner" id="mergeInner0"></div>
+            </div>
+          </div>
+<!-- Output -->
           <div class="node-row">
             <div class="box-label label-hdfs">
               <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21.2 15c.7-1.2 1-2.5.7-3.9-.6-2-2.4-3.5-4.4-3.5h-1.2c-.7-3-3.2-5.2-6.2-5.6-3-.3-5.9 1.3-7.3 4-1.2 2.5-1 6.5.5 8.8m8.7-1.6V21"/><path d="M16 16l-4-4-4 4"/></svg> Map Output (Ready)</span>
             </div>
             <div class="box-content box-hdfs" id="boxMerge0">
-              <div class="final-output" id="finalA"><div class="mini-label" style="color:var(--warning)">part-m-00000</div></div>
+              <div class="final-output" id="finalA">
+                <div class="mini-label" style="color:var(--warning)">part-m-00000</div>
+                <div class="mapper-output-segment" id="finalA-p0" data-label="P0"></div>
+                <div class="mapper-output-segment" id="finalA-p1" data-label="P1"></div>
+                <div class="mapper-output-segment" id="finalA-p2" data-label="P2"></div>
+              </div>
             </div>
           </div>
 
@@ -805,7 +878,7 @@
           <!-- HDFS Input -->
           <div class="node-row">
             <div class="box-label label-hdfs">
-              <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg> Input Split (HDFS Source)</span> 
+              <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg> Input Splits (HDFS Source)</span> 
               <span>64 MB</span>
             </div>
             <div class="box-content box-hdfs" id="boxInput1">
@@ -834,11 +907,10 @@
             </div>
             <div class="box-content box-disk" id="boxSpill1">
               <div class="spill-container">
-              <div class="spill-slot is-hidden" id="spillB0"><div class="mini-label">Spill 0</div></div>
-              <div class="spill-slot is-hidden" id="spillB1"><div class="mini-label">Spill 1</div></div>
+                <!-- Populated by JS -->
+              </div>
             </div>
           </div>
-        </div>
 
           <!-- Combine -->
           <div class="node-row combine-row is-hidden">
@@ -847,19 +919,33 @@
             </div>
             <div class="box-content box-combine" id="boxCombine1">
               <div class="combine-container">
-                <div class="combine-slot" id="combineB0"><div class="mini-label">Combine 0</div></div>
-                <div class="combine-slot" id="combineB1"><div class="mini-label">Combine 1</div></div>
+                <!-- Populated by JS -->
               </div>
             </div>
           </div>
 
-          <!-- Output -->
+          
+          <!-- Local Merge Sort -->
+          <div class="node-row mapper-merge-row is-hidden">
+            <div class="box-label label-disk">
+              <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;margin-right:8px;"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg> Local Merge Sort</span>
+            </div>
+            <div class="box-content box-disk" id="boxLocalMerge1">
+              <div class="mapper-merge-inner" id="mergeInner1"></div>
+            </div>
+          </div>
+<!-- Output -->
           <div class="node-row">
             <div class="box-label label-hdfs">
               <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21.2 15c.7-1.2 1-2.5.7-3.9-.6-2-2.4-3.5-4.4-3.5h-1.2c-.7-3-3.2-5.2-6.2-5.6-3-.3-5.9 1.3-7.3 4-1.2 2.5-1 6.5.5 8.8m8.7-1.6V21"/><path d="M16 16l-4-4-4 4"/></svg> Map Output (Ready)</span>
             </div>
             <div class="box-content box-hdfs" id="boxMerge1">
-              <div class="final-output" id="finalB"><div class="mini-label" style="color:var(--warning)">part-m-00001</div></div>
+              <div class="final-output" id="finalB">
+                <div class="mini-label" style="color:var(--warning)">part-m-00001</div>
+                <div class="mapper-output-segment" id="finalB-p0" data-label="P0"></div>
+                <div class="mapper-output-segment" id="finalB-p1" data-label="P1"></div>
+                <div class="mapper-output-segment" id="finalB-p2" data-label="P2"></div>
+              </div>
             </div>
           </div>
 
@@ -922,8 +1008,8 @@
             </div>
             <div class="box-content box-reduce" id="boxRed2" style="border-left-color:var(--partition-2);">
               <div class="reducer-segments" id="red2Segments">
-                <div class="segment-row reducer-stage" id="red2Seg0"><div class="mini-label">Segmento Node 01</div></div>
-                <div class="segment-row reducer-stage" id="red2Seg1"><div class="mini-label">Segmento Node 02</div></div>
+                <div class="segment-row reducer-stage" id="red2Seg0"><div class="mini-label">Segment Node 01</div></div>
+                <div class="segment-row reducer-stage" id="red2Seg1"><div class="mini-label">Segment Node 02</div></div>
               </div>
               <div class="reducer-merge reducer-stage" id="red2Merge"><div class="mini-label">Merge sort</div></div>
               <div class="reducer-inner" id="red2"></div>
@@ -975,7 +1061,49 @@
   50% { transform: scale(1.05); opacity: 1; }
   100% { transform: scale(0.95); opacity: 0.5; }
 }
-</style>
+
+    .final-output {
+      display: flex !important;
+      flex-direction: column;
+      gap: 4px;
+      padding: 22px 4px 4px 4px !important;
+    }
+    .mapper-output-segment {
+      flex: 1;
+      border: 1px solid rgba(0,0,0,0.05);
+      border-radius: 4px;
+      background: rgba(255,255,255,0.3);
+      min-height: 30px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 4px;
+      position: relative;
+    }
+    .mapper-output-segment::after {
+      content: attr(data-label);
+      position: absolute;
+      right: 4px;
+      bottom: 2px;
+      font-size: 8px;
+      text-transform: uppercase;
+      opacity: 0.5;
+      font-weight: 800;
+    }
+
+  
+    .mapper-merge-inner {
+      min-height: 60px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--record-gap);
+      align-content: flex-start;
+      justify-content: center;
+      padding: 4px;
+      position: relative;
+    }
+
+  </style>
 
   <script type="module" src="./assets/js/pipeline-dual-nodes/index.js"></script>
 </body>

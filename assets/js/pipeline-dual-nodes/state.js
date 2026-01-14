@@ -5,21 +5,66 @@
 
 import { CONFIG } from './config.js';
 
-// Raw data as immutable constants
+// Records reorganized to ensure Partition 0 < Partition 1 < Partition 2 alphabetically
+// P0: ant, arm (A)
+// P1: car, cat, cup (C)
+// P2: day, dog, dot (D)
+
 export const RAW_DATA_A = Object.freeze([
-  { k: 'cat', p: 0, c: 'bg-p0' }, { k: 'cat', p: 0, c: 'bg-p0' },
-  { k: 'dog', p: 1, c: 'bg-p1' }, { k: 'dog', p: 1, c: 'bg-p1' },
-  { k: 'ant', p: 2, c: 'bg-p2' }, { k: 'ant', p: 2, c: 'bg-p2' },
-  { k: 'car', p: 0, c: 'bg-p0' }, { k: 'day', p: 1, c: 'bg-p1' },
-  { k: 'cat', p: 0, c: 'bg-p0' }, { k: 'dog', p: 1, c: 'bg-p1' }
+  { k: 'ant', p: 0, c: 'bg-p0' }, { k: 'ant', p: 0, c: 'bg-p0' },
+  { k: 'car', p: 1, c: 'bg-p1' }, { k: 'car', p: 1, c: 'bg-p1' },
+  { k: 'day', p: 2, c: 'bg-p2' }, { k: 'day', p: 2, c: 'bg-p2' },
+  { k: 'arm', p: 0, c: 'bg-p0' }, { k: 'cat', p: 1, c: 'bg-p1' },
+  { k: 'ant', p: 0, c: 'bg-p0' }, { k: 'car', p: 1, c: 'bg-p1' },
+  { k: 'day', p: 2, c: 'bg-p2' }, { k: 'arm', p: 0, c: 'bg-p0' }
 ]);
 
 export const RAW_DATA_B = Object.freeze([
-  { k: 'cup', p: 0, c: 'bg-p0' }, { k: 'dot', p: 1, c: 'bg-p1' },
-  { k: 'dot', p: 1, c: 'bg-p1' }, { k: 'arm', p: 2, c: 'bg-p2' },
-  { k: 'cup', p: 0, c: 'bg-p0' }, { k: 'arm', p: 2, c: 'bg-p2' },
-  { k: 'dog', p: 1, c: 'bg-p1' }, { k: 'cat', p: 0, c: 'bg-p0' }
+  { k: 'cup', p: 1, c: 'bg-p1' }, { k: 'dog', p: 2, c: 'bg-p2' },
+  { k: 'dog', p: 2, c: 'bg-p2' }, { k: 'ant', p: 0, c: 'bg-p0' },
+  { k: 'cup', p: 1, c: 'bg-p1' }, { k: 'ant', p: 0, c: 'bg-p0' },
+  { k: 'car', p: 1, c: 'bg-p1' }, { k: 'ant', p: 0, c: 'bg-p0' },
+  { k: 'cup', p: 1, c: 'bg-p1' }, { k: 'dot', p: 2, c: 'bg-p2' },
+  { k: 'ant', p: 0, c: 'bg-p0' }, { k: 'car', p: 1, c: 'bg-p1' }
 ]);
+
+/**
+ * Splits input data into chunks for HDFS-style input splits.
+ * @param {Array} data
+ * @param {number} splitSize
+ * @returns {Array<Array>}
+ */
+export function splitInputData(data, splitSize = CONFIG.INPUT_SPLIT_RECORDS) {
+  const size = Math.max(1, splitSize);
+  const splits = [];
+  for (let i = 0; i < data.length; i += size) {
+    splits.push(data.slice(i, i + size));
+  }
+  return splits;
+}
+
+/**
+ * Calculates how many records trigger a spill.
+ * @param {number} capacity
+ * @param {number} threshold
+ * @returns {number}
+ */
+export function getSpillTriggerCount(capacity = CONFIG.BUFFER_CAPACITY, threshold = CONFIG.SPILL_THRESHOLD) {
+  return Math.max(1, Math.ceil(capacity * threshold));
+}
+
+/**
+ * Calculates the number of spills for a given input size.
+ * @param {number} recordsLength
+ * @param {number} capacity
+ * @param {number} threshold
+ * @returns {number}
+ */
+export function calculateSpillCount(recordsLength, capacity = CONFIG.BUFFER_CAPACITY, threshold = CONFIG.SPILL_THRESHOLD) {
+  if (!recordsLength || recordsLength <= 0) return 0;
+  const trigger = getSpillTriggerCount(capacity, threshold);
+  return Math.ceil(recordsLength / trigger);
+}
 
 /**
  * Creates a fresh mapper state.
@@ -42,18 +87,31 @@ function createMapperState(id, data) {
  * Factory function for creating a fresh simulation state.
  * @param {Array} dataA - Data for mapper 0 (optional, defaults to RAW_DATA_A)
  * @param {Array} dataB - Data for mapper 1 (optional, defaults to RAW_DATA_B)
+ * @param {number} splitSize - Records per split
  * @returns {Object} Initial state
  */
-export function createInitialState(dataA = RAW_DATA_A, dataB = RAW_DATA_B) {
+export function createInitialState(dataA = RAW_DATA_A, dataB = RAW_DATA_B, splitSize = CONFIG.INPUT_SPLIT_RECORDS) {
+  const mappers = [
+    createMapperState(0, dataA),
+    createMapperState(1, dataB)
+  ];
+
+  const inputSplits = [
+    splitInputData(mappers[0].data, splitSize),
+    splitInputData(mappers[1].data, splitSize)
+  ];
+
+  const spillCounts = mappers.map(mapper => calculateSpillCount(mapper.data.length));
+
   return {
     running: false,
     shuffleComplete: false,
-    mappers: [
-      createMapperState(0, dataA),
-      createMapperState(1, dataB)
-    ],
+    mappers,
     reducers: { 0: [], 1: [], 2: [] },
-    reduceOutput: { 0: [], 1: [], 2: [] }
+    reduceOutput: { 0: [], 1: [], 2: [] },
+    splitSize,
+    inputSplits,
+    spillCounts
   };
 }
 

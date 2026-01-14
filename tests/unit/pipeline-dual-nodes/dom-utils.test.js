@@ -108,6 +108,8 @@ test('resetState clears simulation collections', () => {
   assert.equal(state.mappers[0].spills.length, 0);
   assert.equal(state.mappers[0].final.length, 0);
   assert.equal(state.mappers[0]._mergeAll, null);
+  assert.equal(state.inputSplits[0].length, 1);
+  assert.equal(state.spillCounts[0], 1);
   assert.equal(state.reducers[0].length, 0);
   assert.equal(state.reduceOutput[0].length, 0);
 
@@ -136,6 +138,14 @@ test('resetUI restores counters and inputs', () => {
   createElement(document, { id: ELEMENT_IDS.NET_PULSE });
   createElement(document, { id: ELEMENT_IDS.BOX_INPUT_0 });
   createElement(document, { id: ELEMENT_IDS.BOX_INPUT_1 });
+  const spillBox0 = createElement(document, { id: 'boxSpill0' });
+  const spillBox1 = createElement(document, { id: 'boxSpill1' });
+  createElement(document, { className: 'spill-container', parent: spillBox0 });
+  createElement(document, { className: 'spill-container', parent: spillBox1 });
+  const combineBox0 = createElement(document, { id: 'boxCombine0' });
+  const combineBox1 = createElement(document, { id: 'boxCombine1' });
+  createElement(document, { className: 'combine-container', parent: combineBox0 });
+  createElement(document, { className: 'combine-container', parent: combineBox1 });
   createElement(document, { id: ELEMENT_IDS.FILL_0 });
   createElement(document, { id: ELEMENT_IDS.FILL_1 });
   createElement(document, { id: ELEMENT_IDS.PCT_0 });
@@ -154,6 +164,10 @@ test('resetUI restores counters and inputs', () => {
   const input1 = document.getElementById(ELEMENT_IDS.BOX_INPUT_1);
   assert.equal(input0.querySelectorAll('.kv-record').length, 1);
   assert.equal(input1.querySelectorAll('.kv-record').length, 1);
+  assert.equal(spillBox0.querySelectorAll('.spill-slot').length, 1);
+  assert.equal(spillBox1.querySelectorAll('.spill-slot').length, 1);
+  assert.equal(combineBox0.querySelectorAll('.combine-slot').length, 1);
+  assert.equal(combineBox1.querySelectorAll('.combine-slot').length, 1);
 
   restore();
 });

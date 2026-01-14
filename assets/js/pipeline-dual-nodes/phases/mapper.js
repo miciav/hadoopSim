@@ -6,7 +6,6 @@ import {
   el,
   getBufferId,
   getFillId,
-  getPctId,
   getBoxSpillId,
   getBoxCombineId,
   getSpillSlotId,
@@ -39,71 +38,89 @@ export async function runMapper(state, mapperId, delay, nodeId, callbacks) {
 
   if (!fillEl) return;
 
-  for (let i = 0; i < mapper.data.length; i++) {
+  // Use splits from state to simulate tasks
+  const splits = state.inputSplits[mapperId] || [mapper.data];
+  let globalRecordIndex = 0;
+
+  for (let splitIdx = 0; splitIdx < splits.length; splitIdx++) {
     if (!isRunning()) return;
 
-    const record = mapper.data[i];
-    mapper.buffer.push(record);
+    const split = splits[splitIdx];
+    const displayNode = (mapperId === 0) ? 'Node 01' : 'Node 02';
 
-    // Update record counter
-    onRecordProcessed();
-
-    // Fly record from HDFS input to buffer
-    const sourceId = getSourceRecordId(mapperId, i);
-    await flyRecord(sourceId, getBufferId(mapperId), record, delay * 0.4);
-
-    if (!isRunning()) return;
-
-    // Add record to buffer visually
-    const recordEl = createRecordElement(record);
-    bufEl.appendChild(recordEl);
-    showRecord(recordEl);
-
-    // Update buffer fill indicator
-    const pct = calculateBufferPercentage(mapper.buffer);
-    updateBufferFill(mapperId, pct);
-
-    // Check for spill condition
-    const isLastRecord = i === mapper.data.length - 1;
-    if (shouldSpill(mapper.buffer) || isLastRecord) {
-      setBufferLimit(mapperId, true);
-
-      if (isTeaching()) {
-        log(`Node 0${mapperId + 1}: <strong>Buffer Full (${pct}%).</strong> Pausing input to Spill.`, 'MAP');
-      }
-
-      const spillBox = el(getBoxSpillId(mapperId));
-      if (spillBox) spillBox.classList.add('active');
-
-      await wait(delay);
-      if (!isRunning()) return;
-
-      const spillIdx = mapper.spills.length;
-      const spillSlot = el(getSpillSlotId(mapperId, spillIdx));
-      if (spillSlot) spillSlot.classList.remove('is-hidden');
-
-      if (spillIdx === 1) {
-        const combineBox = el(getBoxCombineId(mapperId));
-        const combineRow = combineBox ? combineBox.closest('.node-row') : null;
-        if (combineRow) combineRow.classList.remove('is-hidden');
-      }
-
-      if (isTeaching()) {
-        log(`Node 0${mapperId + 1}: <strong>Combiner</strong> running... Writing Combine output.`, 'DISK');
-      }
-
-      await runSpill(state, mapperId, spillIdx, delay, callbacks);
-      if (!isRunning()) return;
-
-      if (spillBox) spillBox.classList.remove('active');
-      turnActiveToGhosts(bufEl);
-
-      // Reset buffer state
-      mapper.buffer = [];
-      updateBufferFill(mapperId, 0);
-      setBufferLimit(mapperId, false);
+    // Log start of task (if significant splits exist)
+    if (isTeaching() && splits.length > 1) {
+       log(`${displayNode}: <strong>Task ${splitIdx}</strong> processing Split ${splitIdx} (${split.length} records)...`, 'MAP');
     }
 
-    await wait(delay * 0.2);
+    for (let i = 0; i < split.length; i++) {
+      if (!isRunning()) return;
+
+      const record = split[i];
+      mapper.buffer.push(record);
+
+      // Update record counter
+      onRecordProcessed();
+
+      // Fly record from HDFS input to buffer
+      // Note: we use globalRecordIndex to match the static input element IDs
+      const sourceId = getSourceRecordId(mapperId, globalRecordIndex);
+      await flyRecord(sourceId, getBufferId(mapperId), record, delay * 0.4);
+      
+      globalRecordIndex++;
+
+      if (!isRunning()) return;
+
+      // Add record to buffer visually
+      const recordEl = createRecordElement(record);
+      bufEl.appendChild(recordEl);
+      showRecord(recordEl);
+
+      // Update buffer fill indicator
+      const pct = calculateBufferPercentage(mapper.buffer);
+      updateBufferFill(mapperId, pct);
+
+      // Check for spill condition: Buffer Full OR End of Split (Task completion)
+      const isBufferFull = shouldSpill(mapper.buffer);
+      const isEndOfTask = i === split.length - 1;
+
+      if (isBufferFull || isEndOfTask) {
+        setBufferLimit(mapperId, true);
+
+        if (isTeaching()) {
+          const reason = isBufferFull ? `Buffer Full (${pct}%)` : `End of Task`;
+          log(`${displayNode}: <strong>${reason}.</strong> Spilling to disk.`, 'MAP');
+        }
+
+        const spillBox = el(getBoxSpillId(mapperId));
+        if (spillBox) spillBox.classList.add('active');
+
+        await wait(delay);
+        if (!isRunning()) return;
+
+        const spillIdx = mapper.spills.length;
+        const spillSlot = el(getSpillSlotId(mapperId, spillIdx));
+        if (spillSlot) spillSlot.classList.remove('is-hidden');
+
+        // Note: Combine row visibility is handled in spill.js
+
+        if (isTeaching()) {
+           log(`${displayNode}: <strong>Combiner</strong> running... Writing Combine output.`, 'DISK');
+        }
+
+        await runSpill(state, mapperId, spillIdx, delay, callbacks);
+        if (!isRunning()) return;
+
+        if (spillBox) spillBox.classList.remove('active');
+        turnActiveToGhosts(bufEl);
+
+        // Reset buffer state
+        mapper.buffer = [];
+        updateBufferFill(mapperId, 0);
+        setBufferLimit(mapperId, false);
+      }
+
+      await wait(delay * 0.2);
+    }
   }
 }
