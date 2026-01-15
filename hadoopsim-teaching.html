@@ -1,0 +1,1284 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hadoop Cluster Simulator - Step by Step</title>
+  <style>
+    /* --- MODERN THEME (Slate & Indigo) --- */
+    :root {
+      --bg-body: #f1f5f9;
+      --bg-card: #ffffff;
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+      --border-color: #e2e8f0;
+      --primary: #2563eb;       /* Blue-600 */
+      --primary-hover: #1d4ed8; /* Blue-700 */
+      --success: #10b981;       /* Emerald-500 */
+      --warning: #f59e0b;       /* Amber-500 */
+      --danger: #ef4444;        /* Red-500 */
+      --radius: 12px;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Monaco', monospace;
+      --record-gap: 8px;
+
+      /* Typography Scale (1.25 ratio - Major Third) */
+      --text-xs: 12px;      /* Mini labels, badges */
+      --text-sm: 14px;      /* Secondary text, captions */
+      --text-base: 16px;    /* Body text */
+      --text-lg: 18px;      /* Emphasized text */
+      --text-xl: 20px;      /* Section headers */
+      --text-2xl: 28px;     /* Page title */
+      --text-3xl: 36px;     /* Hero text */
+
+      /* Icon sizes (proportional to text) */
+      --icon-sm: 18px;
+      --icon-md: 20px;
+      --icon-lg: 24px;
+
+      /* Accessible text colors (WCAG AA compliant on white bg) */
+      --text-label: #475569;     /* 7:1 contrast - for labels */
+      --text-caption: #64748b;   /* 4.6:1 contrast - for captions */
+      --text-disabled: #94a3b8;  /* 3.5:1 - only for decorative/disabled */
+
+      /* Partition colors (adjusted for white text contrast) */
+      --partition-0: #7c3aed;    /* Violet-600 - better contrast */
+      --partition-1: #db2777;    /* Pink-600 - better contrast */
+      --partition-2: #d97706;    /* Amber-600 - better contrast */
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0; padding: 20px;
+      background: var(--bg-body);
+      color: var(--text-main);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      display: flex; justify-content: center;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .app {
+      max-width: 2000px; width: 100%;
+      background: var(--bg-card);
+      border-radius: 16px;
+      padding: 32px 40px;
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--border-color);
+    }
+
+    /* Typography */
+    h1 {
+      font-size: var(--text-2xl); margin: 0 0 8px;
+      color: #0f172a; font-weight: 700;
+      letter-spacing: -0.025em;
+    }
+    .subtitle {
+      font-size: var(--text-sm); color: var(--text-muted);
+      margin-bottom: 24px; font-weight: 400;
+      display: flex; align-items: center; gap: 10px;
+    }
+
+    /* Controls Header */
+    .controls {
+      display: flex; gap: 12px; margin-bottom: 24px;
+      flex-wrap: wrap; align-items: center;
+      background: #f8fafc;
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border-color);
+    }
+
+    button {
+      border-radius: 8px; padding: 12px 24px;
+      font-size: var(--text-sm); border: none; cursor: pointer;
+      background: var(--primary); color: #fff;
+      font-weight: 600; transition: all 0.2s ease;
+      display: flex; align-items: center; gap: 10px;
+      box-shadow: var(--shadow-sm);
+    }
+    button svg { width: var(--icon-sm); height: var(--icon-sm); }
+    button:hover:not(:disabled) {
+      background: var(--primary-hover);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
+    }
+    button:disabled {
+      opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none;
+    }
+    button.secondary {
+      background: #fff; color: var(--text-main);
+      border: 1px solid var(--border-color);
+    }
+    button.secondary:hover:not(:disabled) {
+      background: #f1f5f9; border-color: #cbd5e1;
+    }
+
+    .options {
+      margin-left: auto; display: flex; gap: 28px;
+      align-items: center; font-size: var(--text-sm);
+      color: var(--text-muted); font-weight: 500;
+    }
+    .options label { cursor: pointer; display: flex; align-items: center; gap: 8px; }
+    .options input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
+    .options input[type="range"] { height: 6px; cursor: pointer; }
+
+    /* Metrics Grid */
+    .metrics {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 24px 0;
+    }
+    .metrics.compact {
+      grid-template-columns: repeat(4, minmax(90px, 1fr));
+      gap: 8px;
+      margin: 0;
+    }
+    .metric-card {
+      background: #fff; border: 1px solid var(--border-color);
+      border-radius: var(--radius); padding: 20px;
+      display: flex; flex-direction: column; align-items: center;
+      box-shadow: var(--shadow-sm); transition: transform 0.2s;
+    }
+    .metrics.compact .metric-card {
+      padding: 8px 10px;
+      min-height: 52px;
+    }
+    .metric-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+    .metric-value {
+      font-size: var(--text-2xl); font-weight: 700;
+      color: #0f172a; font-family: var(--font-mono);
+    }
+    .metrics.compact .metric-value {
+      font-size: var(--text-lg);
+    }
+    .metric-label {
+      font-size: var(--text-xs); text-transform: uppercase;
+      letter-spacing: 0.05em; color: #64748b;
+      margin-top: 6px; font-weight: 600;
+    }
+    .metrics.compact .metric-label {
+      margin-top: 2px;
+      letter-spacing: 0.04em;
+    }
+
+    /* Main Layout */
+    .layout {
+      display: grid; grid-template-columns: 3fr 1.2fr;
+      gap: 32px; margin-top: 24px; align-items: start;
+    }
+
+    /* Nodes */
+    .cluster-rack { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }
+
+    .node-container {
+      border: 1px solid var(--border-color); border-radius: 16px;
+      padding: 38px 20px 20px 20px;  /* Extra top padding for node-tag */
+      position: relative; background: #fff;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex; flex-direction: column; gap: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+    .node-container:hover { box-shadow: var(--shadow-md); }
+
+    /* Status Indicators */
+    .node-container.active-node {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1), var(--shadow-lg);
+    }
+
+    .node-tag {
+      position: absolute; top: -14px; left: 20px;
+      background: #fff; padding: 6px 14px;
+      font-size: var(--text-sm); font-weight: 700; color: var(--text-muted);
+      text-transform: uppercase; border: 1px solid var(--border-color);
+      border-radius: 20px; display: flex; align-items: center; gap: 8px;
+      box-shadow: var(--shadow-sm); z-index: 2;
+    }
+    .node-tag span { font-size: var(--text-base); }
+
+    /* Specific Node Styles */
+    .node-map { border-top: 4px solid #10b981; } /* Green top accent */
+    .node-reduce { border-top: 4px solid #8b5cf6; } /* Purple top accent */
+
+    /* Components & Icons */
+    .box-label {
+      font-size: var(--text-xs); text-transform: uppercase;
+      color: #64748b; margin-bottom: 10px;
+      font-weight: 700; display: flex; justify-content: space-between; align-items: center;
+    }
+    .box-label svg { width: var(--icon-sm); height: var(--icon-sm); margin-right: 8px; stroke-width: 2px; }
+    .box-label span { font-size: var(--text-sm); }
+
+    .box-content {
+      border-radius: 8px; border: 1px solid #cbd5e1;
+      padding: 12px;
+      min-height: 80px; position: relative; transition: min-height 0.2s ease;
+    }
+
+    /* --- SEMANTIC VARIANTS --- */
+
+    /* HDFS (Input/Output) - Slate/Tech */
+    .box-hdfs {
+      background: #f8fafc; border-color: #cbd5e1;
+      border-left: 3px solid #64748b;
+    }
+    .label-hdfs { color: #475569; }
+
+    /* RAM (JVM/Buffers) - Green/Fast */
+    .box-ram {
+      background: #f0fdf4; /* Emerald-50 */
+      border-color: #86efac;
+      border-left: 3px solid #10b981;
+    }
+    .label-ram { color: #059669; }
+
+    /* DISK (Spills) - Orange/Slow/Persistent */
+    .box-disk {
+      background: #fffbeb; /* Amber-50 */
+      border: 1px dashed #fcd34d;
+      border-left: 3px solid #f59e0b;
+    }
+    .label-disk { color: #d97706; }
+
+    /* Combine (Optional) - Blue/Compute */
+    .box-combine {
+      background: #eff6ff; /* Blue-50 */
+      border: 1px solid #bfdbfe;
+      border-left: 3px solid #3b82f6;
+    }
+    .label-combine { color: #1d4ed8; }
+
+    /* Mappers */
+    .mapper-card {
+      border: 1px solid #bbf7d0; /* Green tint border */
+      border-radius: 8px; background: #ffffff;
+      padding: 12px; display: flex; flex-direction: column; min-height: 140px;
+      box-shadow: 0 2px 4px rgba(16, 185, 129, 0.05);
+    }
+    .mapper-header {
+      display: flex; justify-content: space-between;
+      font-size: var(--text-sm); font-weight: 700; margin-bottom: 10px; color: #166534;
+    }
+
+    .buffer-inner {
+      position: relative; border-radius: 6px; border: 1px solid #bbf7d0; background: #f0fdf4;
+      height: 90px; padding: 4px; display: flex; flex-wrap: wrap; gap: var(--record-gap);
+      align-content: flex-start; justify-content: center; overflow: hidden;
+    }
+    .buffer-fill {
+      position: absolute; bottom: 0; left: 0; right: 0; height: 0%;
+      background: rgba(16, 185, 129, 0.15);
+      border-top: 2px solid var(--success);
+      transition: height 0.2s; pointer-events: none; z-index: 0;
+    }
+    .buffer-fill.limit {
+      background: rgba(249, 115, 22, 0.15); border-color: var(--warning);
+    }
+
+    /* Spills + Combine */
+    .spill-container {
+      display: flex;
+      flex-direction: column;
+      gap: var(--record-gap);
+    }
+    .combine-container { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+    .spill-slot {
+      border-radius: 6px;
+      border: 1px solid #cbd5e1; background: #ffffff;
+      min-height: 60px; padding: 20px 4px 4px;
+      position: relative; display: flex; flex-wrap: wrap; gap: var(--record-gap);
+      align-content: flex-start; justify-content: center;
+      width: 100%;
+    }
+    .combine-slot {
+      flex: 1; min-width: 60px; border-radius: 6px;
+      border: 1px solid #fcd34d; background: #ffffff;
+      min-height: 80px; padding: 20px 4px 4px;
+      position: relative; display: flex; flex-wrap: wrap; gap: var(--record-gap);
+      align-content: flex-start; justify-content: center;
+      box-shadow: 0 1px 2px rgba(245, 158, 11, 0.1);
+    }
+    .mini-label {
+      position: absolute; top: 6px; left: 8px;
+      font-size: var(--text-xs); text-transform: uppercase;
+      color: #64748b; font-weight: 700;
+    }
+
+    .final-output {
+      border-radius: 6px; border: 1px solid #cbd5e1;
+      background: linear-gradient(135deg, #fff 0%, #fff7ed 100%);
+      min-height: 80px; padding: 20px 4px 4px;
+      position: relative; display: flex; flex-wrap: wrap; gap: var(--record-gap);
+      align-content: flex-start; justify-content: center;
+    }
+
+    /* Network Layer - Light Theme */
+    .network-layer {
+      height: 56px; margin: 0;
+      background: #f8fafc; /* Slate-50 */
+      border-radius: 12px; display: flex; align-items: center; justify-content: center;
+      color: #64748b; font-size: var(--text-sm); font-family: var(--font-mono); letter-spacing: 1px; font-weight: 600;
+      position: relative; overflow: hidden;
+      border: 1px solid #cbd5e1;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.03); /* Softer inset */
+      z-index: 5;
+    }
+    .network-pulse {
+      position: absolute; top: 0; left: 0; width: 30%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.2), transparent); /* Lighter blue pulse */
+      filter: blur(8px);
+      transform: translateX(-150%); pointer-events: none;
+    }
+    .network-pulse.active { animation: netPulse 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+    @keyframes netPulse { 0% { transform: translateX(-150%); } 100% { transform: translateX(450%); } }
+
+    /* Reducer Rack (3 columns) */
+    .reducer-rack {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    /* Reducer inner container */
+    .reducer-inner {
+      min-height: 100px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--record-gap);
+      align-content: flex-start;
+      justify-content: center;
+      padding: 4px;
+      position: relative;
+    }
+
+    /* Reduce box style */
+    .label-reduce { color: var(--partition-0); }
+    .box-reduce {
+      background: #faf5ff;
+      border-color: #e9d5ff;
+      border-left: 3px solid var(--partition-0);
+    }
+
+    .reducer-segments {
+      display: none;
+      flex-direction: column;
+      gap: var(--record-gap);
+      margin-bottom: var(--record-gap);
+    }
+    .reducer-segments.active {
+      display: flex;
+    }
+
+    .reducer-stage {
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      background: #ffffff;
+      min-height: 60px;
+      padding: 20px 4px 4px;
+      position: relative;
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--record-gap);
+      align-content: flex-start;
+      justify-content: center;
+    }
+
+    .reducer-merge {
+      display: none;
+      margin-top: var(--record-gap);
+    }
+    .reducer-merge.active {
+      display: flex;
+    }
+
+    .reducer-output {
+      margin-top: var(--record-gap);
+    }
+
+    /* Output files container */
+    .output-files {
+      display: flex;
+      gap: 12px;
+    }
+
+    .output-file {
+      flex: 1;
+      min-height: 80px;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      background: linear-gradient(135deg, #fff 0%, #f0fdf4 100%);
+      padding: 24px 8px 8px;
+      position: relative;
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--record-gap);
+      align-content: flex-start;
+      justify-content: center;
+    }
+
+    .is-hidden {
+      display: none !important;
+    }
+
+    .reducer-inner.is-hidden {
+      display: none;
+      min-height: 0;
+      padding: 0;
+    }
+
+    /* Output node accent */
+    .node-output { border-top: 4px solid var(--success); }
+
+    /* --- LOG PANEL (Light Theme) --- */
+    .log-panel {
+      background: #ffffff; color: #334155; border-radius: 12px;
+      height: 680px; display: flex; flex-direction: column; overflow: hidden;
+      box-shadow: var(--shadow-md); border: 1px solid #e2e8f0;
+    }
+    .log-header {
+      background: #f8fafc; padding: 14px 18px; font-size: var(--text-sm);
+      text-transform: uppercase; font-weight: 700; color: #475569;
+      border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between;
+    }
+    .log-content {
+      flex: 1; overflow-y: auto; padding: 16px;
+      font-family: var(--font-mono); font-size: var(--text-sm); line-height: 1.7;
+    }
+    .log-entry {
+      margin-bottom: 10px; padding: 10px 14px; border-radius: 6px;
+      background: #f8fafc; border-left: 4px solid #cbd5e1;
+      border: 1px solid #f1f5f9; border-left-width: 4px;
+      animation: fadeIn 0.2s ease-out;
+    }
+    .log-entry strong { color: #0f172a; font-weight: 600; }
+
+    .log-map { border-left-color: var(--success); background: #ecfdf5; border-color: #d1fae5; }
+    .log-disk { border-left-color: var(--warning); background: #fffbeb; border-color: #fef3c7; }
+    .log-net { border-left-color: var(--primary); background: #eff6ff; border-color: #dbeafe; }
+    .log-red { border-left-color: #d946ef; background: #fdf4ff; border-color: #fae8ff; }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* --- RECORDS --- */
+    .input-records {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-content: flex-start;
+      gap: var(--record-gap);
+    }
+    .input-splits {
+      display: flex;
+      flex-direction: column;
+      gap: var(--record-gap);
+    }
+    .input-split {
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      background: #ffffff;
+      min-height: 60px;
+      padding: 20px 4px 4px;
+      position: relative;
+    }
+
+    .kv-record {
+      font-size: var(--text-xs);
+      padding: 0 8px;
+      height: 26px;
+      min-width: 52px;
+      border-radius: 5px;
+      color: white; font-weight: 700;
+      margin: 0;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.12);
+      opacity: 0; transform: scale(0.8); flex-shrink: 0;
+      z-index: 10; position: relative;
+      font-family: var(--font-mono);
+      border: 1px solid rgba(255,255,255,0.25);
+      transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+    }
+    .kv-record.show { opacity: 1; transform: scale(1); transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+
+    .bg-p0 { background: var(--partition-0); } /* Violet - 4.5:1 contrast with white */
+    .bg-p1 { background: var(--partition-1); } /* Pink - 4.5:1 contrast with white */
+    .bg-p2 { background: var(--partition-2); } /* Amber - 4.5:1 contrast with white */
+
+    /* Text color variants for partition labels */
+    .color-p0 { color: var(--partition-0) !important; }
+    .color-p1 { color: var(--partition-1) !important; }
+    .color-p2 { color: var(--partition-2) !important; }
+
+    .flying-record {
+      position: absolute; z-index: 9999; pointer-events: none;
+      transition: top 0.4s cubic-bezier(0.25, 1, 0.5, 1), left 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+    }
+
+    /* --- GHOST & PERSISTENT STATES --- */
+
+    /* Teaching Mode OFF: collapse ghost/persistent to zero */
+    .app:not(.teaching-mode-active) .kv-record.ghost,
+    .app:not(.teaching-mode-active) .kv-record.persistent {
+      opacity: 0;
+      width: 0 !important; min-width: 0 !important; height: 0 !important;
+      margin: 0 !important; padding: 0 !important; border: 0 !important;
+      transform: scale(0);
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    /* Ghost style (shared across all boxes) */
+    .kv-record.persistent { opacity: 1; transform: scale(1); }
+    .kv-record.ghost {
+      opacity: 0.4;
+      transform: scale(1);
+      filter: saturate(0.2) brightness(1.1);
+      border: 1px dashed rgba(0,0,0,0.15) !important;
+      box-shadow: none;
+    }
+
+    /* HDFS Inputs: always fully visible (override collapse) */
+    #boxInput0 .kv-record.persistent,
+    #boxInput1 .kv-record.persistent,
+    #boxHdfsOutput .kv-record.persistent {
+      opacity: 1 !important;
+      width: auto !important;
+      min-width: 52px !important;
+      height: 26px !important;
+      margin: 0 !important;
+      padding: 0 8px !important;
+      transform: scale(1) !important;
+      filter: none !important;
+      border: 1px solid rgba(255,255,255,0.25) !important;
+      pointer-events: auto !important;
+      overflow: visible !important;
+    }
+
+    /* Progress Bar */
+    .progress-bar {
+      height: 4px; background: #e2e8f0; margin: 20px 0;
+      border-radius: 2px; overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; width: 0%; background: var(--success);
+      transition: width 0.3s ease-out;
+    }
+
+    /* --- FOLD ANIMATION --- */
+    .node-row {
+      transition: max-height 0.35s cubic-bezier(0.25, 0.8, 0.25, 1),
+                  opacity 0.25s ease,
+                  margin 0.25s ease,
+                  padding 0.25s ease;
+      overflow: hidden;
+      max-height: 500px; /* Must be larger than actual content height */
+      opacity: 1;
+    }
+
+    .node-row.folded {
+      max-height: 0 !important;
+      opacity: 0 !important;
+      margin-top: 0 !important;
+      margin-bottom: 0 !important;
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+      pointer-events: none;
+    }
+
+    .box-content.folded {
+      display: none;
+      max-height: 0 !important;
+      min-height: 0 !important;
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+      border-width: 0 !important;
+      opacity: 0 !important;
+      margin-top: 0 !important;
+      pointer-events: none;
+      overflow: hidden;
+      transition: max-height 0.35s cubic-bezier(0.25, 0.8, 0.25, 1),
+                  opacity 0.25s ease,
+                  margin 0.25s ease,
+                  padding 0.25s ease,
+                  border 0.25s ease;
+    }
+
+    /* --- COMBINE SWEEP EFFECT --- */
+    .combine-sweep {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+      overflow: hidden;
+      border-radius: inherit;
+      z-index: 50;
+    }
+
+    .combine-sweep::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.1) 25%,
+        rgba(255, 255, 255, 0.4) 50%,
+        rgba(255, 255, 255, 0.1) 75%,
+        transparent 100%
+      );
+      animation: sweepAcross 1s ease-in-out forwards;
+    }
+
+    /* Color variants */
+    .combine-sweep.sweep-amber::after {
+      background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(245, 158, 11, 0.1) 25%,
+        rgba(245, 158, 11, 0.5) 50%,
+        rgba(245, 158, 11, 0.1) 75%,
+        transparent 100%
+      );
+    }
+
+    .combine-sweep.sweep-green::after {
+      background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(16, 185, 129, 0.1) 25%,
+        rgba(16, 185, 129, 0.5) 50%,
+        rgba(16, 185, 129, 0.1) 75%,
+        transparent 100%
+      );
+    }
+
+    .combine-sweep.sweep-purple::after {
+      background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(139, 92, 246, 0.1) 25%,
+        rgba(139, 92, 246, 0.5) 50%,
+        rgba(139, 92, 246, 0.1) 75%,
+        transparent 100%
+      );
+    }
+
+    @keyframes sweepAcross {
+      0% { left: -100%; }
+      100% { left: 100%; }
+    }
+
+    /* Ensure containers have position relative for the sweep overlay */
+    .spill-slot, .final-output, .reducer-box {
+      position: relative;
+    }
+
+    /* Scrollbar for logs */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+
+    .final-output {
+      display: flex !important;
+      flex-direction: column;
+      gap: 4px;
+      padding: 22px 4px 4px 4px !important;
+    }
+    .mapper-output-segment {
+      flex: 1;
+      border: 1px solid rgba(0,0,0,0.05);
+      border-radius: 4px;
+      background: rgba(255,255,255,0.3);
+      min-height: 30px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 4px;
+      position: relative;
+    }
+    .mapper-output-segment::after {
+      content: attr(data-label);
+      position: absolute;
+      right: 4px;
+      bottom: 2px;
+      font-size: 8px;
+      text-transform: uppercase;
+      opacity: 0.5;
+      font-weight: 800;
+    }
+
+
+    .mapper-merge-inner {
+      min-height: 60px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--record-gap);
+      align-content: flex-start;
+      justify-content: center;
+      padding: 4px;
+      position: relative;
+    }
+
+    /* --- STEP-BY-STEP MINI CONSOLE --- */
+    .step-console {
+      position: fixed;
+      right: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 180px;
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    .step-console-header {
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      color: white;
+      padding: 14px 16px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      text-align: center;
+    }
+
+    .step-console-body {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .step-info {
+      background: #f8fafc;
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .step-counter {
+      font-size: 24px;
+      font-weight: 700;
+      color: #0f172a;
+      font-family: var(--font-mono);
+      margin-bottom: 4px;
+    }
+
+    .step-phase {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #64748b;
+      background: #e2e8f0;
+      padding: 4px 8px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-bottom: 8px;
+    }
+
+    .step-phase.phase-input { background: #dbeafe; color: #1d4ed8; }
+    .step-phase.phase-map { background: #d1fae5; color: #059669; }
+    .step-phase.phase-spill { background: #fef3c7; color: #d97706; }
+    .step-phase.phase-merge { background: #fef3c7; color: #d97706; }
+    .step-phase.phase-shuffle { background: #dbeafe; color: #1d4ed8; }
+    .step-phase.phase-reduce-merge { background: #f3e8ff; color: #7c3aed; }
+    .step-phase.phase-reduce { background: #fae8ff; color: #c026d3; }
+    .step-phase.phase-output { background: #d1fae5; color: #059669; }
+    .step-phase.phase-finish { background: #d1fae5; color: #059669; }
+
+    .step-description {
+      font-size: 11px;
+      color: #475569;
+      line-height: 1.4;
+      min-height: 32px;
+    }
+
+    .step-console-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .step-btn {
+      width: 100%;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .step-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .step-btn-next {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+    }
+
+    .step-btn-next:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+    }
+
+    .step-btn-next:disabled {
+      background: #cbd5e1;
+      color: #94a3b8;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .step-btn-reset {
+      background: #f1f5f9;
+      color: #475569;
+      border: 1px solid #e2e8f0;
+    }
+
+    .step-btn-reset:hover {
+      background: #e2e8f0;
+      border-color: #cbd5e1;
+    }
+
+    /* Pulse animation for active step button */
+    .step-btn-next:not(:disabled) {
+      animation: stepPulse 2s ease-in-out infinite;
+    }
+
+    @keyframes stepPulse {
+      0%, 100% { box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3); }
+      50% { box-shadow: 0 2px 16px rgba(16, 185, 129, 0.5); }
+    }
+
+  </style>
+</head>
+<body>
+
+<div class="app">
+  <h1>Hadoop Cluster Simulator - Teaching Mode</h1>
+  <div class="subtitle">
+    <span>📚 Step-by-Step Execution</span>
+    <span>•</span>
+    <span>🔍 Enhanced Visibility</span>
+    <span>•</span>
+    <span>🎯 Learn at Your Own Pace</span>
+  </div>
+
+  <div class="controls">
+    <button id="startBtn">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+      Deploy Job
+    </button>
+    <button id="resetBtn" class="secondary">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+      Reset
+    </button>
+    <div class="options">
+      <label>
+        <input type="checkbox" id="teachingMode" checked>
+        <strong>Teaching Mode</strong>
+      </label>
+      <span style="display:flex; align-items:center; gap:8px;">
+        Speed
+        <input type="range" id="speedSlider" min="0.5" max="3.0" step="0.5" value="1.5" style="width:80px; cursor:pointer;">
+      </span>
+      <span style="display:flex; align-items:center; gap:8px;">
+        Split Size
+        <input type="number" id="splitSizeInput" min="1" max="20" value="10" style="width:50px;">
+      </span>
+    </div>
+    <div class="metrics compact">
+      <div class="metric-card">
+        <span class="metric-value" id="mRecords">0</span>
+        <span class="metric-label">📥 Records In</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-value" id="mSpills">0</span>
+        <span class="metric-label">💾 Disk Spills</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-value" id="mNet">0</span>
+        <span class="metric-label">🔌 Net Packets</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-value" id="mPhase" style="color:var(--primary)">IDLE</span>
+        <span class="metric-label">⚙️ Status</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+
+  <div class="layout">
+    <div class="pipeline-col">
+
+      <div class="cluster-rack">
+
+        <!-- NODE 01 -->
+        <div class="node-container node-map" id="node01">
+          <div class="node-tag"><span>🖥️</span> Node 01</div>
+
+          <!-- HDFS Input -->
+          <div class="node-row">
+            <div class="box-label label-hdfs">
+              <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg> Input Splits (HDFS Source)</span>
+              <span>64 MB</span>
+            </div>
+            <div class="box-content box-hdfs" id="boxInput0">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
+          <!-- RAM Map -->
+          <div class="node-row">
+            <div class="box-label label-ram">
+              <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg> Map Task (JVM RAM)</span>
+              <span id="pct0" style="color:var(--success)">0%</span>
+            </div>
+            <div class="box-content box-ram" id="boxMap0">
+              <div class="mapper-card">
+                <div class="mapper-header"><span>Mapper A</span></div>
+                <div class="buffer-inner" id="buf0"><div class="buffer-fill" id="fill0"></div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- DISK Spills -->
+          <div class="node-row">
+            <div class="box-label label-disk">
+              <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="12" x2="2" y2="12"></line><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path><line x1="6" y1="16" x2="6.01" y2="16"></line><line x1="10" y1="16" x2="10.01" y2="16"></line></svg> Spill (Local FS)</span>
+            </div>
+            <div class="box-content box-disk" id="boxSpill0">
+              <div class="spill-container">
+                <!-- Populated by JS -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Combine -->
+          <div class="node-row combine-row is-hidden">
+            <div class="box-label label-combine">
+              <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg> Combine (Optional)</span>
+            </div>
+            <div class="box-content box-combine" id="boxCombine0">
+              <div class="combine-container">
+                <!-- Populated by JS -->
+              </div>
+            </div>
+          </div>
+
+
+          <!-- Local Merge Sort -->
+          <div class="node-row mapper-merge-row is-hidden">
+            <div class="box-label label-disk">
+              <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;margin-right:8px;"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg> Local Merge Sort</span>
+            </div>
+            <div class="box-content box-disk" id="boxLocalMerge0">
+              <div class="mapper-merge-inner" id="mergeInner0"></div>
+            </div>
+          </div>
+<!-- Output -->
+          <div class="node-row">
+            <div class="box-label label-hdfs">
+              <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21.2 15c.7-1.2 1-2.5.7-3.9-.6-2-2.4-3.5-4.4-3.5h-1.2c-.7-3-3.2-5.2-6.2-5.6-3-.3-5.9 1.3-7.3 4-1.2 2.5-1 6.5.5 8.8m8.7-1.6V21"/><path d="M16 16l-4-4-4 4"/></svg> Map Output (Ready)</span>
+            </div>
+            <div class="box-content box-hdfs" id="boxMerge0">
+              <div class="final-output" id="finalA">
+                <div class="mini-label" style="color:var(--warning)">part-m-00000</div>
+                <div class="mapper-output-segment" id="finalA-p0" data-label="P0"></div>
+                <div class="mapper-output-segment" id="finalA-p1" data-label="P1"></div>
+                <div class="mapper-output-segment" id="finalA-p2" data-label="P2"></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- NODE 02 -->
+        <div class="node-container node-map" id="node02">
+          <div class="node-tag"><span>🖥️</span> Node 02</div>
+
+          <!-- HDFS Input -->
+          <div class="node-row">
+            <div class="box-label label-hdfs">
+              <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg> Input Splits (HDFS Source)</span>
+              <span>64 MB</span>
+            </div>
+            <div class="box-content box-hdfs" id="boxInput1">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
+          <!-- RAM Map -->
+          <div class="node-row">
+            <div class="box-label label-ram">
+              <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg> Map Task (JVM RAM)</span>
+              <span id="pct1" style="color:var(--success)">0%</span>
+            </div>
+            <div class="box-content box-ram" id="boxMap1">
+              <div class="mapper-card">
+                <div class="mapper-header"><span>Mapper B</span></div>
+                <div class="buffer-inner" id="buf1"><div class="buffer-fill" id="fill1"></div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- DISK Spills -->
+          <div class="node-row">
+            <div class="box-label label-disk">
+              <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="12" x2="2" y2="12"></line><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path><line x1="6" y1="16" x2="6.01" y2="16"></line><line x1="10" y1="16" x2="10.01" y2="16"></line></svg> Spill (Local FS)</span>
+            </div>
+            <div class="box-content box-disk" id="boxSpill1">
+              <div class="spill-container">
+                <!-- Populated by JS -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Combine -->
+          <div class="node-row combine-row is-hidden">
+            <div class="box-label label-combine">
+              <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg> Combine (Optional)</span>
+            </div>
+            <div class="box-content box-combine" id="boxCombine1">
+              <div class="combine-container">
+                <!-- Populated by JS -->
+              </div>
+            </div>
+          </div>
+
+
+          <!-- Local Merge Sort -->
+          <div class="node-row mapper-merge-row is-hidden">
+            <div class="box-label label-disk">
+              <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;margin-right:8px;"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg> Local Merge Sort</span>
+            </div>
+            <div class="box-content box-disk" id="boxLocalMerge1">
+              <div class="mapper-merge-inner" id="mergeInner1"></div>
+            </div>
+          </div>
+<!-- Output -->
+          <div class="node-row">
+            <div class="box-label label-hdfs">
+              <span style="display:flex;align-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21.2 15c.7-1.2 1-2.5.7-3.9-.6-2-2.4-3.5-4.4-3.5h-1.2c-.7-3-3.2-5.2-6.2-5.6-3-.3-5.9 1.3-7.3 4-1.2 2.5-1 6.5.5 8.8m8.7-1.6V21"/><path d="M16 16l-4-4-4 4"/></svg> Map Output (Ready)</span>
+            </div>
+            <div class="box-content box-hdfs" id="boxMerge1">
+              <div class="final-output" id="finalB">
+                <div class="mini-label" style="color:var(--warning)">part-m-00001</div>
+                <div class="mapper-output-segment" id="finalB-p0" data-label="P0"></div>
+                <div class="mapper-output-segment" id="finalB-p1" data-label="P1"></div>
+                <div class="mapper-output-segment" id="finalB-p2" data-label="P2"></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="network-layer" id="networkLayer">
+        <div class="network-pulse" id="netPulse"></div>
+        <span>CORE SWITCH • HTTP SHUFFLE FABRIC</span>
+        <div id="netHub" style="position:absolute; left:50%; top:50%; width:1px; height:1px;"></div>
+      </div>
+
+      <!-- REDUCER NODES (3 separate nodes) -->
+      <div class="cluster-rack reducer-rack" style="margin-top: 32px;">
+
+        <!-- REDUCER NODE 0 -->
+        <div class="node-container node-reduce" id="nodeRed0">
+          <div class="node-tag color-p0"><span>🖥️</span> Node 03</div>
+          <div class="node-row">
+            <div class="box-label label-reduce">
+              <span>Reduce Task (Partition 0)</span>
+            </div>
+            <div class="box-content box-reduce" id="boxRed0">
+              <div class="reducer-segments" id="red0Segments">
+                <div class="segment-row reducer-stage" id="red0Seg0"><div class="mini-label">Segment Node 01</div></div>
+                <div class="segment-row reducer-stage" id="red0Seg1"><div class="mini-label">Segment Node 02</div></div>
+              </div>
+              <div class="reducer-merge reducer-stage" id="red0Merge"><div class="mini-label">Merge sort</div></div>
+              <div class="reducer-inner" id="red0"></div>
+              <div class="reducer-output reducer-stage" id="red0Reduce"><div class="mini-label color-p0">Reduce</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- REDUCER NODE 1 -->
+        <div class="node-container node-reduce" id="nodeRed1">
+          <div class="node-tag color-p1"><span>🖥️</span> Node 04</div>
+          <div class="node-row">
+            <div class="box-label label-reduce" style="color:var(--partition-1);">
+              <span>Reduce Task (Partition 1)</span>
+            </div>
+            <div class="box-content box-reduce" id="boxRed1" style="border-left-color:var(--partition-1);">
+              <div class="reducer-segments" id="red1Segments">
+                <div class="segment-row reducer-stage" id="red1Seg0"><div class="mini-label">Segment Node 01</div></div>
+                <div class="segment-row reducer-stage" id="red1Seg1"><div class="mini-label">Segment Node 02</div></div>
+              </div>
+              <div class="reducer-merge reducer-stage" id="red1Merge"><div class="mini-label">Merge sort</div></div>
+              <div class="reducer-inner" id="red1"></div>
+              <div class="reducer-output reducer-stage" id="red1Reduce"><div class="mini-label color-p1">Reduce</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- REDUCER NODE 2 -->
+        <div class="node-container node-reduce" id="nodeRed2">
+          <div class="node-tag color-p2"><span>🖥️</span> Node 05</div>
+          <div class="node-row">
+            <div class="box-label label-reduce" style="color:var(--partition-2);">
+              <span>Reduce Task (Partition 2)</span>
+            </div>
+            <div class="box-content box-reduce" id="boxRed2" style="border-left-color:var(--partition-2);">
+              <div class="reducer-segments" id="red2Segments">
+                <div class="segment-row reducer-stage" id="red2Seg0"><div class="mini-label">Segment Node 01</div></div>
+                <div class="segment-row reducer-stage" id="red2Seg1"><div class="mini-label">Segment Node 02</div></div>
+              </div>
+              <div class="reducer-merge reducer-stage" id="red2Merge"><div class="mini-label">Merge sort</div></div>
+              <div class="reducer-inner" id="red2"></div>
+              <div class="reducer-output reducer-stage" id="red2Reduce"><div class="mini-label color-p2">Reduce</div></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- HDFS OUTPUT -->
+      <div class="node-container node-output">
+        <div class="node-tag"><span>💾</span> HDFS Output</div>
+        <div class="node-row">
+          <div class="box-label label-hdfs">
+            <span>Final Output Files</span>
+          </div>
+          <div class="box-content box-hdfs" id="boxHdfsOutput">
+            <div class="output-files">
+              <div class="output-file" id="hdfsOut0"><div class="mini-label color-p0">part-r-00000</div></div>
+              <div class="output-file" id="hdfsOut1"><div class="mini-label color-p1">part-r-00001</div></div>
+              <div class="output-file" id="hdfsOut2"><div class="mini-label color-p2">part-r-00002</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="log-panel">
+      <div class="log-header">
+        <span>Job History Log</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="width:8px; height:8px; background:var(--success); border-radius:50%; animation: pulse 2s infinite;"></span>
+          <span style="color:var(--text-caption); font-size:var(--text-xs);">Live</span>
+        </div>
+      </div>
+      <div class="log-content" id="consoleLog">
+        <div class="log-entry log-sys">> Cluster Daemon Started. Waiting for job...</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<style>
+@keyframes pulse {
+  0% { transform: scale(0.95); opacity: 0.5; }
+  50% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.5; }
+}
+
+    .final-output {
+      display: flex !important;
+      flex-direction: column;
+      gap: 4px;
+      padding: 22px 4px 4px 4px !important;
+    }
+    .mapper-output-segment {
+      flex: 1;
+      border: 1px solid rgba(0,0,0,0.05);
+      border-radius: 4px;
+      background: rgba(255,255,255,0.3);
+      min-height: 30px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 4px;
+      position: relative;
+    }
+    .mapper-output-segment::after {
+      content: attr(data-label);
+      position: absolute;
+      right: 4px;
+      bottom: 2px;
+      font-size: 8px;
+      text-transform: uppercase;
+      opacity: 0.5;
+      font-weight: 800;
+    }
+
+
+    .mapper-merge-inner {
+      min-height: 60px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--record-gap);
+      align-content: flex-start;
+      justify-content: center;
+      padding: 4px;
+      position: relative;
+    }
+
+  </style>
+
+<!-- Step-by-Step Mini Console -->
+<div class="step-console">
+  <div class="step-console-header">
+    Step Controller
+  </div>
+  <div class="step-console-body">
+    <div class="step-info" id="stepInfo">
+      <div class="step-phase" id="stepPhase">READY</div>
+      <div class="step-counter" id="stepCounter">0 / 0</div>
+      <div class="step-description" id="stepDescription">Click "Next Step" to begin</div>
+    </div>
+    <div class="step-console-buttons">
+      <button class="step-btn step-btn-next" id="stepBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="5 3 19 12 5 21 5 3"></polygon>
+        </svg>
+        Next Step
+      </button>
+      <button class="step-btn step-btn-reset" id="resetStepBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 4v6h-6"></path>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+        </svg>
+        Reset
+      </button>
+    </div>
+  </div>
+</div>
+
+  <script type="module" src="./assets/js/pipeline-teaching/index.js"></script>
+</body>
+</html>
