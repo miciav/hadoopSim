@@ -202,6 +202,59 @@ export function revealCombineRow(mapperId) {
 }
 
 /**
+ * Creates a combine slot dynamically.
+ * @param {number} mapperId - Mapper ID
+ * @param {number} spillIndex - Spill/combine index
+ * @returns {HTMLElement|null} The created slot element
+ */
+export function createCombineSlot(mapperId, spillIndex) {
+  const combineId = getCombineSlotId(mapperId, spillIndex);
+
+  // Check if slot already exists
+  if (el(combineId)) {
+    return el(combineId);
+  }
+
+  const nodeEl = el(mapperId === 0 ? 'node01' : 'node02');
+  if (!nodeEl) return null;
+
+  const combineContainer = nodeEl.querySelector('.combine-container');
+  if (!combineContainer) return null;
+
+  // Create the slot
+  const slot = document.createElement('div');
+  slot.id = combineId;
+  slot.className = 'combine-slot';
+
+  // Add mini label
+  const label = document.createElement('div');
+  label.className = 'mini-label';
+  label.textContent = `Combine ${spillIndex}`;
+  slot.appendChild(label);
+
+  // Add to container
+  combineContainer.appendChild(slot);
+
+  return slot;
+}
+
+/**
+ * Clears all combine slots from the combine containers.
+ * Used to reset combine slots so they can be created dynamically.
+ */
+export function clearCombineSlots() {
+  ['node01', 'node02'].forEach(nodeId => {
+    const nodeEl = el(nodeId);
+    if (!nodeEl) return;
+
+    const combineContainer = nodeEl.querySelector('.combine-container');
+    if (combineContainer) {
+      combineContainer.innerHTML = '';
+    }
+  });
+}
+
+/**
  * Reveals the merge row for a mapper.
  * @param {number} mapperId - Mapper ID
  */

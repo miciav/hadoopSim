@@ -26,6 +26,8 @@ import {
   removeActiveRecords,
   revealSpillSlot,
   revealCombineRow,
+  createCombineSlot,
+  clearCombineSlots,
   revealMergeRow
 } from './dom-helpers.js';
 
@@ -35,7 +37,8 @@ import {
 export const STEP_TYPES = {
   INPUT_INIT: 'INPUT_INIT',
   MAP_BATCH: 'MAP_BATCH',           // Read batch of records into buffer (parallel on both nodes)
-  SPILL_SORT_COMBINE: 'SPILL_SORT_COMBINE', // Sort, spill, and combine (parallel on both nodes)
+  SPILL_SORT: 'SPILL_SORT',         // Sort and spill to disk (parallel on both nodes)
+  COMBINE: 'COMBINE',               // Apply combiner to spilled data (parallel on both nodes)
   MERGE: 'MERGE',                   // Merge phase (parallel on both nodes)
   SHUFFLE: 'SHUFFLE',               // Network shuffle (all at once)
   REDUCE_MERGE: 'REDUCE_MERGE',     // Reduce merge sort (all partitions)
@@ -54,6 +57,7 @@ export function createStepSimulation() {
   let currentStepIndex = 0;
   let isExecutingStep = false;
   let onStepChangeCallback = null;
+  let onStepCompleteCallback = null;
 
   const callbacks = {
     isRunning: () => state.running,
@@ -132,11 +136,20 @@ export function createStepSimulation() {
         ]
       });
 
-      // SPILL_SORT_COMBINE: Sort, spill, and combine (parallel)
+      // SPILL_SORT: Sort and spill to disk (parallel)
       stepQueue.push({
-        type: STEP_TYPES.SPILL_SORT_COMBINE,
-        description: `Spill ${batchIndex + 1}: Sort & Combine (both nodes in parallel)`,
+        type: STEP_TYPES.SPILL_SORT,
+        description: `Spill ${batchIndex + 1}: Sort & write to disk (both nodes)`,
         phase: 'SPILL',
+        batchIndex,
+        spillIndex: batchIndex
+      });
+
+      // COMBINE: Apply combiner to spilled data (parallel)
+      stepQueue.push({
+        type: STEP_TYPES.COMBINE,
+        description: `Spill ${batchIndex + 1}: Apply Combiner (both nodes)`,
+        phase: 'COMBINE',
         batchIndex,
         spillIndex: batchIndex
       });
@@ -200,8 +213,12 @@ export function createStepSimulation() {
         await executeMapBatch(step, tick);
         break;
 
-      case STEP_TYPES.SPILL_SORT_COMBINE:
-        await executeSpillSortCombine(step, tick);
+      case STEP_TYPES.SPILL_SORT:
+        await executeSpillSort(step, tick);
+        break;
+
+      case STEP_TYPES.COMBINE:
+        await executeCombine(step, tick);
         break;
 
       case STEP_TYPES.MERGE:
@@ -261,6 +278,11 @@ export function createStepSimulation() {
       const flyPromises = batch.map(async ({ record, recordIndex }, idx) => {
         const sourceId = getSourceRecordId(mapperId, recordIndex);
 
+        // Ensure record has CSS class based on partition
+        if (!record.c) {
+          record.c = `bg-p${record.p}`;
+        }
+
         // Add to buffer state
         mapper.buffer.push({ ...record, count: 1 });
 
@@ -289,9 +311,9 @@ export function createStepSimulation() {
   }
 
   /**
-   * Execute SPILL_SORT_COMBINE: Sort, spill, and combine (parallel on both nodes)
+   * Execute SPILL_SORT: Sort and spill to disk (parallel on both nodes)
    */
-  async function executeSpillSortCombine(step, tick) {
+  async function executeSpillSort(step, tick) {
     const { spillIndex } = step;
 
     highlightBoxes([ELEMENT_IDS.BOX_SPILL_0, ELEMENT_IDS.BOX_SPILL_1]);
@@ -306,7 +328,9 @@ export function createStepSimulation() {
 
       // Sort buffer
       const sorted = sortByPartitionThenKey(mapper.buffer);
-      mapper.buffer = sorted;
+
+      // Store sorted records for the combine phase
+      mapper.pendingSpill = sorted;
 
       // Reveal spill slot
       revealSpillSlot(mapperId, spillIndex);
@@ -314,6 +338,10 @@ export function createStepSimulation() {
       // Animate records from buffer to spill (in parallel)
       const spillContainerId = getSpillSlotId(mapperId, spillIndex);
       const flyPromises = sorted.map(async (rec, i) => {
+        // Ensure record has CSS class based on partition
+        if (!rec.c) {
+          rec.c = `bg-p${rec.p}`;
+        }
         const sourceId = `buf${mapperId}-rec${i}`;
         await wait(i * 30); // Small stagger
         await flyRecord(sourceId, spillContainerId, rec, tick * 0.3);
@@ -322,32 +350,65 @@ export function createStepSimulation() {
 
       await Promise.all(flyPromises);
 
-      // Clear buffer visually
+      // Clear buffer visually and state
       const bufEl = el(`buf${mapperId}`);
       if (bufEl) {
         const records = bufEl.querySelectorAll('.kv-record:not(.buffer-fill)');
         records.forEach(r => r.remove());
       }
+      mapper.buffer = [];
       updateBufferFill(mapperId, 0);
 
       callbacks.onSpillCreated();
+    });
 
-      // Now combine
+    await Promise.all(spillPromises);
+    await wait(tick * 0.2);
+  }
+
+  /**
+   * Execute COMBINE: Apply combiner to spilled data (parallel on both nodes)
+   */
+  async function executeCombine(step, tick) {
+    const { spillIndex } = step;
+
+    // Highlight combine boxes
+    highlightBoxes(['boxCombine0', 'boxCombine1']);
+    updatePhaseDisplay('COMBINE');
+
+    log(`<strong>Spill ${spillIndex + 1}:</strong> Applying Combiner on both nodes`, 'DISK');
+
+    // Process both mappers in parallel
+    const combinePromises = [0, 1].map(async (mapperId) => {
+      const mapper = state.mappers[mapperId];
+
+      // Get the sorted records stored during spill phase
+      const spillRecords = mapper.pendingSpill;
+      if (!spillRecords || spillRecords.length === 0) return;
+
+      // Reveal combine row and create combine slot dynamically
       revealCombineRow(mapperId);
+      createCombineSlot(mapperId, spillIndex);
 
+      const spillContainerId = getSpillSlotId(mapperId, spillIndex);
       const combineContainerId = getCombineSlotId(mapperId, spillIndex);
+
       triggerCombineSweep(spillContainerId, SWEEP_COLORS.AMBER);
 
       await wait(tick * 0.4);
 
       // Combine records
-      const combined = combine(sorted);
+      const combined = combine(spillRecords);
       mapper.spills.push(combined);
-      mapper.buffer = [];
+      mapper.pendingSpill = null; // Clear pending spill
 
-      // Render combined records
+      // Render combined records (ensure CSS class is set)
       for (let i = 0; i < combined.length; i++) {
         const rec = combined[i];
+        // Ensure record has CSS class based on partition
+        if (!rec.c) {
+          rec.c = `bg-p${rec.p}`;
+        }
         renderRecordInCombine(mapperId, spillIndex, rec, `${combineContainerId}-rec${i}`);
       }
 
@@ -358,10 +419,10 @@ export function createStepSimulation() {
       }
     });
 
-    await Promise.all(spillPromises);
+    await Promise.all(combinePromises);
 
-    log(`<strong>Spill ${spillIndex + 1}:</strong> Combiner applied on both nodes`, 'DISK');
-    await wait(tick * 0.3);
+    log(`<strong>Spill ${spillIndex + 1}:</strong> Combiner completed on both nodes`, 'DISK');
+    await wait(tick * 0.2);
   }
 
   /**
@@ -669,6 +730,7 @@ export function createStepSimulation() {
     const splitSize = parseInt(el(ELEMENT_IDS.SPLIT_SIZE_INPUT)?.value ?? CONFIG.INPUT_SPLIT_RECORDS, 10);
     state = createInitialState(undefined, undefined, splitSize);
     resetUI(state);
+    clearCombineSlots(); // Clear pre-created combine slots for dynamic creation
     buildStepQueue();
     currentStepIndex = 0;
     state.running = true;
@@ -694,6 +756,8 @@ export function createStepSimulation() {
 
     try {
       await executeStep(step);
+      // Notify that this step completed (before incrementing index)
+      notifyStepComplete(step);
       currentStepIndex++;
       updateProgress();
       notifyStepChange();
@@ -713,6 +777,7 @@ export function createStepSimulation() {
     const splitSize = parseInt(el(ELEMENT_IDS.SPLIT_SIZE_INPUT)?.value ?? CONFIG.INPUT_SPLIT_RECORDS, 10);
     state = createInitialState(undefined, undefined, splitSize);
     resetUI(state);
+    clearCombineSlots(); // Clear pre-created combine slots for dynamic creation
     buildStepQueue();
     currentStepIndex = 0;
 
@@ -742,15 +807,28 @@ export function createStepSimulation() {
   }
 
   /**
-   * Sets callback for step changes
+   * Sets callback for step changes (called after index increments, for next step info)
    */
   function onStepChange(callback) {
     onStepChangeCallback = callback;
   }
 
+  /**
+   * Sets callback for step completion (called after step executes, with completed step info)
+   */
+  function onStepComplete(callback) {
+    onStepCompleteCallback = callback;
+  }
+
   function notifyStepChange() {
     if (onStepChangeCallback) {
       onStepChangeCallback(getCurrentStepInfo());
+    }
+  }
+
+  function notifyStepComplete(completedStep) {
+    if (onStepCompleteCallback) {
+      onStepCompleteCallback(completedStep);
     }
   }
 
@@ -781,6 +859,7 @@ export function createStepSimulation() {
     reset,
     getCurrentStepInfo,
     onStepChange,
+    onStepComplete,
     getState,
     isComplete,
     isBusy

@@ -23,6 +23,15 @@
       --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
       --font-mono: 'JetBrains Mono', 'Fira Code', 'Monaco', monospace;
       --record-gap: 8px;
+      --step-console-width: 160px;
+      --step-console-right: 16px;
+      --callout-gap: 12px;
+      /* Callout positioning: sits between main content and step controller */
+      --callout-right: calc(var(--step-console-right) + var(--step-console-width) + var(--callout-gap));
+      --callout-min-width: 240px;
+      --callout-max-width: 420px;
+      --callout-arrow-size: 10px;
+      --callout-arrow-border: 12px;
 
       /* Typography Scale (1.25 ratio - Major Third) */
       --text-xs: 12px;      /* Mini labels, badges */
@@ -166,7 +175,7 @@
     /* Main Layout */
     .layout {
       display: grid; grid-template-columns: 3fr 1.2fr;
-      gap: 32px; margin-top: 24px; align-items: start;
+      gap: 32px; margin-top: 24px; align-items: stretch;
     }
 
     /* Nodes */
@@ -283,7 +292,7 @@
       flex-direction: column;
       gap: var(--record-gap);
     }
-    .combine-container { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+    .combine-container { display: flex; flex-direction: column; gap: var(--record-gap); }
     .spill-slot {
       border-radius: 6px;
       border: 1px solid #cbd5e1; background: #ffffff;
@@ -293,12 +302,13 @@
       width: 100%;
     }
     .combine-slot {
-      flex: 1; min-width: 60px; border-radius: 6px;
+      border-radius: 6px;
       border: 1px solid #fcd34d; background: #ffffff;
-      min-height: 80px; padding: 20px 4px 4px;
+      min-height: 60px; padding: 20px 4px 4px;
       position: relative; display: flex; flex-wrap: wrap; gap: var(--record-gap);
       align-content: flex-start; justify-content: center;
       box-shadow: 0 1px 2px rgba(245, 158, 11, 0.1);
+      width: 100%;
     }
     .mini-label {
       position: absolute; top: 6px; left: 8px;
@@ -458,6 +468,129 @@
     .log-disk { border-left-color: var(--warning); background: #fffbeb; border-color: #fef3c7; }
     .log-net { border-left-color: var(--primary); background: #eff6ff; border-color: #dbeafe; }
     .log-red { border-left-color: #d946ef; background: #fdf4ff; border-color: #fae8ff; }
+
+    /* --- PHASE CALLOUT --- */
+    .phase-callout {
+      position: absolute;
+      right: 0;
+      top: 0;
+      width: 100%;
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--border-color);
+      padding: 20px 24px;
+      min-height: 140px;
+      transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+      z-index: 100;
+      --callout-arrow-top: 50%;
+    }
+
+    .phase-callout-wrapper {
+      position: fixed;
+      right: var(--callout-right);
+      top: 50%;
+      transform: translateY(-50%);
+      /* Dynamic width: 24% of viewport, clamped between min and max */
+      width: clamp(var(--callout-min-width), 24vw, var(--callout-max-width));
+      height: auto;
+      max-height: 80vh;
+      z-index: 999;
+      transition: width 0.3s ease;
+    }
+
+    /* Hide callout on very small screens */
+    @media (max-width: 1100px) {
+      .phase-callout-wrapper {
+        display: none;
+      }
+    }
+
+    .callout-arrow {
+      position: absolute;
+      left: calc(-1 * var(--callout-arrow-size));
+      top: var(--callout-arrow-top);
+      transform: translateY(-50%);
+      width: 0;
+      height: 0;
+      border-top: var(--callout-arrow-size) solid transparent;
+      border-bottom: var(--callout-arrow-size) solid transparent;
+      border-right: var(--callout-arrow-size) solid #ffffff;
+      filter: drop-shadow(-2px 0 2px rgba(0,0,0,0.1));
+      z-index: 10;
+    }
+
+    /* Add a border effect for the arrow */
+    .phase-callout::before {
+      content: '';
+      position: absolute;
+      left: calc(-1 * var(--callout-arrow-border));
+      top: var(--callout-arrow-top);
+      transform: translateY(-50%);
+      width: 0;
+      height: 0;
+      border-top: var(--callout-arrow-border) solid transparent;
+      border-bottom: var(--callout-arrow-border) solid transparent;
+      border-right: var(--callout-arrow-border) solid var(--border-color);
+      z-index: 9;
+    }
+
+    .callout-content {
+      position: relative;
+      z-index: 1;
+    }
+
+    .callout-phase {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 4px 10px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      background: #e2e8f0;
+      color: #64748b;
+    }
+
+    .callout-phase.phase-input { background: #dbeafe; color: #1d4ed8; }
+    .callout-phase.phase-map { background: #d1fae5; color: #059669; }
+    .callout-phase.phase-spill { background: #fef3c7; color: #d97706; }
+    .callout-phase.phase-combine { background: #dbeafe; color: #1d4ed8; }
+    .callout-phase.phase-merge { background: #fef3c7; color: #d97706; }
+    .callout-phase.phase-shuffle { background: #dbeafe; color: #1d4ed8; }
+    .callout-phase.phase-reduce-merge { background: #f3e8ff; color: #7c3aed; }
+    .callout-phase.phase-reduce { background: #fae8ff; color: #c026d3; }
+    .callout-phase.phase-output { background: #d1fae5; color: #059669; }
+    .callout-phase.phase-finish { background: #d1fae5; color: #059669; }
+
+    .callout-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 10px;
+      line-height: 1.3;
+    }
+
+    .callout-description {
+      font-size: 14px;
+      color: #475569;
+      line-height: 1.6;
+    }
+
+    .callout-description strong {
+      color: #0f172a;
+      font-weight: 600;
+    }
+
+    .callout-description code {
+      background: #f1f5f9;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: #7c3aed;
+    }
 
     @keyframes fadeIn { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -730,13 +863,13 @@
     /* --- STEP-BY-STEP MINI CONSOLE --- */
     .step-console {
       position: fixed;
-      right: 20px;
+      right: var(--step-console-right);
       top: 50%;
       transform: translateY(-50%);
-      width: 180px;
+      width: var(--step-console-width);
       background: #ffffff;
       border-radius: 16px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.05);
       z-index: 1000;
       display: flex;
       flex-direction: column;
@@ -747,8 +880,8 @@
     .step-console-header {
       background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
       color: white;
-      padding: 14px 16px;
-      font-size: 12px;
+      padding: 12px 14px;
+      font-size: 11px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.05em;
@@ -756,25 +889,48 @@
     }
 
     .step-console-body {
-      padding: 16px;
+      padding: 14px;
       display: flex;
       flex-direction: column;
       gap: 12px;
     }
 
+    .step-config {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .step-config-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+    }
+
+    .step-config-input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: var(--font-mono);
+      text-align: center;
+    }
+
     .step-info {
       background: #f8fafc;
-      border-radius: 8px;
-      padding: 12px;
+      border-radius: 10px;
+      padding: 14px;
       text-align: center;
     }
 
     .step-counter {
-      font-size: 24px;
+      font-size: 28px;
       font-weight: 700;
       color: #0f172a;
       font-family: var(--font-mono);
-      margin-bottom: 4px;
+      line-height: 1;
     }
 
     .step-phase {
@@ -785,7 +941,7 @@
       color: #64748b;
       background: #e2e8f0;
       padding: 4px 8px;
-      border-radius: 4px;
+      border-radius: 6px;
       display: inline-block;
       margin-bottom: 8px;
     }
@@ -793,19 +949,13 @@
     .step-phase.phase-input { background: #dbeafe; color: #1d4ed8; }
     .step-phase.phase-map { background: #d1fae5; color: #059669; }
     .step-phase.phase-spill { background: #fef3c7; color: #d97706; }
+    .step-phase.phase-combine { background: #dbeafe; color: #1d4ed8; }
     .step-phase.phase-merge { background: #fef3c7; color: #d97706; }
     .step-phase.phase-shuffle { background: #dbeafe; color: #1d4ed8; }
     .step-phase.phase-reduce-merge { background: #f3e8ff; color: #7c3aed; }
     .step-phase.phase-reduce { background: #fae8ff; color: #c026d3; }
     .step-phase.phase-output { background: #d1fae5; color: #059669; }
     .step-phase.phase-finish { background: #d1fae5; color: #059669; }
-
-    .step-description {
-      font-size: 11px;
-      color: #475569;
-      line-height: 1.4;
-      min-height: 32px;
-    }
 
     .step-console-buttons {
       display: flex;
@@ -815,33 +965,25 @@
 
     .step-btn {
       width: 100%;
-      padding: 12px 16px;
+      padding: 12px 10px;
       border: none;
       border-radius: 8px;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s ease;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-    }
-
-    .step-btn svg {
-      width: 16px;
-      height: 16px;
+      white-space: nowrap;
     }
 
     .step-btn-next {
       background: linear-gradient(135deg, #10b981 0%, #059669 100%);
       color: white;
-      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+      box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
     }
 
     .step-btn-next:hover:not(:disabled) {
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+      box-shadow: 0 3px 10px rgba(16, 185, 129, 0.4);
     }
 
     .step-btn-next:disabled {
@@ -862,14 +1004,47 @@
       border-color: #cbd5e1;
     }
 
+    /* Statistics */
+    .step-stats {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding-top: 12px;
+      border-top: 1px solid #e2e8f0;
+    }
+
+    .step-stat {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 8px;
+      background: #f8fafc;
+      border-radius: 6px;
+    }
+
+    .step-stat-value {
+      font-size: 16px;
+      font-weight: 700;
+      color: #0f172a;
+      font-family: var(--font-mono);
+    }
+
+    .step-stat-label {
+      font-size: 10px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      font-weight: 600;
+    }
+
     /* Pulse animation for active step button */
     .step-btn-next:not(:disabled) {
       animation: stepPulse 2s ease-in-out infinite;
     }
 
     @keyframes stepPulse {
-      0%, 100% { box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3); }
-      50% { box-shadow: 0 2px 16px rgba(16, 185, 129, 0.5); }
+      0%, 100% { box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3); }
+      50% { box-shadow: 0 2px 12px rgba(16, 185, 129, 0.5); }
     }
 
   </style>
@@ -886,47 +1061,11 @@
     <span>🎯 Learn at Your Own Pace</span>
   </div>
 
-  <div class="controls">
-    <button id="startBtn">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-      Deploy Job
-    </button>
-    <button id="resetBtn" class="secondary">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
-      Reset
-    </button>
-    <div class="options">
-      <label>
-        <input type="checkbox" id="teachingMode" checked>
-        <strong>Teaching Mode</strong>
-      </label>
-      <span style="display:flex; align-items:center; gap:8px;">
-        Speed
-        <input type="range" id="speedSlider" min="0.5" max="3.0" step="0.5" value="1.5" style="width:80px; cursor:pointer;">
-      </span>
-      <span style="display:flex; align-items:center; gap:8px;">
-        Split Size
-        <input type="number" id="splitSizeInput" min="1" max="20" value="10" style="width:50px;">
-      </span>
-    </div>
-    <div class="metrics compact">
-      <div class="metric-card">
-        <span class="metric-value" id="mRecords">0</span>
-        <span class="metric-label">📥 Records In</span>
-      </div>
-      <div class="metric-card">
-        <span class="metric-value" id="mSpills">0</span>
-        <span class="metric-label">💾 Disk Spills</span>
-      </div>
-      <div class="metric-card">
-        <span class="metric-value" id="mNet">0</span>
-        <span class="metric-label">🔌 Net Packets</span>
-      </div>
-      <div class="metric-card">
-        <span class="metric-value" id="mPhase" style="color:var(--primary)">IDLE</span>
-        <span class="metric-label">⚙️ Status</span>
-      </div>
-    </div>
+  <!-- Hidden elements for compatibility -->
+  <div style="display:none;">
+    <button id="startBtn"></button>
+    <button id="resetBtn"></button>
+    <input type="checkbox" id="teachingMode" checked>
   </div>
 
   <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
@@ -1184,16 +1323,17 @@
 
     </div>
 
-    <div class="log-panel">
-      <div class="log-header">
-        <span>Job History Log</span>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <span style="width:8px; height:8px; background:var(--success); border-radius:50%; animation: pulse 2s infinite;"></span>
-          <span style="color:var(--text-caption); font-size:var(--text-xs);">Live</span>
+    <!-- Phase Explanation Callout -->
+    <div class="phase-callout-wrapper">
+      <div class="phase-callout" id="phaseCallout">
+        <div class="callout-arrow" id="calloutArrow"></div>
+        <div class="callout-content">
+          <div class="callout-phase" id="calloutPhase">READY</div>
+          <div class="callout-title" id="calloutTitle">Welcome to Hadoop MapReduce</div>
+          <div class="callout-description" id="calloutDescription">
+            Click "Next Step" to begin the step-by-step simulation. Each step will show you how data flows through the MapReduce pipeline, from input splits to final output files.
+          </div>
         </div>
-      </div>
-      <div class="log-content" id="consoleLog">
-        <div class="log-entry log-sys">> Cluster Daemon Started. Waiting for job...</div>
       </div>
     </div>
 
@@ -1252,29 +1392,40 @@
 
 <!-- Step-by-Step Mini Console -->
 <div class="step-console">
-  <div class="step-console-header">
-    Step Controller
-  </div>
+  <div class="step-console-header">Step Controller</div>
   <div class="step-console-body">
+    <!-- Split Size -->
+    <div class="step-config">
+      <label class="step-config-label">Split Size</label>
+      <input type="number" id="splitSizeInput" min="1" max="20" value="10" class="step-config-input">
+    </div>
+
+    <!-- Step Info -->
     <div class="step-info" id="stepInfo">
       <div class="step-phase" id="stepPhase">READY</div>
       <div class="step-counter" id="stepCounter">0 / 0</div>
-      <div class="step-description" id="stepDescription">Click "Next Step" to begin</div>
     </div>
+
+    <!-- Buttons -->
     <div class="step-console-buttons">
-      <button class="step-btn step-btn-next" id="stepBtn">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="5 3 19 12 5 21 5 3"></polygon>
-        </svg>
-        Next Step
-      </button>
-      <button class="step-btn step-btn-reset" id="resetStepBtn">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M23 4v6h-6"></path>
-          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-        </svg>
-        Reset
-      </button>
+      <button class="step-btn step-btn-next" id="stepBtn">Next Step</button>
+      <button class="step-btn step-btn-reset" id="resetStepBtn">Reset</button>
+    </div>
+
+    <!-- Statistics -->
+    <div class="step-stats">
+      <div class="step-stat">
+        <span class="step-stat-label">Records</span>
+        <span class="step-stat-value" id="mRecords">0</span>
+      </div>
+      <div class="step-stat">
+        <span class="step-stat-label">Spills</span>
+        <span class="step-stat-value" id="mSpills">0</span>
+      </div>
+      <div class="step-stat">
+        <span class="step-stat-label">Packets</span>
+        <span class="step-stat-value" id="mNet">0</span>
+      </div>
     </div>
   </div>
 </div>
