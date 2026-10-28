@@ -19,3 +19,12 @@ I dataset predefiniti delle due pipeline modulari contengono 12 record per
 mapper; il risultato atteso aggregato per chiave è `ant: 7`, `arm: 2`,
 `car: 5`, `cat: 1`, `cup: 3`, `day: 3`, `dog: 2`, `dot: 1`.
 Questi conteggi non impongono lo stesso numero di passi alle due viste.
+
+## Removed historical variants
+
+The removed `old_stuff/` directory included an older ecosystem page with a
+Gantt timeline and `hadoop-map-side-pipeline-multi-node_v1.html`, which let the
+user select one to five nodes. Neither capability is represented by the current
+six home-page views. These historical files remain in Git history before commit
+`e955ca1`; removing them from the current site does not assert that their
+teaching content is equivalent to the maintained pages.
