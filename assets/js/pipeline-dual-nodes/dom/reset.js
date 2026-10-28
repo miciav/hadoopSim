@@ -44,7 +44,7 @@ export function resetState(state) {
 
   const size = state.splitSize || 10;
   state.inputSplits = state.mappers.map(mapper => splitInputData(mapper.data || [], size));
-  state.spillCounts = state.mappers.map(mapper => calculateSpillCount(mapper.data.length));
+  state.spillCounts = state.inputSplits.map(splits => splits.reduce((sum, split) => sum + calculateSpillCount(split.length), 0));
 
   const reducerKeys = state.reducers ? Object.keys(state.reducers) : ['0', '1', '2'];
   state.reducers = reducerKeys.reduce((acc, key) => {

@@ -193,6 +193,8 @@ function uploadLargeFile() {
   renderCluster();
 }
 
+const recoveryTimers = new Set();
+
 function simulateNodeFailure() {
   const activeNodes = sim.state.nodes.filter((node) => !node.failed);
   if (activeNodes.length === 0) {
@@ -204,7 +206,8 @@ function simulateNodeFailure() {
   sim.actions.failNode(randomNode.id);
   notify(`⚠️ ${randomNode.name} failed. Re-replicating...`, 'warning');
 
-  setTimeout(() => {
+  const timerId = setTimeout(() => {
+    recoveryTimers.delete(timerId);
     const summary = sim.actions.reReplicate();
     if (summary.lost > 0) {
       notify(`❌ ${summary.lost} blocks lost.`, 'error');
@@ -213,11 +216,14 @@ function simulateNodeFailure() {
     }
     renderCluster();
   }, 1500);
+  recoveryTimers.add(timerId);
 
   renderCluster();
 }
 
 function resetCluster() {
+  recoveryTimers.forEach((timerId) => clearTimeout(timerId));
+  recoveryTimers.clear();
   sim.actions.reset();
   fileColors.clear();
   colorIndex = 0;

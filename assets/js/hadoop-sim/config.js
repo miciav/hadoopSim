@@ -28,7 +28,7 @@ export const DEFAULT_CONFIG = {
 };
 
 export function resolveConfig(config = {}) {
-  return {
+  const resolved = {
     ...DEFAULT_CONFIG,
     ...config,
     nodeTemplate: {
@@ -48,4 +48,26 @@ export function resolveConfig(config = {}) {
       ...(config.mapReduce || {})
     }
   };
+  const positive = (value) => Number.isFinite(value) && value > 0;
+  if (!Number.isInteger(resolved.nodeCount) || resolved.nodeCount <= 0 ||
+      !Number.isInteger(resolved.replicationFactor) || resolved.replicationFactor <= 0 ||
+      !Number.isInteger(resolved.blockSizeMb) || resolved.blockSizeMb <= 0 ||
+      !Number.isInteger(resolved.mapReduce.amCpu) || !Number.isInteger(resolved.mapReduce.mapperCpu) ||
+      !Number.isInteger(resolved.yarn.queueLimit) || resolved.yarn.queueLimit < 0 ||
+      Object.values(resolved.mapReduce).some((value) => !positive(value))) {
+    throw new RangeError('Invalid simulation configuration');
+  }
+  const nodes = Array.isArray(config.nodes) && config.nodes.length ? config.nodes : [resolved.nodeTemplate];
+  const ids = new Set();
+  nodes.forEach((node, index) => {
+    const id = node.id ?? index + 1;
+    if (ids.has(id) || !Number.isInteger(node.cpuTotal ?? resolved.nodeTemplate.cpuTotal) ||
+        !positive(node.cpuTotal ?? resolved.nodeTemplate.cpuTotal) ||
+        !positive(node.memoryTotalMb ?? resolved.nodeTemplate.memoryTotalMb) ||
+        !positive(node.storageTotalMb ?? resolved.nodeTemplate.storageTotalMb)) {
+      throw new RangeError('Invalid node configuration');
+    }
+    ids.add(id);
+  });
+  return resolved;
 }

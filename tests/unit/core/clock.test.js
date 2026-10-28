@@ -28,3 +28,29 @@ test('manual clock runs intervals repeatedly', () => {
   clock.advance(16);
   assert.deepEqual(calls, [5, 10, 15]);
 });
+
+test('manual clock does not rearm a cancelled interval', () => {
+  const clock = createManualClock();
+  let calls = 0;
+  const id = clock.setInterval(() => { calls++; clock.clearInterval(id); }, 10);
+  clock.advance(40);
+  assert.equal(calls, 1);
+});
+
+test('manual clock skips an interval cancelled at the same time', () => {
+  const clock = createManualClock();
+  const calls = [];
+  clock.setInterval(() => { calls.push('first'); clock.clearInterval(second); }, 10);
+  const second = clock.setInterval(() => calls.push('second'), 10);
+  clock.advance(10);
+  assert.deepEqual(calls, ['first']);
+});
+
+test('manual clock skips a timeout cancelled at the same time', () => {
+  const clock = createManualClock();
+  const calls = [];
+  clock.setTimeout(() => { calls.push('first'); clock.clearTimeout(second); }, 10);
+  const second = clock.setTimeout(() => calls.push('second'), 10);
+  clock.advance(10);
+  assert.deepEqual(calls, ['first']);
+});

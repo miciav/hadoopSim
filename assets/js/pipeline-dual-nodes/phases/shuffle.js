@@ -65,6 +65,7 @@ export async function runNetworkShuffle(state, tick, callbacks) {
       if (teachingEnabled && rec.p !== currentP) {
         currentP = rec.p;
         await wait(Math.random() * 100);
+        if (!isRunning()) return;
         log(`${nodeName}: Streaming batch for <strong>Partition ${currentP}</strong>...`, 'NET');
       }
 
@@ -75,6 +76,7 @@ export async function runNetworkShuffle(state, tick, callbacks) {
         // Fly to network hub from specific partition segment
         const sourceId = getFinalSegmentId(sourceIndex, rec.p);
         await flyRecord(sourceId, ELEMENT_IDS.NET_HUB, rec, tick * 0.5);
+        if (!isRunning()) return;
 
         // Update network counter
         onNetPacket();
@@ -95,6 +97,8 @@ export async function runNetworkShuffle(state, tick, callbacks) {
 
         await flyRecord(ELEMENT_IDS.NET_HUB, targetId, recordPayload, tick * 0.5);
 
+        if (!isRunning()) return;
+
         // Land in reducer
         const targetBox = el(targetId);
         if (targetBox) {
@@ -108,6 +112,7 @@ export async function runNetworkShuffle(state, tick, callbacks) {
       // Launch packet and continue (parallel transmission)
       nodePromises.push(packetJourney());
       await wait(nicSpeed);
+      if (!isRunning()) return;
     }
 
     // Wait for all packets from this node

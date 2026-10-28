@@ -19,12 +19,12 @@ import {
 
 test('RAW_DATA_A is frozen', () => {
   assert.ok(Object.isFrozen(RAW_DATA_A));
-  assert.equal(RAW_DATA_A.length, 10);
+  assert.equal(RAW_DATA_A.length, 12);
 });
 
 test('RAW_DATA_B is frozen', () => {
   assert.ok(Object.isFrozen(RAW_DATA_B));
-  assert.equal(RAW_DATA_B.length, 8);
+  assert.equal(RAW_DATA_B.length, 12);
 });
 
 test('createInitialState produces clean state', () => {
@@ -37,10 +37,10 @@ test('createInitialState produces clean state', () => {
   assert.equal(state.mappers[0].spills.length, 0);
   assert.equal(state.mappers[0].final.length, 0);
   assert.equal(state.inputSplits.length, 2);
-  assert.equal(state.inputSplits[0].length, 1);
-  assert.equal(state.inputSplits[1].length, 1);
-  assert.equal(state.spillCounts[0], 2);
-  assert.equal(state.spillCounts[1], 2);
+  assert.equal(state.inputSplits[0].length, 2);
+  assert.equal(state.inputSplits[1].length, 2);
+  assert.equal(state.spillCounts[0], 3);
+  assert.equal(state.spillCounts[1], 3);
   assert.deepEqual(Object.keys(state.reducers), ['0', '1', '2']);
 });
 

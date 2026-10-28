@@ -86,6 +86,7 @@ export function createManualClock(startMs = 0) {
         }
       });
       dueTimeouts.forEach((entry) => {
+        if (!timeouts.has(entry.id)) return;
         timeouts.delete(entry.id);
         entry.fn();
       });
@@ -97,9 +98,9 @@ export function createManualClock(startMs = 0) {
         }
       });
       dueIntervals.forEach((entry) => {
+        if (!intervals.has(entry.id)) return;
         entry.fn();
-        entry.time = now + entry.interval;
-        intervals.set(entry.id, entry);
+        if (intervals.has(entry.id)) entry.time = now + entry.interval;
       });
     }
 

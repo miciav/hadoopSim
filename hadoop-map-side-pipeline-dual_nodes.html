@@ -727,6 +727,9 @@
       position: relative;
     }
 
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition-duration: 0s !important; }
+    }
   </style>
 </head>
 <body>

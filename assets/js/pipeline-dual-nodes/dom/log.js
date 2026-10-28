@@ -11,6 +11,8 @@ import { LOG_TYPES, CONFIG } from '../config.js';
  * @param {string} type - Log type: 'SYS', 'MAP', 'DISK', 'NET', 'RED'
  */
 export function log(message, type = 'SYS') {
+  const consoleEl = el(ELEMENT_IDS.CONSOLE_LOG);
+  if (!consoleEl) return;
   const div = document.createElement('div');
   const styleClass = LOG_TYPES[type] || LOG_TYPES.SYS;
 
@@ -20,13 +22,9 @@ export function log(message, type = 'SYS') {
   const time = now.toTimeString().split(' ')[0];
   div.innerHTML = `<span style="opacity:0.5; font-size:9px; margin-right:6px;">[${time}]</span> ${message}`;
 
-  const consoleEl = el(ELEMENT_IDS.CONSOLE_LOG);
-  if (consoleEl) {
-    consoleEl.prepend(div);
-    // Limit log entries
-    while (consoleEl.children.length > CONFIG.MAX_LOG_ENTRIES) {
-      consoleEl.lastChild.remove();
-    }
+  consoleEl.prepend(div);
+  while (consoleEl.children.length > CONFIG.MAX_LOG_ENTRIES) {
+    consoleEl.lastChild.remove();
   }
 }
 

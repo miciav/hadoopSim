@@ -4,6 +4,7 @@ import {
   combine,
   sortByPartitionThenKey,
   mergeSpills,
+  mergeSortedSpills,
   aggregateByKey,
   sortAndCombineBuffer
 } from '../../../assets/js/pipeline-dual-nodes/combiner.js';
@@ -181,4 +182,15 @@ test('sortAndCombineBuffer sorts and combines', () => {
   assert.equal(result[0].count, 2);
   assert.equal(result[1].k, 'dog');
   assert.equal(result[1].count, 1);
+});
+
+test('mergeSortedSpills preserves source and does not combine records', () => {
+  const spills = [
+    [{ k: 'ant', p: 0 }, { k: 'car', p: 1 }],
+    [{ k: 'ant', p: 0 }, { k: 'dog', p: 2 }]
+  ];
+  assert.deepEqual(mergeSortedSpills(spills).map(({ record, sourceIndex }) => [record.k, sourceIndex]), [
+    ['ant', 0], ['ant', 1], ['car', 0], ['dog', 1]
+  ]);
+  assert.equal(spills[0].length, 2);
 });

@@ -15,7 +15,8 @@ function replaceState(target, source) {
 
 export function createSimulation(config = {}, deps = {}) {
   const emitter = deps.emitter || createEventEmitter();
-  const rng = deps.rng || (deps.seed ? createSeededRng(deps.seed) : Math.random);
+  let seededRng = deps.seed != null ? createSeededRng(deps.seed) : null;
+  const rng = deps.rng || (seededRng ? () => seededRng() : Math.random);
   const clock = deps.clock || createRealClock();
   const state = deps.state || createInitialState(config);
 
@@ -31,6 +32,8 @@ export function createSimulation(config = {}, deps = {}) {
   });
 
   function reset() {
+    mapreduce.stopAll();
+    if (seededRng && !deps.rng) seededRng = createSeededRng(deps.seed);
     const fresh = createInitialState(config);
     replaceState(state, fresh);
     emitter.emit('simulation:reset', { state });
@@ -57,6 +60,7 @@ export function createSimulation(config = {}, deps = {}) {
   return {
     state,
     actions,
+    dispose: mapreduce.dispose,
     hdfs,
     yarn,
     mapreduce,

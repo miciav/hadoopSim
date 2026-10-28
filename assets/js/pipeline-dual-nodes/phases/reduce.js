@@ -150,6 +150,7 @@ export async function runReduceMergeSort(state, tick, isRunning, isTeaching = ()
       const targetId = mergeBox ? getReducerMergeId(p) : getReducerId(p);
 
       await flyRecord(fromId, targetId, item.record, tick * 0.4);
+
       if (!isRunning()) return;
 
       const targetBox = mergeBox || box;
@@ -159,11 +160,13 @@ export async function runReduceMergeSort(state, tick, isRunning, isTeaching = ()
         showRecord(r);
       }
       await wait(Math.max(tick * 0.1, 80));
+      if (!isRunning()) return;
     }
 
     if (mergeBox) {
       triggerCombineSweep(getReducerMergeId(p), SWEEP_COLORS.PURPLE);
       await wait(Math.max(tick * 0.4, 400));
+      if (!isRunning()) return;
       turnActiveToGhosts(mergeBox);
     }
 
@@ -181,6 +184,7 @@ export async function runReduceMergeSort(state, tick, isRunning, isTeaching = ()
           box.appendChild(r);
           showRecord(r);
           await wait(Math.max(tick * 0.1, 80));
+          if (!isRunning()) return;
         }
       }
     }
@@ -214,7 +218,6 @@ export async function runReduce(state, tick, isRunning) {
     // Sweep effect for reduce aggregation
     triggerCombineSweep(getReducerOutputId(p), SWEEP_COLORS.PURPLE);
     await wait(Math.max(tick, 800));
-
     if (!isRunning()) return;
 
     // Aggregate by key
@@ -234,12 +237,16 @@ export async function runReduce(state, tick, isRunning) {
     for (const [k, v] of aggregated.entries()) {
       if (!isRunning()) return;
 
-      const r = createRecordElement({ k, c: partition.cssClass }, v);
-      r.classList.add('reduce-output');
-      if (outputBox) outputBox.appendChild(r);
-      showRecord(r);
+      if (outputBox) {
+        const r = createRecordElement({ k, c: partition.cssClass }, v);
+        r.classList.add('reduce-output');
+        outputBox.appendChild(r);
+        showRecord(r);
+      }
 
       await wait(tick * 0.3);
+
+      if (!isRunning()) return;
     }
   });
 

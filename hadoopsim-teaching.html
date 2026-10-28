@@ -1047,6 +1047,9 @@
       50% { box-shadow: 0 2px 12px rgba(16, 185, 129, 0.5); }
     }
 
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition-duration: 0s !important; }
+    }
   </style>
 </head>
 <body>
@@ -1407,8 +1410,10 @@
     </div>
 
     <!-- Buttons -->
+    <div id="stepError" role="status" aria-live="polite" hidden></div>
     <div class="step-console-buttons">
       <button class="step-btn step-btn-next" id="stepBtn">Next Step</button>
+      <button class="step-btn step-btn-reset" id="playStepBtn">Play</button>
       <button class="step-btn step-btn-reset" id="resetStepBtn">Reset</button>
     </div>
 

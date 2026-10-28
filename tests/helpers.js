@@ -44,3 +44,13 @@ export async function getClusterSnapshot(page, globalName = 'cluster') {
   }
   return snapshot;
 }
+
+export async function seedPage(page, seed) {
+  await page.addInitScript({ content: `
+    let seed = ${Number(seed)};
+    Math.random = () => {
+      seed = (seed * 1664525 + 1013904223) % 4294967296;
+      return seed / 4294967296;
+    };
+  ` });
+}

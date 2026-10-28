@@ -5,7 +5,6 @@
 import {
   el,
   getBufferId,
-  getFillId,
   getBoxSpillId,
   getBoxCombineId,
   getSpillSlotId,
@@ -34,9 +33,6 @@ export async function runMapper(state, mapperId, delay, nodeId, callbacks) {
 
   const mapper = state.mappers[mapperId];
   const bufEl = el(getBufferId(mapperId));
-  const fillEl = el(getFillId(mapperId));
-
-  if (!fillEl) return;
 
   // Use splits from state to simulate tasks
   const splits = state.inputSplits[mapperId] || [mapper.data];
@@ -72,9 +68,11 @@ export async function runMapper(state, mapperId, delay, nodeId, callbacks) {
       if (!isRunning()) return;
 
       // Add record to buffer visually
-      const recordEl = createRecordElement(record);
-      bufEl.appendChild(recordEl);
-      showRecord(recordEl);
+      if (bufEl) {
+        const recordEl = createRecordElement(record);
+        bufEl.appendChild(recordEl);
+        showRecord(recordEl);
+      }
 
       // Update buffer fill indicator
       const pct = calculateBufferPercentage(mapper.buffer);

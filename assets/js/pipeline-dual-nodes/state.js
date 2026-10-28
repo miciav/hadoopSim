@@ -101,7 +101,7 @@ export function createInitialState(dataA = RAW_DATA_A, dataB = RAW_DATA_B, split
     splitInputData(mappers[1].data, splitSize)
   ];
 
-  const spillCounts = mappers.map(mapper => calculateSpillCount(mapper.data.length));
+  const spillCounts = inputSplits.map(splits => splits.reduce((sum, split) => sum + calculateSpillCount(split.length), 0));
 
   return {
     running: false,

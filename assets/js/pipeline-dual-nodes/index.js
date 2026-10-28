@@ -39,7 +39,7 @@ export function initPipeline() {
           // Fold when teaching mode is turned OFF (if shuffle is complete)
           const state = simulation.getState();
           if (state.shuffleComplete) {
-            foldIntermediateRows();
+            foldIntermediateRows(() => simulation.getState() === state && state.shuffleComplete);
           }
         }
       });

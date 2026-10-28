@@ -29,12 +29,15 @@ export async function runOutput(state, tick, isRunning) {
 
     await wait(tick * 0.3);
 
+    if (!isRunning()) return;
+
     // Animate each record flying to HDFS
     for (const rec of records) {
       if (!isRunning()) return;
 
       // Fly record from reducer to HDFS output
       await flyRecord(sourceId, targetId, rec, tick * 0.5);
+      if (!isRunning()) return;
 
       // Land in HDFS output file
       const targetBox = el(targetId);
@@ -46,6 +49,8 @@ export async function runOutput(state, tick, isRunning) {
       }
 
       await wait(tick * 0.25);
+
+      if (!isRunning()) return;
     }
 
     const sourceBox = el(sourceId);

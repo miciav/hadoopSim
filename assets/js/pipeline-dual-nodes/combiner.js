@@ -72,3 +72,21 @@ export function sortAndCombineBuffer(buffer) {
   const sorted = sortByPartitionThenKey(buffer);
   return combine(sorted);
 }
+
+export function mergeSortedSpills(spills) {
+  const positions = spills.map(() => 0);
+  const merged = [];
+  while (true) {
+    let selected = -1;
+    spills.forEach((records, index) => {
+      const candidate = records[positions[index]];
+      const current = selected < 0 ? null : spills[selected][positions[selected]];
+      if (candidate && (!current || candidate.p < current.p ||
+          (candidate.p === current.p && String(candidate.k).localeCompare(String(current.k)) < 0))) {
+        selected = index;
+      }
+    });
+    if (selected < 0) return merged;
+    merged.push({ record: spills[selected][positions[selected]++], sourceIndex: selected });
+  }
+}

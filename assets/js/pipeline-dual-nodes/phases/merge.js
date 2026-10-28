@@ -13,6 +13,7 @@ import {
 } from '../dom/selectors.js';
 import { createRecordElement, showRecord, turnActiveToGhosts, markAsGhost } from '../dom/records.js';
 import { flyRecord, wait } from '../dom/animations.js';
+import { mergeSortedSpills } from '../combiner.js';
 
 /**
  * Animates records flying from spills to Local Merge Sort box.
@@ -43,27 +44,16 @@ export async function runMergeAnimation(state, mapperId, tick, isRunning) {
     return { data: [...data], sourceId, pos: 0 };
   });
 
-  const mergedOrder = [];
-  while (true) {
-    let minIdx = -1;
-    let minRec = null;
-    spills.forEach((s, idx) => {
-      if (s.pos >= s.data.length) return;
-      const cand = s.data[s.pos];
-      if (!minRec || cand.p < minRec.p || (cand.p === minRec.p && String(cand.k).localeCompare(String(minRec.k)) < 0)) {
-        minRec = cand;
-        minIdx = idx;
-      }
-    });
-    if (minIdx === -1) break;
-    mergedOrder.push({ rec: spills[minIdx].data[spills[minIdx].pos], sourceId: spills[minIdx].sourceId });
-    spills[minIdx].pos++;
-  }
+  const mergedOrder = mergeSortedSpills(spills.map(spill => spill.data)).map(({ record, sourceIndex }) => ({
+    rec: record,
+    sourceId: spills[sourceIndex].sourceId
+  }));
 
   // 2. Fly to Merge Sort box
   for (const item of mergedOrder) {
     if (!isRunning()) return;
     await flyRecord(item.sourceId, mergeInnerId, item.rec, tick * 0.5);
+    if (!isRunning()) return;
     if (mergeInner) {
       const r = createRecordElement(item.rec, item.rec.count);
       mergeInner.appendChild(r);
@@ -71,10 +61,12 @@ export async function runMergeAnimation(state, mapperId, tick, isRunning) {
       item.mergeEl = r; // Keep reference to ghost it later
     }
     await wait(tick * 0.1);
+    if (!isRunning()) return;
   }
 
   // 3. Pause for sort completion
   await wait(tick * 0.5);
+  if (!isRunning()) return;
 
   // 4. Save to Disk (Copy to final segments and ghost in merge box)
   for (const item of mergedOrder) {
@@ -83,6 +75,7 @@ export async function runMergeAnimation(state, mapperId, tick, isRunning) {
     
     // Fly to segment
     await flyRecord(mergeInnerId, segmentId, item.rec, tick * 0.5);
+    if (!isRunning()) return;
     
     // Ghost the record in Local Merge box instead of removing it
     if (item.mergeEl) markAsGhost(item.mergeEl);
@@ -94,6 +87,7 @@ export async function runMergeAnimation(state, mapperId, tick, isRunning) {
       showRecord(r);
     }
     await wait(tick * 0.05);
+    if (!isRunning()) return;
   }
 
   mapper.final = mergedOrder.map(i => i.rec);

@@ -154,7 +154,7 @@ export function getHdfsOutId(partition) {
 
 // Simple element getter (no caching to avoid stale references)
 export function el(id) {
-  return document.getElementById(id);
+  return typeof document === 'undefined' ? null : document.getElementById(id);
 }
 
 // All container IDs that need to be cleared on reset

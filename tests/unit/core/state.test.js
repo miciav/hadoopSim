@@ -33,3 +33,12 @@ test('createInitialState includes counters and queues', () => {
   assert.deepEqual(state.yarnQueue, []);
   assert.deepEqual(state.mapReduceQueue, []);
 });
+
+test('invalid configuration is rejected before a cluster is constructed', () => {
+  assert.throws(() => createInitialState({ blockSizeMb: 0 }), RangeError);
+  assert.throws(() => createInitialState({ replicationFactor: 0 }), RangeError);
+  assert.throws(() => createInitialState({ nodes: [{ id: 1 }, { id: 1 }] }), RangeError);
+  assert.throws(() => createInitialState({ nodeTemplate: { cpuTotal: -1 } }), RangeError);
+  assert.throws(() => createInitialState({ nodeTemplate: { cpuTotal: 1.5 } }), RangeError);
+  assert.throws(() => createInitialState({ mapReduce: { mapperCpu: 1.5 } }), RangeError);
+});

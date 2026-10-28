@@ -1,16 +1,8 @@
-import { test, expect } from '@playwright/test';
-import { getClusterSnapshot } from './helpers.js';
-
-const seedRandom = (seedValue) => () => {
-  let seed = seedValue;
-  Math.random = () => {
-    seed = (seed * 1664525 + 1013904223) % 4294967296;
-    return seed / 4294967296;
-  };
-};
+import { test, expect } from './fixtures.js';
+import { getClusterSnapshot, seedPage } from './helpers.js';
 
 test('YARN resource usage stays within node capacity', async ({ page }) => {
-  await page.addInitScript(seedRandom(99));
+  await seedPage(page, 99);
   await page.goto('/yarn_interactive.html');
 
   await page.evaluate(() => {
@@ -38,7 +30,7 @@ test('YARN queue drains when resources free up', async ({ page }) => {
 
   await page.goto('/yarn_interactive.html');
 
-  await page.evaluate(() => {
+  const initialQueue = await page.evaluate(() => {
     cluster.nodes.forEach((node) => {
       node.cpuTotal = 2;
       node.memoryTotalMb = 4096;
@@ -48,9 +40,8 @@ test('YARN queue drains when resources free up', async ({ page }) => {
     for (let i = 0; i < 15; i++) {
       submitJob();
     }
+    return cluster.yarnQueue.length;
   });
-
-  const initialQueue = await page.evaluate(() => cluster.yarnQueue.length);
   expect(initialQueue).toBeGreaterThan(0);
 
   await page.waitForFunction(

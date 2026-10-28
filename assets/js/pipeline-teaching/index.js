@@ -1,3 +1,4 @@
+import { createActor, createMachine } from 'xstate';
 /**
  * Main entry point for the step-by-step teaching simulation.
  */
@@ -29,7 +30,7 @@ const PHASE_EXPLANATIONS = {
   },
   SPILL: {
     title: 'Spill to Disk',
-    description: 'When the buffer reaches 80% capacity, a <strong>spill</strong> occurs. Records are <strong>sorted by partition and key</strong>, then written to the local disk. The sorted data is stored in spill files on the local filesystem.',
+    description: 'When the buffer reaches its 75% threshold, or a split ends, a <strong>spill</strong> occurs. Records are <strong>sorted by partition and key</strong>, then written to the local disk. The sorted data is stored in spill files on the local filesystem.',
     targetSelector: '#node02 .box-disk'
   },
   COMBINE: {
@@ -183,9 +184,13 @@ export function initTeachingPipeline() {
     const appContainer = document.querySelector('.app');
     const stepBtn = document.getElementById('stepBtn');
     const resetStepBtn = document.getElementById('resetStepBtn');
+    const playStepBtn = document.getElementById('playStepBtn');
+    const playback = createActor(createMachine({ initial: 'paused', states: { paused: { on: { PLAY: 'playing' } }, playing: { on: { PAUSE: 'paused' } } } })).start();
+    let playbackVersion = 0;
     const stepInfo = document.getElementById('stepInfo');
     const stepCounter = document.getElementById('stepCounter');
     const stepDescription = document.getElementById('stepDescription');
+    const stepError = document.getElementById('stepError');
     const stepPhase = document.getElementById('stepPhase');
 
     // Force teaching mode active
@@ -234,7 +239,7 @@ export function initTeachingPipeline() {
       }
 
       if (stepBtn) {
-        stepBtn.disabled = info.isComplete || simulation.isBusy();
+        stepBtn.disabled = info.isComplete || simulation.isBusy() || playback.getSnapshot().matches('playing');
         stepBtn.textContent = info.isComplete ? 'Complete' : 'Next Step';
       }
 
@@ -276,15 +281,59 @@ export function initTeachingPipeline() {
         }
 
         stepBtn.disabled = true;
-        await simulation.nextStep();
-        stepBtn.disabled = simulation.isComplete();
+        try {
+          await simulation.nextStep();
+        } catch (error) {
+          if (stepError) { stepError.textContent = `Error: ${error.message}`; stepError.hidden = false; }
+        } finally {
+          stepBtn.disabled = simulation.isComplete() || simulation.isBusy() || playback.getSnapshot().matches('playing');
+        }
+      });
+    }
+
+    if (playStepBtn) {
+      playStepBtn.addEventListener('click', async () => {
+        if (playback.getSnapshot().matches('playing')) {
+          playback.send({ type: 'PAUSE' });
+          playStepBtn.textContent = 'Play';
+          playStepBtn.disabled = simulation.isBusy();
+          return;
+        }
+        if (simulation.isBusy()) return;
+        const info = simulation.getCurrentStepInfo();
+        if (info.total === 0 || (info.index === 0 && !simulation.getState().running)) {
+          simulation.init();
+          unfoldIntermediateRows();
+        }
+        playback.send({ type: 'PLAY' });
+        playStepBtn.textContent = 'Pause';
+        stepBtn.disabled = true;
+        const version = ++playbackVersion;
+        try {
+          while (version === playbackVersion && playback.getSnapshot().matches('playing') && !simulation.isComplete()) {
+            await simulation.nextStep();
+          }
+        } catch (error) {
+          if (stepError) { stepError.textContent = `Error: ${error.message}`; stepError.hidden = false; }
+        } finally {
+          if (version === playbackVersion) {
+            playback.send({ type: 'PAUSE' });
+            playStepBtn.textContent = 'Play';
+            playStepBtn.disabled = simulation.isComplete();
+            stepBtn.disabled = simulation.isComplete();
+          }
+        }
       });
     }
 
     // Reset button handler
     if (resetStepBtn) {
       resetStepBtn.addEventListener('click', () => {
+        playbackVersion++;
+        playback.send({ type: 'PAUSE' });
+        if (playStepBtn) { playStepBtn.textContent = 'Play'; playStepBtn.disabled = false; }
         simulation.reset();
+        if (stepError) { stepError.hidden = true; stepError.textContent = ''; }
         updateStepUI({
           step: null,
           index: 0,

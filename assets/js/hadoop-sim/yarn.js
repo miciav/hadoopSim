@@ -1,5 +1,12 @@
 import { shuffle } from './random.js';
 
+function validateRequest(request) {
+  if (!request || !Number.isInteger(request.cpu) || request.cpu <= 0 ||
+      !Number.isFinite(request.memoryMb) || request.memoryMb <= 0) {
+    throw new RangeError('Invalid CPU or memory request');
+  }
+}
+
 function availableCpu(node) {
   return node.cpuTotal - node.cpuUsed;
 }
@@ -61,6 +68,7 @@ export function createYarnEngine({ state, rng = Math.random, emitter = null }) {
   }
 
   function allocateContainer(request, preferredNodeIds = null) {
+    validateRequest(request);
     const activeNodes = state.nodes.filter((node) => !node.failed);
     let candidates = [];
 
@@ -85,6 +93,7 @@ export function createYarnEngine({ state, rng = Math.random, emitter = null }) {
   }
 
   function submitJob(request) {
+    validateRequest(request);
     const entry = {
       ...request,
       name: request.name || `Job-${state.counters.job++}`
@@ -107,6 +116,7 @@ export function createYarnEngine({ state, rng = Math.random, emitter = null }) {
   }
 
   function submitDistributedJob(requests) {
+    requests.forEach(validateRequest);
     const results = [];
     requests.forEach((request) => {
       results.push(submitJob(request));

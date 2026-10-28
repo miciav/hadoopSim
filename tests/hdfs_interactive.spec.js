@@ -1,16 +1,8 @@
-import { test, expect } from '@playwright/test';
-import { getClusterSnapshot } from './helpers.js';
-
-const seedRandom = (seedValue) => () => {
-  let seed = seedValue;
-  Math.random = () => {
-    seed = (seed * 1664525 + 1013904223) % 4294967296;
-    return seed / 4294967296;
-  };
-};
+import { test, expect } from './fixtures.js';
+import { getClusterSnapshot, seedPage } from './helpers.js';
 
 test('HDFS replication factor preserved when space is available', async ({ page }) => {
-  await page.addInitScript(seedRandom(42));
+  await seedPage(page, 42);
   await page.goto('/hdfs_interactive.html');
 
   await page.evaluate(() => uploadFile());
@@ -38,7 +30,7 @@ test('HDFS replication factor preserved when space is available', async ({ page 
 });
 
 test('HDFS avoids failed nodes and keeps storage within bounds', async ({ page }) => {
-  await page.addInitScript(seedRandom(123));
+  await seedPage(page, 123);
   await page.goto('/hdfs_interactive.html');
 
   await page.evaluate(() => simulateNodeFailure());
@@ -62,7 +54,7 @@ test('HDFS avoids failed nodes and keeps storage within bounds', async ({ page }
 });
 
 test('HDFS rolls back partial uploads when space runs out', async ({ page }) => {
-  await page.addInitScript(seedRandom(7));
+  await seedPage(page, 7);
   await page.goto('/hdfs_interactive.html');
 
   await page.evaluate(() => {
@@ -73,15 +65,13 @@ test('HDFS rolls back partial uploads when space runs out', async ({ page }) => 
       node.blocks = [];
     });
     cluster.files = [];
-    cluster.blockCounter = 1;
-    cluster.fileCounter = 1;
     renderCluster();
   });
 
   await page.evaluate(() => uploadLargeFile());
 
   const snapshot = await getClusterSnapshot(page);
-  const expectedFileName = 'largefile1.dat';
+  const expectedFileName = 'file-1.dat';
   const file = snapshot.files.find((entry) => entry.name === expectedFileName);
   expect(file).toBeUndefined();
 

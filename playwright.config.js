@@ -2,6 +2,8 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
+  testMatch: '**/*.spec.js',
+  workers: 2,
   timeout: 30000,
   expect: {
     timeout: 5000
@@ -11,9 +13,9 @@ export default defineConfig({
     trace: 'retain-on-failure'
   },
   webServer: {
-    command: 'python3 -m http.server 5173',
+    command: 'npm run preview',
     url: 'http://localhost:5173/index.html',
-    reuseExistingServer: true,
+    reuseExistingServer: false,
     timeout: 20000
   }
 });

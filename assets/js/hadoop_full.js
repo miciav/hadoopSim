@@ -1,4 +1,5 @@
 import { createSimulation } from './hadoop-sim/simulation.js';
+import { describeMapReduceFailure } from './hadoop-sim/mapreduce.js';
 import { randomInt } from './hadoop-sim/random.js';
 
 const COLORS = ['#3182ce', '#38a169', '#d69e2e', '#e53e3e', '#805ad5', '#dd6b20'];
@@ -71,6 +72,7 @@ function scheduleYarnCompletion(containerName, jobRecord = null) {
 sim.on('mapreduce:started', renderCluster);
 sim.on('mapreduce:progress', renderCluster);
 sim.on('mapreduce:completed', renderCluster);
+sim.on('mapreduce:failed', renderCluster);
 sim.on('hdfs:uploadComplete', renderCluster);
 sim.on('hdfs:reReplicated', renderCluster);
 
@@ -359,6 +361,7 @@ function renderMapReduceJobs() {
           <div style="font-size: 0.85em; color: #4a5568;">
             ${job.mappers.length} mappers (${localityPercent}% data locality)
           </div>
+          ${job.status === 'failed' ? `<div>${describeMapReduceFailure(job.failureReason)}</div>` : ''}
           <div class="job-progress">
             <div class="progress-bar">
               <div class="progress-fill" style="width: ${job.progress}%; background: #f6ad55;"></div>
@@ -548,6 +551,10 @@ function runMapReduce() {
     return;
   }
 
+  if (job.status === 'failed') {
+    notify(`❌ ${job.name} failed: ${job.failureReason}`, 'error');
+    return;
+  }
   if (job.status === 'queued') {
     notify(`⏳ ${job.name} queued: insufficient resources`, 'warning');
   } else {
@@ -556,6 +563,8 @@ function runMapReduce() {
 
   renderCluster();
 }
+
+const recoveryTimers = new Set();
 
 function simulateFailure() {
   const activeNodes = sim.state.nodes.filter((node) => !node.failed);
@@ -568,7 +577,8 @@ function simulateFailure() {
   sim.actions.failNode(randomNode.id);
   notify(`💥 ${randomNode.name} failed! HDFS will re-replicate blocks...`, 'warning');
 
-  setTimeout(() => {
+  const timerId = setTimeout(() => {
+    recoveryTimers.delete(timerId);
     const summary = sim.actions.reReplicate();
     if (summary.lost > 0) {
       notify(`❌ ${summary.lost} blocks permanently lost!`, 'error');
@@ -577,11 +587,14 @@ function simulateFailure() {
     }
     renderCluster();
   }, 2000);
+  recoveryTimers.add(timerId);
 
   renderCluster();
 }
 
 function resetCluster() {
+  recoveryTimers.forEach((timerId) => clearTimeout(timerId));
+  recoveryTimers.clear();
   yarnCompletionTimers.forEach((timerId) => clearTimeout(timerId));
   yarnCompletionTimers.clear();
   yarnJobsByContainer.clear();

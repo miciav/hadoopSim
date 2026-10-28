@@ -85,3 +85,12 @@ stateDiagram-v2
   ShuffleSort --> JobFailed
   Reducing --> JobFailed
 ```
+
+## Scope of the provided views
+
+The aggregate cluster simulator represents resource allocation and mapper progress;
+it does not simulate shuffle or reduce execution. The automatic pipeline represents
+parallel record movement. The guided pipeline groups record operations into teaching
+steps, and a step is not a cluster scheduler tick. Mapper nodes may display work
+from several input splits in sequence; split boundaries still trigger a spill.
+The guided model uses pure step transitions independently of its animation layer.

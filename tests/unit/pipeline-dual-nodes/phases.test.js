@@ -12,6 +12,7 @@ function createBaseState() {
   return {
     running: true,
     shuffleComplete: false,
+    inputSplits: [[], []],
     mappers: [
       { id: 0, buffer: [], spills: [], final: [], data: [], _mergeAll: null },
       { id: 1, buffer: [], spills: [], final: [], data: [], _mergeAll: null }
@@ -52,6 +53,7 @@ test('runMapper processes records and triggers spill', async () => {
   const restoreTimers = useImmediateTimers();
   const state = createBaseState();
   state.mappers[0].data = [{ k: 'cat', p: 0, c: 'bg-p0' }];
+  state.inputSplits[0] = [state.mappers[0].data];
 
   createElement(document, { id: 'buf0' });
   createElement(document, { id: 'fill0' });
@@ -86,38 +88,29 @@ test('runMergeAnimation captures merged records', async () => {
 
   createElement(document, { id: 'spillA0' });
   createElement(document, { id: 'combineA0' });
-  createElement(document, { id: 'finalA' });
+  createElement(document, { id: 'finalA-p0' });
 
   await runMergeAnimation(state, 0, 1, () => true);
 
-  assert.equal(state.mappers[0]._mergeAll.length, 1);
-  assert.equal(document.getElementById('finalA').children.length, 1);
+  assert.equal(state.mappers[0].final.length, 1);
+  assert.equal(document.getElementById('finalA-p0').children.length, 1);
 
   restoreTimers();
   restore();
 });
 
-test('runMergeSortOutput writes final merged output', async () => {
+test('runMergeSortOutput ghosts source records without altering merged data', async () => {
   const { document, restore } = setupMockDom();
-  const restoreTimers = useImmediateTimers();
   const state = createBaseState();
-  state.mappers[0].spills = [[{ k: 'cat', p: 0, c: 'bg-p0', count: 1 }]];
-  state.mappers[0]._mergeAll = [
-    { k: 'cat', p: 0, c: 'bg-p0', count: 1 },
-    { k: 'cat', p: 0, c: 'bg-p0', count: 2 }
-  ];
-
-  createElement(document, { id: 'spillA0' });
-  createElement(document, { id: 'combineA0' });
-  createElement(document, { id: 'finalA' });
-
+  const record = { k: 'cat', p: 0, c: 'bg-p0', count: 2 };
+  state.mappers[0].spills = [[record]];
+  state.mappers[0].final = [record];
+  const slot = createElement(document, { id: 'combineA0' });
+  const item = createElement(document, { parent: slot });
+  item.classList.add('kv-record');
   await runMergeSortOutput(state, 0, 1, () => true);
-
-  assert.equal(state.mappers[0].final.length, 2);
-  assert.equal(state.mappers[0].final[0].count, 1);
-  assert.equal(state.mappers[0].final[1].count, 2);
-
-  restoreTimers();
+  assert.deepEqual(state.mappers[0].final, [record]);
+  assert.ok(item.classList.contains('ghost'));
   restore();
 });
 
@@ -234,4 +227,59 @@ test('runOutput writes final records to HDFS outputs', async () => {
 
   restoreTimers();
   restore();
+});
+
+test('runMapper processes data even without a fill indicator', async () => {
+  const { document, restore } = setupMockDom();
+  const restoreTimers = useImmediateTimers();
+  const state = createBaseState();
+  const record = { k: 'cat', p: 0, c: 'bg-p0' };
+  state.mappers[0].data = [record];
+  state.inputSplits[0] = [[record]];
+  createElement(document, { id: 'buf0' });
+  let processed = 0;
+  try {
+    await runMapper(state, 0, 1, 'node01', {
+      isRunning: () => true, isTeaching: () => false,
+      onRecordProcessed: () => { processed++; }, onSpillCreated: () => {}
+    });
+    assert.equal(processed, 1);
+    assert.equal(state.mappers[0].spills[0][0].k, 'cat');
+  } finally {
+    restoreTimers();
+    restore();
+  }
+});
+
+test('mapper can process records without a DOM', async () => {
+  const state = createBaseState();
+  const record = { k: 'cat', p: 0, c: 'bg-p0' };
+  state.mappers[0].data = [record];
+  state.inputSplits[0] = [[record]];
+  await runMapper(state, 0, 0, 'node01', {
+    isRunning: () => true, isTeaching: () => false,
+    onRecordProcessed: () => {}, onSpillCreated: () => {}
+  });
+  assert.deepEqual(state.mappers[0].spills.map(spill => spill.map(item => [item.k, item.count])), [[['cat', 1]]]);
+});
+
+test('automatic pipeline processes its default data without a DOM', async () => {
+  const { createInitialState } = await import('../../../assets/js/pipeline-dual-nodes/state.js');
+  const state = createInitialState();
+  state.running = true;
+  const originalTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = (callback) => { queueMicrotask(callback); return 1; };
+  const callbacks = { isRunning: () => true, isTeaching: () => false,
+    onRecordProcessed: () => {}, onSpillCreated: () => {}, onNetPacket: () => {} };
+  try {
+    await Promise.all([runMapper(state, 0, 0, 'node01', callbacks), runMapper(state, 1, 0, 'node02', callbacks)]);
+    await Promise.all([runMergeAnimation(state, 0, 0, callbacks.isRunning), runMergeAnimation(state, 1, 0, callbacks.isRunning)]);
+    await runNetworkShuffle(state, 0, callbacks);
+    await runReduceMergeSort(state, 0, callbacks.isRunning, callbacks.isTeaching);
+    await runReduce(state, 0, callbacks.isRunning);
+    assert.deepEqual(Object.fromEntries(Object.values(state.reduceOutput).flat().map(record => [record.k, record.count])),
+      { ant: 7, arm: 2, car: 5, cat: 1, cup: 3, day: 3, dog: 2, dot: 1 });
+  } finally {
+    globalThis.setTimeout = originalTimeout;
+  }
 });

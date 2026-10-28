@@ -8,8 +8,9 @@ import { wait } from './animations.js';
 /**
  * Folds intermediate rows to focus on results.
  */
-export async function foldIntermediateRows() {
+export async function foldIntermediateRows(isRunning = () => true) {
   await wait(400);
+  if (!isRunning()) return;
 
   // Fold Spills
   ['boxSpill0', 'boxSpill1'].forEach(id => {
@@ -21,6 +22,7 @@ export async function foldIntermediateRows() {
   });
 
   await wait(300);
+  if (!isRunning()) return;
 
   // Fold Combine
   ['boxCombine0', 'boxCombine1'].forEach(id => {
@@ -32,6 +34,7 @@ export async function foldIntermediateRows() {
   });
 
   await wait(300);
+  if (!isRunning()) return;
 
   // Fold Map Output
   ['boxMerge0', 'boxMerge1'].forEach(id => {
@@ -43,6 +46,7 @@ export async function foldIntermediateRows() {
   });
 
   await wait(300);
+  if (!isRunning()) return;
 
   // Fold Map Task (RAM)
   ['boxMap0', 'boxMap1'].forEach(id => {
@@ -54,6 +58,7 @@ export async function foldIntermediateRows() {
   });
 
   await wait(300);
+  if (!isRunning()) return;
 
   // Fold Reducer boxes (keep labels visible)
   ['boxRed0', 'boxRed1', 'boxRed2'].forEach(id => {

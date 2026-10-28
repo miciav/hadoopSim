@@ -44,6 +44,8 @@ export async function runSpill(state, mapperId, spillIdx, delay, callbacks) {
 
     await flyRecord(bufId, slotId, rec, delay * 0.5);
 
+    if (!isRunning()) return;
+
     // Land record in spill slot
     if (slot) {
       const r = createRecordElement(rec, 1);
@@ -52,6 +54,8 @@ export async function runSpill(state, mapperId, spillIdx, delay, callbacks) {
     }
 
     await wait(delay * 0.1);
+
+    if (!isRunning()) return;
   }
 
   if (!isRunning()) return;
@@ -79,6 +83,7 @@ export async function runSpill(state, mapperId, spillIdx, delay, callbacks) {
     const sweepTargetId = combineSlot ? combineSlotId : slotId;
     triggerCombineSweep(sweepTargetId, SWEEP_COLORS.AMBER);
     await wait(800);
+    if (!isRunning()) return;
 
     // Show combined records
     combined.forEach(rec => {

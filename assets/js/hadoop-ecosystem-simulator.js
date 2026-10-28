@@ -1,3 +1,7 @@
+import React from 'react';
+import * as ReactDOM from 'react-dom/client';
+import { createSimulation } from './hadoop-sim/simulation.js';
+import { describeMapReduceFailure } from './hadoop-sim/mapreduce.js';
 const { useState, useEffect, useRef } = React;
 
 const FILE_COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
@@ -555,138 +559,8 @@ const STYLES = `
               font-size: 0.9em;
             }
 
-            .shuffle-phase {
-              margin-top: 10px;
-              padding: 15px;
-              background: linear-gradient(135deg, #fef5e7 0%, #fdebd0 100%);
-              border-radius: 8px;
-              border: 2px solid #f39c12;
-              animation: shufflePulse 1.5s ease-in-out infinite;
-            }
-
-            @keyframes shufflePulse {
-              0%, 100% {
-                box-shadow: 0 0 10px rgba(243, 156, 18, 0.3);
-              }
-              50% {
-                box-shadow: 0 0 20px rgba(243, 156, 18, 0.6);
-              }
-            }
-
-            .shuffle-fill {
-              background: linear-gradient(90deg, #f39c12 0%, #e67e22 100%) !important;
-            }
-
-            /* GANTT STYLES */
-            .gantt-container {
-              margin-top: 12px;
-              padding: 14px;
-              background: linear-gradient(145deg, #f8fafc 0%, #edf2f7 100%);
-              border-radius: 12px;
-              border: 1px solid #cbd5e0;
-              box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
-            }
-
-            .gantt-body {
-              display: flex;
-              flex-direction: column;
-              gap: 8px;
-            }
-
-            .gantt-legend {
-              display: flex;
-              align-items: center;
-              flex-wrap: wrap;
-              gap: 12px;
-              font-size: 0.85em;
-              color: #4a5568;
-            }
-
-            .legend-swatch {
-              width: 14px;
-              height: 14px;
-              border-radius: 4px;
-              display: inline-block;
-              margin-right: 6px;
-              box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-            }
-
-            .legend-swatch.map { background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); }
-            .legend-swatch.reduce { background: linear-gradient(90deg, #38b2ac 0%, #319795 100%); }
-            .legend-swatch.shuffle { background: linear-gradient(90deg, #ed8936 0%, #dd6b20 100%); }
-
-            .gantt-vis-wrapper {
-              min-height: 220px;
-              max-height: none;
-              background: white;
-              border-radius: 10px;
-              border: 1px solid #e2e8f0;
-              padding: 6px;
-              overflow: visible;
-            }
-
-            .vis-item.gantt-map {
-              background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-              border-color: #667eea;
-              color: white;
-            }
-
-            .vis-item.gantt-reduce {
-              background: linear-gradient(90deg, #38b2ac 0%, #319795 100%);
-              border-color: #319795;
-              color: white;
-            }
-
-            .vis-item.gantt-shuffle {
-              background: linear-gradient(90deg, #ed8936 0%, #dd6b20 100%);
-              border-color: #dd6b20;
-              color: white;
-            }
-
-            .vis-item {
-              border-radius: 8px;
-              box-shadow: 0 2px 6px rgba(0,0,0,0.12);
-              font-size: 0.8em;
-            }
-
-            .vis-time-axis .vis-text {
-              color: #4a5568;
-            }
-
-            .gantt-empty {
-              font-size: 0.9em;
-              color: #718096;
-              padding: 8px 0;
-            }
-
-            .gantt-metrics {
-              display: flex;
-              flex-wrap: wrap;
-              gap: 10px;
-              margin-bottom: 12px;
-            }
-
-            .gantt-metric {
-              background: rgba(255, 255, 255, 0.9);
-              border: 1px solid #e2e8f0;
-              border-radius: 8px;
-              padding: 6px 12px;
-              font-size: 0.8em;
-              color: #4a5568;
-              display: flex;
-              flex-direction: column;
-              gap: 2px;
-              min-width: 140px;
-            }
-
-            .gantt-metric span {
-              font-size: 0.75em;
-              text-transform: uppercase;
-              letter-spacing: 0.05em;
-            }
-
-            .gantt-metric strong {
-              color: #2d3748;
+            @media (prefers-reduced-motion: reduce) {
+              *, *::before, *::after { animation: none !important; transition-duration: 0s !important; }
             }
 
             .notification {
@@ -740,8 +614,7 @@ const STYLES = `
             }
           `;
 
-const bootstrap = (HadoopSim) => {
-  const { createSimulation } = HadoopSim;
+const bootstrap = () => {
 
   const NotificationToaster = ({ notifications }) => (
   <div>
@@ -928,6 +801,7 @@ const bootstrap = (HadoopSim) => {
   const [, setVersion] = useState(0);
   const fileColorsRef = useRef(new Map());
   const colorIndexRef = useRef(0);
+  const recoveryTimersRef = useRef(new Set());
 
   if (!simRef.current) {
     simRef.current = createSimulation({
@@ -947,7 +821,12 @@ const bootstrap = (HadoopSim) => {
 
   useEffect(() => {
     const off = sim.on('*', () => setVersion((value) => value + 1));
-    return () => off();
+    return () => {
+      off();
+      recoveryTimersRef.current.forEach(clearTimeout);
+      recoveryTimersRef.current.clear();
+      sim.dispose();
+    };
   }, [sim]);
 
   const pushNotification = (message, type) => {
@@ -986,6 +865,10 @@ const bootstrap = (HadoopSim) => {
       pushNotification('⚠️ Upload an HDFS file first!', 'warning');
       return;
     }
+    if (job.status === 'failed') {
+      pushNotification(`❌ ${job.name} failed: ${job.failureReason}`, 'error');
+      return;
+    }
     if (job.status === 'queued') {
       pushNotification(`⏳ ${job.name} queued: insufficient resources`, 'warning');
     } else {
@@ -1003,7 +886,8 @@ const bootstrap = (HadoopSim) => {
     sim.actions.failNode(randomNode.id);
     pushNotification(`💥 ${randomNode.name} failed. Re-replicating...`, 'warning');
 
-    setTimeout(() => {
+    const timerId = setTimeout(() => {
+      recoveryTimersRef.current.delete(timerId);
       const summary = sim.actions.reReplicate();
       if (summary.lost > 0) {
         pushNotification(`❌ ${summary.lost} blocks permanently lost`, 'error');
@@ -1011,9 +895,12 @@ const bootstrap = (HadoopSim) => {
         pushNotification(`✅ Re-replicated ${summary.reReplicated} blocks`, 'success');
       }
     }, 1500);
+    recoveryTimersRef.current.add(timerId);
   };
 
   const resetCluster = () => {
+    recoveryTimersRef.current.forEach(clearTimeout);
+    recoveryTimersRef.current.clear();
     sim.actions.reset();
     fileColorsRef.current.clear();
     colorIndexRef.current = 0;
@@ -1047,7 +934,7 @@ const bootstrap = (HadoopSim) => {
       <style>{STYLES}</style>
       <div className="header">
         <h1>🐘 Hadoop Ecosystem Simulator</h1>
-        <p>HDFS + YARN + MapReduce (Library-driven)</p>
+        <p>HDFS + YARN + MapReduce (simplified model)</p>
       </div>
 
       <div className="main-container">
@@ -1124,6 +1011,7 @@ const bootstrap = (HadoopSim) => {
                     <div className="job-details">
                       <div>File: {job.fileName}</div>
                       <div>Mappers: {job.mappers.length}</div>
+                      {job.status === 'failed' && <div>{describeMapReduceFailure(job.failureReason)}</div>}
                     </div>
                     <div className="job-progress">
                       <div className="progress-bar">
@@ -1147,24 +1035,4 @@ const bootstrap = (HadoopSim) => {
   root.render(<HadoopEcosystem />);
 };
 
-const waitForHadoopSim = () => {
-  if (window.HadoopSimReady) {
-    return window.HadoopSimReady;
-  }
-  if (window.HadoopSim) {
-    return Promise.resolve(window.HadoopSim);
-  }
-  return new Promise((resolve) => {
-    const intervalId = setInterval(() => {
-      if (window.HadoopSimReady) {
-        clearInterval(intervalId);
-        window.HadoopSimReady.then(resolve);
-      } else if (window.HadoopSim) {
-        clearInterval(intervalId);
-        resolve(window.HadoopSim);
-      }
-    }, 50);
-  });
-};
-
-waitForHadoopSim().then(bootstrap);
+bootstrap();

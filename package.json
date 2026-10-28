@@ -3,10 +3,24 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "playwright test",
-    "test:unit": "node --test tests/unit/**/*.test.js"
+    "test": "npm run build && playwright test",
+    "test:unit": "node --test tests/unit/**/*.test.js",
+    "build": "node scripts/build.mjs",
+    "preview": "python3 -m http.server 5173 --directory dist",
+    "lint": "eslint assets/js tests scripts *.js",
+    "format:check": "prettier --check scripts/build.mjs eslint.config.js package.json",
+    "format": "prettier --write scripts/build.mjs eslint.config.js package.json"
   },
   "devDependencies": {
-    "@playwright/test": "^1.49.0"
+    "@playwright/test": "1.57.0",
+    "esbuild": "0.28.2",
+    "eslint": "10.13.0",
+    "globals": "17.13.0",
+    "prettier": "3.9.10"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "xstate": "5.33.3"
   }
 }

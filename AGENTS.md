@@ -8,14 +8,14 @@
   - `yarn_interactive.html`
   - `hadoop-map-side-pipeline-dual_nodes.html`
 - Page logic is in `assets/js/`; shared library lives under `assets/js/hadoop-sim/`.
-- Static pages load ES modules via `<script type="module" src="./assets/js/...">` (React page uses the `hadoop-sim/bridge.js` module).
-- The React/Babel simulator keeps JSX in `assets/js/hadoop-ecosystem-simulator.js` and compiles at runtime with the Babel CDN.
+- Page modules are bundled by esbuild; the React simulator keeps JSX in `assets/js/hadoop-ecosystem-simulator.js`.
+- The generated `dist/` directory contains the static site and is published by GitHub Pages.
 - If you split functionality further, keep new modules under `assets/js/` and import them with ES modules to keep pages static-host friendly.
 
 ## Build, Test, and Development Commands
-- `open hadoop-ecosystem-simulator.html` — launch the simulator directly in Safari.
-- `python3 -m http.server 5173` — serve the folder and open pages via `http://localhost:5173/...` to avoid CSP issues with inline Babel.
-- `npx prettier --write hadoop-ecosystem-simulator.html` — reformat JSX/JS after sizable edits (two-space indentation).
+- `npm run build` — build the static site into `dist/`.
+- `npm run preview` — serve the built site at `http://localhost:5173/`.
+- `npm run lint` and `npm run format:check` — run configured static checks.
 - `npm run test:unit` — run Node unit tests for the core library.
 
 ## Coding Style & Naming Conventions
@@ -38,6 +38,6 @@
 - Call out risks such as scheduler fairness or notification timing, plus any new commands/config.
 
 ## Security & Configuration Tips
-- CDN versions for React/Babel are pinned—update deliberately and test via HTTP server in Safari/Chrome.
+- Runtime dependencies are bundled locally and pinned in the lockfile; update deliberately and test via HTTP server in Safari/Chrome.
 - Keep everything client-side; avoid remote calls unless explicitly approved.
 - Prefer HTTPS hosting if deploying publicly to prevent mixed-content issues.

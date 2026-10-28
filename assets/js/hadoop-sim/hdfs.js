@@ -86,6 +86,7 @@ export function createHdfsEngine({ state, rng = Math.random, emitter = null }) {
   }
 
   function uploadFile(sizeMb) {
+    if (!Number.isFinite(sizeMb) || sizeMb < 0) throw new RangeError('Invalid file size');
     const fileId = state.counters.file++;
     const fileName = `file-${fileId}.dat`;
     const blockSize = config.blockSizeMb;
