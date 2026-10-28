@@ -4,7 +4,6 @@ import { createActor, fromPromise, toPromise } from 'xstate';
  */
 
 import { createInitialState } from './state.js';
-import { CONFIG } from './config.js';
 import { el, ELEMENT_IDS, HEIGHT_SYNC_GROUPS } from './dom/selectors.js';
 import { highlightNodes, highlightBoxes, setNetworkActive } from './dom/highlights.js';
 import { log } from './dom/log.js';
@@ -260,12 +259,14 @@ export function createSimulation() {
     state.running = false;
     runActor?.stop();
     runActor = null;
-    const splitSize = parseInt(el(ELEMENT_IDS.SPLIT_SIZE_INPUT)?.value ?? CONFIG.INPUT_SPLIT_RECORDS, 10);
+    const splitInput = el(ELEMENT_IDS.SPLIT_SIZE_INPUT);
+    const requestedSize = Number(splitInput?.value);
+    const splitSize = Number.isInteger(requestedSize) && requestedSize > 0 ? requestedSize : state.splitSize;
+    if (splitInput) splitInput.value = String(splitSize);
     state = createInitialState(undefined, undefined, splitSize);
     resetUI(state);
 
     const startBtn = el(ELEMENT_IDS.START_BTN);
-    const splitInput = el(ELEMENT_IDS.SPLIT_SIZE_INPUT);
     if (startBtn) startBtn.disabled = false;
     if (splitInput) splitInput.disabled = false;
   }

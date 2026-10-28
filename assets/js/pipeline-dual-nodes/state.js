@@ -35,7 +35,8 @@ export const RAW_DATA_B = Object.freeze([
  * @returns {Array<Array>}
  */
 export function splitInputData(data, splitSize = CONFIG.INPUT_SPLIT_RECORDS) {
-  const size = Math.max(1, splitSize);
+  if (!Number.isInteger(splitSize) || splitSize <= 0) throw new RangeError('Invalid split size');
+  const size = splitSize;
   const splits = [];
   for (let i = 0; i < data.length; i += size) {
     splits.push(data.slice(i, i + size));

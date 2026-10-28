@@ -235,3 +235,10 @@ test('calculateSpillCount rounds up for partial spills', () => {
   assert.equal(calculateSpillCount(10, 6, 0.75), 2);
   assert.equal(calculateSpillCount(11, 6, 0.75), 3);
 });
+
+test('split size must be a positive integer', () => {
+  for (const size of [0, -1, 1.5, NaN, Infinity]) {
+    assert.throws(() => createInitialState(undefined, undefined, size), RangeError);
+    assert.throws(() => splitInputData([{ k: 'x' }], size), RangeError);
+  }
+});

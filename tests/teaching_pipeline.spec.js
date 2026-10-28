@@ -130,3 +130,13 @@ test('play can restart immediately after reset', async ({ page }) => {
   await page.waitForFunction(() => !window.teachingSimulation.isBusy());
   expect(await page.evaluate(() => window.teachingSimulation.getCurrentStepInfo().index)).toBeGreaterThanOrEqual(1);
 });
+
+test('empty split input restores the previous valid value on reset', async ({ page }) => {
+  await page.goto('/hadoopsim-teaching.html');
+  const split = page.locator('#splitSizeInput');
+  await split.fill('');
+  await page.getByRole('button', { name: 'Reset' }).click();
+  await expect(split).toHaveValue('10');
+  const sizes = await page.evaluate(() => window.teachingSimulation.getState().inputSplits.map(splits => splits.flat().length));
+  expect(sizes).toEqual([12, 12]);
+});

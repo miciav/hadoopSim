@@ -11,7 +11,7 @@ import { log } from '../pipeline-dual-nodes/dom/log.js';
 import { wait as baseWait, flyRecord as baseFlyRecord, triggerCombineSweep } from '../pipeline-dual-nodes/dom/animations.js';
 import { resetUI } from '../pipeline-dual-nodes/dom/reset.js';
 import { foldIntermediateRows, unfoldIntermediateRows } from '../pipeline-dual-nodes/dom/fold.js';
-import { CONFIG, SWEEP_COLORS } from '../pipeline-dual-nodes/config.js';
+import { SWEEP_COLORS } from '../pipeline-dual-nodes/config.js';
 import { sortByPartitionThenKey, combine, mergeSortedSpills, aggregateByKey } from '../pipeline-dual-nodes/combiner.js';
 import { shouldSpill, calculateBufferPercentage } from '../pipeline-dual-nodes/state.js';
 import { updateBufferFill } from '../pipeline-dual-nodes/dom/buffers.js';
@@ -608,7 +608,10 @@ export function createStepSimulation() {
    * Initializes the step-by-step simulation
    */
   function init() {
-    const splitSize = parseInt(el(ELEMENT_IDS.SPLIT_SIZE_INPUT)?.value ?? CONFIG.INPUT_SPLIT_RECORDS, 10);
+    const splitInput = el(ELEMENT_IDS.SPLIT_SIZE_INPUT);
+    const requestedSize = Number(splitInput?.value);
+    const splitSize = Number.isInteger(requestedSize) && requestedSize > 0 ? requestedSize : state.splitSize;
+    if (splitInput) splitInput.value = String(splitSize);
     state = createInitialState(undefined, undefined, splitSize);
     resetUI(state);
     clearCombineSlots(); // Clear pre-created combine slots for dynamic creation
@@ -618,7 +621,6 @@ export function createStepSimulation() {
 
     // Disable original buttons
     const startBtn = el(ELEMENT_IDS.START_BTN);
-    const splitInput = el(ELEMENT_IDS.SPLIT_SIZE_INPUT);
     if (startBtn) startBtn.disabled = true;
     if (splitInput) splitInput.disabled = true;
 
@@ -664,7 +666,10 @@ export function createStepSimulation() {
     stepActor = null;
     state.running = false;
     isExecutingStep = false;
-    const splitSize = parseInt(el(ELEMENT_IDS.SPLIT_SIZE_INPUT)?.value ?? CONFIG.INPUT_SPLIT_RECORDS, 10);
+    const splitInput = el(ELEMENT_IDS.SPLIT_SIZE_INPUT);
+    const requestedSize = Number(splitInput?.value);
+    const splitSize = Number.isInteger(requestedSize) && requestedSize > 0 ? requestedSize : state.splitSize;
+    if (splitInput) splitInput.value = String(splitSize);
     state = createInitialState(undefined, undefined, splitSize);
     resetUI(state);
     clearCombineSlots(); // Clear pre-created combine slots for dynamic creation
@@ -673,7 +678,6 @@ export function createStepSimulation() {
 
     // Re-enable controls
     const startBtn = el(ELEMENT_IDS.START_BTN);
-    const splitInput = el(ELEMENT_IDS.SPLIT_SIZE_INPUT);
     if (startBtn) startBtn.disabled = false;
     if (splitInput) splitInput.disabled = false;
 

@@ -28,11 +28,11 @@
 ## Testing Guidelines
 - Run Playwright smoke tests with `npm test` (installs via `npm install`, `npx playwright install --with-deps`).
 - Validate manually in the browser after every change.
-- Check: cluster bootstrap, file uploads (small/large), node failure + recovery, job submission, shuffle/reduce transitions, progress bars, and Gantt rendering.
+- Check: cluster bootstrap, file uploads (small/large), node failure + recovery, job submission, shuffle/reduce transitions, and progress bars.
 - Keep DevTools console open for React warnings.
 
 ## Commit & Pull Request Guidelines
-- Use imperative commit subjects (e.g., “Hide map phase once Gantt renders”).
+- Use imperative commit subjects (e.g., “Clarify mapper progress”).
 - Commit bodies should note UI behavior changes, resource accounting impacts, and manual verification steps.
 - PRs should summarize scope, list affected UI areas, link issues, and include before/after screenshots when layout changes.
 - Call out risks such as scheduler fairness or notification timing, plus any new commands/config.
