@@ -5,15 +5,43 @@ import { createActor, fromPromise, toPromise } from 'xstate';
  */
 
 import { createInitialState } from '../pipeline-dual-nodes/state.js';
-import { el, ELEMENT_IDS, HEIGHT_SYNC_GROUPS, getSpillSlotId, getCombineSlotId, getSourceRecordId, getMergeInnerId, getFinalSegmentId } from '../pipeline-dual-nodes/dom/selectors.js';
-import { highlightNodes, highlightBoxes, setNetworkActive } from '../pipeline-dual-nodes/dom/highlights.js';
+import {
+  el,
+  ELEMENT_IDS,
+  HEIGHT_SYNC_GROUPS,
+  getSpillSlotId,
+  getCombineSlotId,
+  getSourceRecordId,
+  getMergeInnerId,
+  getFinalSegmentId
+} from '../pipeline-dual-nodes/dom/selectors.js';
+import {
+  highlightNodes,
+  highlightBoxes,
+  setNetworkActive
+} from '../pipeline-dual-nodes/dom/highlights.js';
 import { log } from '../pipeline-dual-nodes/dom/log.js';
-import { wait as baseWait, flyRecord as baseFlyRecord, triggerCombineSweep } from '../pipeline-dual-nodes/dom/animations.js';
+import {
+  wait as baseWait,
+  flyRecord as baseFlyRecord,
+  triggerCombineSweep
+} from '../pipeline-dual-nodes/dom/animations.js';
 import { resetUI } from '../pipeline-dual-nodes/dom/reset.js';
-import { foldIntermediateRows, unfoldIntermediateRows } from '../pipeline-dual-nodes/dom/fold.js';
+import {
+  foldIntermediateRows,
+  unfoldIntermediateRows
+} from '../pipeline-dual-nodes/dom/fold.js';
 import { SWEEP_COLORS } from '../pipeline-dual-nodes/config.js';
-import { sortByPartitionThenKey, combine, mergeSortedSpills, aggregateByKey } from '../pipeline-dual-nodes/combiner.js';
-import { shouldSpill, calculateBufferPercentage } from '../pipeline-dual-nodes/state.js';
+import {
+  sortByPartitionThenKey,
+  combine,
+  mergeSortedSpills,
+  aggregateByKey
+} from '../pipeline-dual-nodes/combiner.js';
+import {
+  shouldSpill,
+  calculateBufferPercentage
+} from '../pipeline-dual-nodes/state.js';
 import { updateBufferFill } from '../pipeline-dual-nodes/dom/buffers.js';
 import {
   renderRecordInBuffer,
@@ -135,7 +163,10 @@ export function createStepSimulation() {
     const flyRecord = (...args) => baseFlyRecord(...args, signal);
     highlightNodes([ELEMENT_IDS.NODE_01, ELEMENT_IDS.NODE_02], 'Input Phase');
     highlightBoxes([ELEMENT_IDS.BOX_INPUT_0, ELEMENT_IDS.BOX_INPUT_1]);
-    log('<strong>YARN ResourceManager:</strong> Job accepted. Allocated Containers on Node 01, Node 02.', 'SYS');
+    log(
+      '<strong>YARN ResourceManager:</strong> Job accepted. Allocated Containers on Node 01, Node 02.',
+      'SYS'
+    );
     updatePhaseDisplay('INPUT');
     await wait(tick * 0.5);
   }
@@ -148,7 +179,10 @@ export function createStepSimulation() {
     const flyRecord = (...args) => baseFlyRecord(...args, signal);
     const { batches } = step;
 
-    highlightNodes([ELEMENT_IDS.NODE_01, ELEMENT_IDS.NODE_02], 'Map Processing');
+    highlightNodes(
+      [ELEMENT_IDS.NODE_01, ELEMENT_IDS.NODE_02],
+      'Map Processing'
+    );
     highlightBoxes([ELEMENT_IDS.BOX_MAP_0, ELEMENT_IDS.BOX_MAP_1]);
     updatePhaseDisplay('MAP');
 
@@ -188,7 +222,10 @@ export function createStepSimulation() {
 
     await Promise.all(mapperPromises);
 
-    log(`<strong>Map Phase:</strong> Batch processed on both nodes in parallel`, 'MAP');
+    log(
+      `<strong>Map Phase:</strong> Batch processed on both nodes in parallel`,
+      'MAP'
+    );
     await wait(tick * 0.2);
   }
 
@@ -203,7 +240,10 @@ export function createStepSimulation() {
     highlightBoxes([ELEMENT_IDS.BOX_SPILL_0, ELEMENT_IDS.BOX_SPILL_1]);
     updatePhaseDisplay('SPILL');
 
-    log(`<strong>Spill ${spillIndex + 1}:</strong> Sorting & spilling on both nodes in parallel`, 'DISK');
+    log(
+      `<strong>Spill ${spillIndex + 1}:</strong> Sorting & spilling on both nodes in parallel`,
+      'DISK'
+    );
 
     // Process both mappers in parallel
     const spillPromises = [0, 1].map(async (mapperId) => {
@@ -226,7 +266,12 @@ export function createStepSimulation() {
         const sourceId = `buf${mapperId}-rec${i}`;
         await wait(i * 30); // Small stagger
         await flyRecord(sourceId, spillContainerId, rec, tick * 0.3);
-        renderRecordInSpill(mapperId, spillIndex, rec, `${spillContainerId}-rec${i}`);
+        renderRecordInSpill(
+          mapperId,
+          spillIndex,
+          rec,
+          `${spillContainerId}-rec${i}`
+        );
       });
 
       await Promise.all(flyPromises);
@@ -235,7 +280,7 @@ export function createStepSimulation() {
       const bufEl = el(`buf${mapperId}`);
       if (bufEl) {
         const records = bufEl.querySelectorAll('.kv-record:not(.buffer-fill)');
-        records.forEach(r => r.remove());
+        records.forEach((r) => r.remove());
       }
       updateBufferFill(mapperId, 0);
 
@@ -258,7 +303,10 @@ export function createStepSimulation() {
     highlightBoxes(['boxCombine0', 'boxCombine1']);
     updatePhaseDisplay('COMBINE');
 
-    log(`<strong>Spill ${spillIndex + 1}:</strong> Applying Combiner on both nodes`, 'DISK');
+    log(
+      `<strong>Spill ${spillIndex + 1}:</strong> Applying Combiner on both nodes`,
+      'DISK'
+    );
 
     // Process both mappers in parallel
     const combinePromises = [0, 1].map(async (mapperId) => {
@@ -289,7 +337,12 @@ export function createStepSimulation() {
         if (!rec.c) {
           rec.c = `bg-p${rec.p}`;
         }
-        renderRecordInCombine(mapperId, spillIndex, rec, `${combineContainerId}-rec${i}`);
+        renderRecordInCombine(
+          mapperId,
+          spillIndex,
+          rec,
+          `${combineContainerId}-rec${i}`
+        );
       }
 
       // Ghost the spill records
@@ -301,7 +354,10 @@ export function createStepSimulation() {
 
     await Promise.all(combinePromises);
 
-    log(`<strong>Spill ${spillIndex + 1}:</strong> Combiner completed on both nodes`, 'DISK');
+    log(
+      `<strong>Spill ${spillIndex + 1}:</strong> Combiner completed on both nodes`,
+      'DISK'
+    );
     await wait(tick * 0.2);
   }
 
@@ -314,7 +370,10 @@ export function createStepSimulation() {
     highlightNodes([ELEMENT_IDS.NODE_01, ELEMENT_IDS.NODE_02], 'Merge Phase');
     highlightBoxes([ELEMENT_IDS.BOX_MERGE_0, ELEMENT_IDS.BOX_MERGE_1]);
     updatePhaseDisplay('MERGE');
-    log('<strong>Merge Phase:</strong> Multi-way merge of sorted spills on both nodes...', 'DISK');
+    log(
+      '<strong>Merge Phase:</strong> Multi-way merge of sorted spills on both nodes...',
+      'DISK'
+    );
 
     // Reveal merge rows
     revealMergeRow(0);
@@ -333,11 +392,15 @@ export function createStepSimulation() {
       // Build multi-way merge from spills
       const spills = mapper.spills.map((data, idx) => {
         const combineId = getCombineSlotId(mapperId, idx);
-        const sourceId = el(combineId) ? combineId : getSpillSlotId(mapperId, idx);
+        const sourceId = el(combineId)
+          ? combineId
+          : getSpillSlotId(mapperId, idx);
         return { data: [...data], sourceId, pos: 0 };
       });
 
-      const mergedOrder = mergeSortedSpills(spills.map(spill => spill.data)).map(({ record, sourceIndex }) => ({
+      const mergedOrder = mergeSortedSpills(
+        spills.map((spill) => spill.data)
+      ).map(({ record, sourceIndex }) => ({
         rec: record,
         sourceId: spills[sourceIndex].sourceId
       }));
@@ -385,11 +448,15 @@ export function createStepSimulation() {
         }
 
         // Add to final segment
-        renderRecordInFinal(mapperId, item.rec, `${finalId}-rec${i}`, segmentId);
+        renderRecordInFinal(
+          mapperId,
+          item.rec,
+          `${finalId}-rec${i}`,
+          segmentId
+        );
       });
 
       await Promise.all(flyToFinalPromises);
-
     });
 
     await Promise.all(mergePromises);
@@ -407,7 +474,10 @@ export function createStepSimulation() {
     highlightNodes(null, 'Network Shuffle');
     setNetworkActive(true);
     updatePhaseDisplay('SHUFFLE');
-    log('<strong>Shuffle Phase:</strong> Both nodes streaming partitions in parallel via HTTP.', 'NET');
+    log(
+      '<strong>Shuffle Phase:</strong> Both nodes streaming partitions in parallel via HTTP.',
+      'NET'
+    );
 
     // Show all reducer segments
     for (let p = 0; p < 3; p++) {
@@ -433,7 +503,12 @@ export function createStepSimulation() {
         await flyRecord(ELEMENT_IDS.NET_HUB, targetSegId, rec, tick * 0.3);
 
         // Render in reducer segment
-        renderRecordInReducer(rec.p, rec, `red${rec.p}-seg${mapperId}-rec${i}`, targetSegId);
+        renderRecordInReducer(
+          rec.p,
+          rec,
+          `red${rec.p}-seg${mapperId}-rec${i}`,
+          targetSegId
+        );
       });
 
       await Promise.all(packetPromises);
@@ -449,7 +524,10 @@ export function createStepSimulation() {
 
     setNetworkActive(false);
 
-    log('<strong>Shuffle Complete:</strong> All partitions transferred to reducers.', 'NET');
+    log(
+      '<strong>Shuffle Complete:</strong> All partitions transferred to reducers.',
+      'NET'
+    );
     await wait(tick * 0.3);
   }
 
@@ -460,9 +538,16 @@ export function createStepSimulation() {
     const wait = (ms) => baseWait(ms, signal);
     const flyRecord = (...args) => baseFlyRecord(...args, signal);
     highlightNodes(null, 'Reduce Merge Sort');
-    highlightBoxes([ELEMENT_IDS.BOX_RED_0, ELEMENT_IDS.BOX_RED_1, ELEMENT_IDS.BOX_RED_2]);
+    highlightBoxes([
+      ELEMENT_IDS.BOX_RED_0,
+      ELEMENT_IDS.BOX_RED_1,
+      ELEMENT_IDS.BOX_RED_2
+    ]);
     updatePhaseDisplay('REDUCE_MERGE');
-    log('<strong>Reduce Merge Sort:</strong> Merging sorted map outputs in all reducers...', 'RED');
+    log(
+      '<strong>Reduce Merge Sort:</strong> Merging sorted map outputs in all reducers...',
+      'RED'
+    );
 
     // Process all partitions in parallel
     const mergePromises = [0, 1, 2].map(async (p) => {
@@ -502,9 +587,16 @@ export function createStepSimulation() {
     const wait = (ms) => baseWait(ms, signal);
     const flyRecord = (...args) => baseFlyRecord(...args, signal);
     highlightNodes(null, 'Reduce Phase');
-    highlightBoxes([ELEMENT_IDS.BOX_RED_0, ELEMENT_IDS.BOX_RED_1, ELEMENT_IDS.BOX_RED_2]);
+    highlightBoxes([
+      ELEMENT_IDS.BOX_RED_0,
+      ELEMENT_IDS.BOX_RED_1,
+      ELEMENT_IDS.BOX_RED_2
+    ]);
     updatePhaseDisplay('REDUCE');
-    log('<strong>Reduce Phase:</strong> Aggregating values by key in all reducers...', 'RED');
+    log(
+      '<strong>Reduce Phase:</strong> Aggregating values by key in all reducers...',
+      'RED'
+    );
 
     // Process all partitions in parallel
     const reducePromises = [0, 1, 2].map(async (partition) => {
@@ -523,14 +615,21 @@ export function createStepSimulation() {
       for (const [key, count] of aggregated.entries()) {
         const rec = { k: key, p: partition, c: `bg-p${partition}`, count };
         await wait(idx * 50);
-        renderRecordInReduceOutput(partition, rec, `red${partition}-out-rec${idx}`);
+        renderRecordInReduceOutput(
+          partition,
+          rec,
+          `red${partition}-out-rec${idx}`
+        );
         idx++;
       }
     });
 
     await Promise.all(reducePromises);
 
-    log('<strong>Reduce Phase:</strong> Aggregation complete on all partitions', 'RED');
+    log(
+      '<strong>Reduce Phase:</strong> Aggregation complete on all partitions',
+      'RED'
+    );
     await wait(tick * 0.2);
   }
 
@@ -543,7 +642,10 @@ export function createStepSimulation() {
     highlightNodes(null, 'Output Phase');
     highlightBoxes([ELEMENT_IDS.BOX_HDFS_OUTPUT]);
     updatePhaseDisplay('OUTPUT');
-    log('<strong>Output Phase:</strong> Writing all partitions to HDFS...', 'SYS');
+    log(
+      '<strong>Output Phase:</strong> Writing all partitions to HDFS...',
+      'SYS'
+    );
 
     // Process all partitions in parallel
     const outputPromises = [0, 1, 2].map(async (partition) => {
@@ -565,7 +667,10 @@ export function createStepSimulation() {
 
     await Promise.all(outputPromises);
 
-    log('<strong>HDFS:</strong> All partitions written (part-r-00000, part-r-00001, part-r-00002)', 'SYS');
+    log(
+      '<strong>HDFS:</strong> All partitions written (part-r-00000, part-r-00001, part-r-00002)',
+      'SYS'
+    );
     await wait(tick * 0.2);
   }
 
@@ -577,7 +682,6 @@ export function createStepSimulation() {
 
     const progressEl = el(ELEMENT_IDS.PROGRESS_FILL);
     if (progressEl) progressEl.style.width = '100%';
-
   }
 
   function updatePhaseDisplay(phase) {
@@ -601,7 +705,10 @@ export function createStepSimulation() {
   function init() {
     const splitInput = el(ELEMENT_IDS.SPLIT_SIZE_INPUT);
     const requestedSize = Number(splitInput?.value);
-    const splitSize = Number.isInteger(requestedSize) && requestedSize > 0 ? requestedSize : state.splitSize;
+    const splitSize =
+      Number.isInteger(requestedSize) && requestedSize > 0
+        ? requestedSize
+        : state.splitSize;
     if (splitInput) splitInput.value = String(splitSize);
     state = createInitialState(undefined, undefined, splitSize);
     resetUI(state);
@@ -631,7 +738,9 @@ export function createStepSimulation() {
 
     try {
       const nextState = applyTeachingStep(state, step);
-      stepActor = createActor(fromPromise(({ signal }) => executeStep(step, signal)));
+      stepActor = createActor(
+        fromPromise(({ signal }) => executeStep(step, signal))
+      );
       stepActor.start();
       await toPromise(stepActor);
       if (generation !== stepGeneration) return false;
@@ -660,7 +769,10 @@ export function createStepSimulation() {
     isExecutingStep = false;
     const splitInput = el(ELEMENT_IDS.SPLIT_SIZE_INPUT);
     const requestedSize = Number(splitInput?.value);
-    const splitSize = Number.isInteger(requestedSize) && requestedSize > 0 ? requestedSize : state.splitSize;
+    const splitSize =
+      Number.isInteger(requestedSize) && requestedSize > 0
+        ? requestedSize
+        : state.splitSize;
     if (splitInput) splitInput.value = String(splitSize);
     state = createInitialState(undefined, undefined, splitSize);
     resetUI(state);
@@ -682,7 +794,12 @@ export function createStepSimulation() {
    */
   function getCurrentStepInfo() {
     if (currentStepIndex >= stepQueue.length) {
-      return { step: null, index: currentStepIndex, total: stepQueue.length, isComplete: true };
+      return {
+        step: null,
+        index: currentStepIndex,
+        total: stepQueue.length,
+        isComplete: true
+      };
     }
     return {
       step: stepQueue[currentStepIndex],

@@ -1,16 +1,42 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { highlightNodes, highlightBoxes, setNetworkActive } from '../../../assets/js/pipeline-dual-nodes/dom/highlights.js';
-import { foldIntermediateRows, unfoldIntermediateRows } from '../../../assets/js/pipeline-dual-nodes/dom/fold.js';
-import { log, clearLog } from '../../../assets/js/pipeline-dual-nodes/dom/log.js';
-import { resetState, resetUI } from '../../../assets/js/pipeline-dual-nodes/dom/reset.js';
-import { ELEMENT_IDS, CLEARABLE_CONTAINERS } from '../../../assets/js/pipeline-dual-nodes/dom/selectors.js';
-import { setupMockDom, createElement, useImmediateTimers } from './dom-helpers.js';
+import {
+  highlightNodes,
+  highlightBoxes,
+  setNetworkActive
+} from '../../../assets/js/pipeline-dual-nodes/dom/highlights.js';
+import {
+  foldIntermediateRows,
+  unfoldIntermediateRows
+} from '../../../assets/js/pipeline-dual-nodes/dom/fold.js';
+import {
+  log,
+  clearLog
+} from '../../../assets/js/pipeline-dual-nodes/dom/log.js';
+import {
+  resetState,
+  resetUI
+} from '../../../assets/js/pipeline-dual-nodes/dom/reset.js';
+import {
+  ELEMENT_IDS,
+  CLEARABLE_CONTAINERS
+} from '../../../assets/js/pipeline-dual-nodes/dom/selectors.js';
+import {
+  setupMockDom,
+  createElement,
+  useImmediateTimers
+} from './dom-helpers.js';
 
 test('highlightNodes activates selected nodes and updates phase', () => {
   const { document, restore } = setupMockDom();
-  const node01 = createElement(document, { id: ELEMENT_IDS.NODE_01, className: 'node-container' });
-  const node02 = createElement(document, { id: ELEMENT_IDS.NODE_02, className: 'node-container active-node' });
+  const node01 = createElement(document, {
+    id: ELEMENT_IDS.NODE_01,
+    className: 'node-container'
+  });
+  const node02 = createElement(document, {
+    id: ELEMENT_IDS.NODE_02,
+    className: 'node-container active-node'
+  });
   const phase = createElement(document, { id: ELEMENT_IDS.PHASE });
 
   highlightNodes([ELEMENT_IDS.NODE_01], 'Map Phase');
@@ -24,8 +50,14 @@ test('highlightNodes activates selected nodes and updates phase', () => {
 
 test('highlightBoxes sets active class only on specified boxes', () => {
   const { document, restore } = setupMockDom();
-  const boxA = createElement(document, { id: 'boxA', className: 'box-content active' });
-  const boxB = createElement(document, { id: 'boxB', className: 'box-content' });
+  const boxA = createElement(document, {
+    id: 'boxA',
+    className: 'box-content active'
+  });
+  const boxB = createElement(document, {
+    id: 'boxB',
+    className: 'box-content'
+  });
 
   highlightBoxes(['boxB']);
 
@@ -94,8 +126,22 @@ test('resetState clears simulation collections', () => {
     running: true,
     shuffleComplete: true,
     mappers: [
-      { id: 0, buffer: [{ k: 'cat' }], spills: [[{ k: 'cat' }]], final: [{ k: 'cat' }], data: [{ k: 'cat' }], _mergeAll: [{ k: 'cat' }] },
-      { id: 1, buffer: [{ k: 'dog' }], spills: [[{ k: 'dog' }]], final: [{ k: 'dog' }], data: [{ k: 'dog' }], _mergeAll: [{ k: 'dog' }] }
+      {
+        id: 0,
+        buffer: [{ k: 'cat' }],
+        spills: [[{ k: 'cat' }]],
+        final: [{ k: 'cat' }],
+        data: [{ k: 'cat' }],
+        _mergeAll: [{ k: 'cat' }]
+      },
+      {
+        id: 1,
+        buffer: [{ k: 'dog' }],
+        spills: [[{ k: 'dog' }]],
+        final: [{ k: 'dog' }],
+        data: [{ k: 'dog' }],
+        _mergeAll: [{ k: 'dog' }]
+      }
     ],
     reducers: { 0: [{ k: 'cat' }], 1: [], 2: [] },
     reduceOutput: { 0: [{ k: 'cat' }], 1: [], 2: [] }
@@ -122,8 +168,20 @@ test('resetUI restores counters and inputs', () => {
     running: false,
     shuffleComplete: true,
     mappers: [
-      { id: 0, buffer: [], spills: [], final: [], data: [{ k: 'cat', c: 'bg-p0' }] },
-      { id: 1, buffer: [], spills: [], final: [], data: [{ k: 'dog', c: 'bg-p1' }] }
+      {
+        id: 0,
+        buffer: [],
+        spills: [],
+        final: [],
+        data: [{ k: 'cat', c: 'bg-p0' }]
+      },
+      {
+        id: 1,
+        buffer: [],
+        spills: [],
+        final: [],
+        data: [{ k: 'dog', c: 'bg-p1' }]
+      }
     ],
     reducers: { 0: [{ k: 'cat' }], 1: [], 2: [] },
     reduceOutput: { 0: [{ k: 'cat' }], 1: [], 2: [] }
@@ -144,21 +202,36 @@ test('resetUI restores counters and inputs', () => {
   createElement(document, { className: 'spill-container', parent: spillBox1 });
   const combineBox0 = createElement(document, { id: 'boxCombine0' });
   const combineBox1 = createElement(document, { id: 'boxCombine1' });
-  createElement(document, { className: 'combine-container', parent: combineBox0 });
-  createElement(document, { className: 'combine-container', parent: combineBox1 });
+  createElement(document, {
+    className: 'combine-container',
+    parent: combineBox0
+  });
+  createElement(document, {
+    className: 'combine-container',
+    parent: combineBox1
+  });
   createElement(document, { id: ELEMENT_IDS.FILL_0 });
   createElement(document, { id: ELEMENT_IDS.FILL_1 });
   createElement(document, { id: ELEMENT_IDS.PCT_0 });
   createElement(document, { id: ELEMENT_IDS.PCT_1 });
 
-  CLEARABLE_CONTAINERS.forEach(id => createElement(document, { id }));
+  CLEARABLE_CONTAINERS.forEach((id) => createElement(document, { id }));
 
   resetUI(state);
 
-  assert.equal(document.getElementById(ELEMENT_IDS.RECORDS_COUNT).innerText, '0');
-  assert.equal(document.getElementById(ELEMENT_IDS.SPILLS_COUNT).innerText, '0');
+  assert.equal(
+    document.getElementById(ELEMENT_IDS.RECORDS_COUNT).innerText,
+    '0'
+  );
+  assert.equal(
+    document.getElementById(ELEMENT_IDS.SPILLS_COUNT).innerText,
+    '0'
+  );
   assert.equal(document.getElementById(ELEMENT_IDS.NET_COUNT).innerText, '0');
-  assert.equal(document.getElementById(ELEMENT_IDS.PROGRESS_FILL).style.width, '0%');
+  assert.equal(
+    document.getElementById(ELEMENT_IDS.PROGRESS_FILL).style.width,
+    '0%'
+  );
 
   const input0 = document.getElementById(ELEMENT_IDS.BOX_INPUT_0);
   const input1 = document.getElementById(ELEMENT_IDS.BOX_INPUT_1);

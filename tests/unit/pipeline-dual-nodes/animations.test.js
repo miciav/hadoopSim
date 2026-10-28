@@ -1,7 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { wait, flyRecord, triggerCombineSweep } from '../../../assets/js/pipeline-dual-nodes/dom/animations.js';
-import { setupMockDom, createElement, useImmediateTimers } from './dom-helpers.js';
+import {
+  wait,
+  flyRecord,
+  triggerCombineSweep
+} from '../../../assets/js/pipeline-dual-nodes/dom/animations.js';
+import {
+  setupMockDom,
+  createElement,
+  useImmediateTimers
+} from './dom-helpers.js';
 
 test('wait resolves after timeout', async () => {
   const restoreTimers = useImmediateTimers();

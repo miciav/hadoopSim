@@ -9,7 +9,9 @@ function availableStorageMb(node) {
 }
 
 function selectTargets(nodes, blockSizeMb, replicaCount, policy, rng) {
-  const candidates = nodes.filter((node) => availableStorageMb(node) >= blockSizeMb);
+  const candidates = nodes.filter(
+    (node) => availableStorageMb(node) >= blockSizeMb
+  );
   if (policy === 'random') {
     return shuffle(candidates, rng).slice(0, replicaCount);
   }
@@ -86,7 +88,8 @@ export function createHdfsEngine({ state, rng = Math.random, emitter = null }) {
   }
 
   function uploadFile(sizeMb) {
-    if (!Number.isFinite(sizeMb) || sizeMb < 0) throw new RangeError('Invalid file size');
+    if (!Number.isFinite(sizeMb) || sizeMb < 0)
+      throw new RangeError('Invalid file size');
     const fileId = state.counters.file++;
     const fileName = `file-${fileId}.dat`;
     const blockSize = config.blockSizeMb;
@@ -169,7 +172,8 @@ export function createHdfsEngine({ state, rng = Math.random, emitter = null }) {
       if (holders.length < replicationFactor) {
         underReplicated += 1;
         const eligible = activeNodes.filter(
-          (node) => !holders.includes(node) && availableStorageMb(node) >= block.sizeMb
+          (node) =>
+            !holders.includes(node) && availableStorageMb(node) >= block.sizeMb
         );
         const needed = replicationFactor - holders.length;
         const targets = selectTargets(
@@ -195,16 +199,26 @@ export function createHdfsEngine({ state, rng = Math.random, emitter = null }) {
 
   function stats() {
     const activeNodes = getActiveNodes(state.nodes).length;
-    const totalStorage = state.nodes.reduce((sum, node) => sum + node.storageTotalMb, 0);
-    const usedStorage = state.nodes.reduce((sum, node) => sum + node.storageUsedMb, 0);
-    const totalBlocks = state.nodes.reduce((sum, node) => sum + node.blocks.length, 0);
+    const totalStorage = state.nodes.reduce(
+      (sum, node) => sum + node.storageTotalMb,
+      0
+    );
+    const usedStorage = state.nodes.reduce(
+      (sum, node) => sum + node.storageUsedMb,
+      0
+    );
+    const totalBlocks = state.nodes.reduce(
+      (sum, node) => sum + node.blocks.length,
+      0
+    );
 
     return {
       totalNodes: state.nodes.length,
       activeNodes,
       totalFiles: state.files.length,
       totalBlocks,
-      storageUsagePercent: totalStorage > 0 ? (usedStorage / totalStorage) * 100 : 0,
+      storageUsagePercent:
+        totalStorage > 0 ? (usedStorage / totalStorage) * 100 : 0,
       replicationFactor: config.replicationFactor
     };
   }

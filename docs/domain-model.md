@@ -3,6 +3,7 @@
 This document formalizes the didactic domain model for a deterministic, step-based MapReduce simulator. It focuses on conceptual correctness and observability over performance or Hadoop internals.
 
 ## Core Domain Entities
+
 - Job: A MapReduce workload with inputs, configuration, and lifecycle state.
 - InputDataset: Logical input split into InputSplits for mapping.
 - InputSplit: A chunk of input assigned to a MapTask; contains Records.
@@ -16,6 +17,7 @@ This document formalizes the didactic domain model for a deterministic, step-bas
 - OutputDataset: Final reduce outputs, grouped by key.
 
 ## Value Objects
+
 - JobId, TaskId, AttemptId: Stable identifiers; deterministic ordering.
 - SplitId, PartitionId, RecordId: Identify data slices and routing targets.
 - DataSize: Bytes/MB for records, splits, and intermediate outputs.
@@ -25,6 +27,7 @@ This document formalizes the didactic domain model for a deterministic, step-bas
 - Key, Value: Logical types; keys are comparable for sort/partitioning.
 
 ## Domain Events
+
 - JobSubmitted: Job enters the system with configuration and inputs.
 - JobInitialized: Splits created; tasks planned; initial state set.
 - MapTaskStarted / MapTaskCompleted: Map task state transitions.
@@ -38,6 +41,7 @@ This document formalizes the didactic domain model for a deterministic, step-bas
 - MetricsUpdated: Snapshot for observability (counters, progress, timing).
 
 ## Key Invariants and Rules
+
 - Each InputSplit is mapped by exactly one MapTask at a time.
 - A MapTask reads all records in its InputSplit exactly once per attempt.
 - A MapTask emits zero or more intermediate pairs per input record.
@@ -51,6 +55,7 @@ This document formalizes the didactic domain model for a deterministic, step-bas
 - Deterministic execution: same inputs + seed ⇒ same events and outputs.
 
 ## Optional Extensions
+
 - Faults: Fail a task attempt; retry up to N times.
 - Skew: Uneven key distribution causing hot partitions.
 - Speculative Execution: Duplicate slow tasks; first completion wins.
@@ -59,6 +64,7 @@ This document formalizes the didactic domain model for a deterministic, step-bas
 - Counters: User/system counters (records read, bytes shuffled).
 
 ## Domain Vocabulary (Glossary)
+
 - Job: A configured MapReduce execution unit.
 - Task: A unit of work; MapTask or ReduceTask.
 - Attempt: One execution try for a task.
@@ -73,6 +79,7 @@ This document formalizes the didactic domain model for a deterministic, step-bas
 - Progress: Fractional completion of task/job lifecycles.
 
 ## Execution State Model (Mermaid)
+
 ```mermaid
 stateDiagram-v2
   [*] --> JobSubmitted

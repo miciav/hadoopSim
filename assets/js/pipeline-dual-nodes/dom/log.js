@@ -34,6 +34,7 @@ export function log(message, type = 'SYS') {
 export function clearLog() {
   const consoleEl = el(ELEMENT_IDS.CONSOLE_LOG);
   if (consoleEl) {
-    consoleEl.innerHTML = '<div class="log-entry log-sys">> Cluster Daemon Started. Waiting for job...</div>';
+    consoleEl.innerHTML =
+      '<div class="log-entry log-sys">> Cluster Daemon Started. Waiting for job...</div>';
   }
 }

@@ -25,7 +25,8 @@ test('YARN queue drains when resources free up', async ({ page }) => {
   await page.addInitScript(() => {
     Math.random = () => 0.1;
     const nativeSetTimeout = window.setTimeout;
-    window.setTimeout = (fn, ms, ...args) => nativeSetTimeout(fn, Math.min(ms, 20), ...args);
+    window.setTimeout = (fn, ms, ...args) =>
+      nativeSetTimeout(fn, Math.min(ms, 20), ...args);
   });
 
   await page.goto('/yarn_interactive.html');
@@ -45,7 +46,9 @@ test('YARN queue drains when resources free up', async ({ page }) => {
   expect(initialQueue).toBeGreaterThan(0);
 
   await page.waitForFunction(
-    () => cluster.yarnQueue.length === 0 && document.getElementById('activeApps')?.textContent === '0',
+    () =>
+      cluster.yarnQueue.length === 0 &&
+      document.getElementById('activeApps')?.textContent === '0',
     null,
     { timeout: 2000 }
   );

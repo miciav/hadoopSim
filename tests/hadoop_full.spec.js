@@ -29,7 +29,9 @@ test('Full HDFS replication and storage bounds', async ({ page }) => {
   });
 });
 
-test('MapReduce allocates one mapper per block and prefers locality', async ({ page }) => {
+test('MapReduce allocates one mapper per block and prefers locality', async ({
+  page
+}) => {
   await seedPage(page, 11);
   await page.goto('/hadoop_full.html');
 
@@ -56,7 +58,9 @@ test('MapReduce allocates one mapper per block and prefers locality', async ({ p
   expect(localityCount / job.mappers.length).toBeGreaterThanOrEqual(0.5);
 });
 
-test('MapReduce failure reschedules or marks mappers on failed nodes', async ({ page }) => {
+test('MapReduce failure reschedules or marks mappers on failed nodes', async ({
+  page
+}) => {
   await seedPage(page, 21);
   await page.goto('/hadoop_full.html');
 
@@ -96,7 +100,8 @@ test('MapReduce completes and releases resources', async ({ page }) => {
     };
 
     const nativeSetInterval = window.setInterval;
-    window.setInterval = (fn, ms, ...args) => nativeSetInterval(fn, Math.min(ms, 20), ...args);
+    window.setInterval = (fn, ms, ...args) =>
+      nativeSetInterval(fn, Math.min(ms, 20), ...args);
   });
 
   await page.goto('/hadoop_full.html');
@@ -107,7 +112,9 @@ test('MapReduce completes and releases resources', async ({ page }) => {
   });
 
   await page.waitForFunction(
-    () => cluster.mapReduceJobs.length > 0 && cluster.mapReduceJobs[0].status !== 'running',
+    () =>
+      cluster.mapReduceJobs.length > 0 &&
+      cluster.mapReduceJobs[0].status !== 'running',
     null,
     { timeout: 6000 }
   );
@@ -122,21 +129,27 @@ test('MapReduce completes and releases resources', async ({ page }) => {
   expect(activeMapReduce.length).toBe(0);
 });
 
-test('reset cancels delayed recovery from a previous cluster', async ({ page }) => {
+test('reset cancels delayed recovery from a previous cluster', async ({
+  page
+}) => {
   await page.goto('/hadoop_full.html');
   const recoveryEvents = await page.evaluate(async () => {
     let count = 0;
-    const off = window.simulation.on('hdfs:reReplicated', () => { count++; });
+    const off = window.simulation.on('hdfs:reReplicated', () => {
+      count++;
+    });
     window.simulateFailure();
     window.resetCluster();
-    await new Promise(resolve => setTimeout(resolve, 2200));
+    await new Promise((resolve) => setTimeout(resolve, 2200));
     off();
     return count;
   });
   expect(recoveryEvents).toBe(0);
 });
 
-test('failed MapReduce job explains the application master failure', async ({ page }) => {
+test('failed MapReduce job explains the application master failure', async ({
+  page
+}) => {
   await page.goto('/hadoop_full.html');
   await page.evaluate(() => {
     window.uploadFile();
@@ -144,6 +157,8 @@ test('failed MapReduce job explains the application master failure', async ({ pa
     const job = window.cluster.mapReduceJobs[0];
     window.simulation.actions.failNode(job.appMasterNodeId);
   });
-  await expect(page.locator('#mapReduceJobs')).toContainText('ApplicationMaster');
+  await expect(page.locator('#mapReduceJobs')).toContainText(
+    'ApplicationMaster'
+  );
   await expect(page.locator('#mapReduceJobs')).toContainText('Failed');
 });

@@ -1,7 +1,9 @@
 import { test, expect } from './fixtures.js';
 import { getClusterSnapshot, seedPage } from './helpers.js';
 
-test('HDFS replication factor preserved when space is available', async ({ page }) => {
+test('HDFS replication factor preserved when space is available', async ({
+  page
+}) => {
   await seedPage(page, 42);
   await page.goto('/hdfs_interactive.html');
 
@@ -29,7 +31,9 @@ test('HDFS replication factor preserved when space is available', async ({ page 
   });
 });
 
-test('HDFS avoids failed nodes and keeps storage within bounds', async ({ page }) => {
+test('HDFS avoids failed nodes and keeps storage within bounds', async ({
+  page
+}) => {
   await seedPage(page, 123);
   await page.goto('/hdfs_interactive.html');
 
@@ -44,7 +48,9 @@ test('HDFS avoids failed nodes and keeps storage within bounds', async ({ page }
   expect(latestFile).toBeTruthy();
 
   const failedBlockIds = new Set(failedNode.blocks.map((block) => block.id));
-  const overlaps = latestFile.blocks.some((block) => failedBlockIds.has(block.id));
+  const overlaps = latestFile.blocks.some((block) =>
+    failedBlockIds.has(block.id)
+  );
   expect(overlaps).toBe(false);
 
   snapshot.nodes.forEach((node) => {
@@ -53,7 +59,9 @@ test('HDFS avoids failed nodes and keeps storage within bounds', async ({ page }
   });
 });
 
-test('HDFS rolls back partial uploads when space runs out', async ({ page }) => {
+test('HDFS rolls back partial uploads when space runs out', async ({
+  page
+}) => {
   await seedPage(page, 7);
   await page.goto('/hdfs_interactive.html');
 

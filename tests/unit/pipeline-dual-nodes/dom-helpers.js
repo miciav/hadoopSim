@@ -5,12 +5,12 @@ class MockClassList {
   }
 
   add(...classes) {
-    classes.forEach(name => this.set.add(name));
+    classes.forEach((name) => this.set.add(name));
     this._sync();
   }
 
   remove(...classes) {
-    classes.forEach(name => this.set.delete(name));
+    classes.forEach((name) => this.set.delete(name));
     this._sync();
   }
 
@@ -60,7 +60,7 @@ function parseSelector(selector) {
 
   const required = base
     .split('.')
-    .map(part => part.trim())
+    .map((part) => part.trim())
     .filter(Boolean);
 
   return { required, excluded };
@@ -77,14 +77,16 @@ function matchesSelector(element, selector) {
   }
 
   const { required, excluded } = parseSelector(selector);
-  const hasAllRequired = required.every(name => element.classList.contains(name));
-  const hasExcluded = excluded.some(name => element.classList.contains(name));
+  const hasAllRequired = required.every((name) =>
+    element.classList.contains(name)
+  );
+  const hasExcluded = excluded.some((name) => element.classList.contains(name));
   return hasAllRequired && !hasExcluded;
 }
 
 function querySelectorAllFrom(root, selector) {
   const matches = [];
-  root.children.forEach(child => {
+  root.children.forEach((child) => {
     if (matchesSelector(child, selector)) {
       matches.push(child);
     }
@@ -206,7 +208,7 @@ class MockElement {
 
   dispatchEvent(event) {
     const list = this._listeners.get(event.type) || [];
-    list.forEach(handler => handler(event));
+    list.forEach((handler) => handler(event));
   }
 
   getBoundingClientRect() {
@@ -245,7 +247,7 @@ class MockDocument {
 
   dispatchEvent(event) {
     const list = this._listeners.get(event.type) || [];
-    list.forEach(handler => handler(event));
+    list.forEach((handler) => handler(event));
   }
 
   triggerDOMContentLoaded() {
@@ -283,7 +285,7 @@ export function setupMockDom({ includeWindow = true } = {}) {
     global.window = {
       scrollX: 0,
       scrollY: 0,
-      requestAnimationFrame: callback => callback()
+      requestAnimationFrame: (callback) => callback()
     };
   } else {
     delete global.window;
@@ -315,7 +317,10 @@ export function setupMockDom({ includeWindow = true } = {}) {
   };
 }
 
-export function createElement(document, { id, className, parent, tagName = 'div' } = {}) {
+export function createElement(
+  document,
+  { id, className, parent, tagName = 'div' } = {}
+) {
   const element = document.createElement(tagName);
   if (id) {
     element.id = id;

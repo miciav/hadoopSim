@@ -2,8 +2,19 @@
  * Spill phase: writes buffer contents to disk with sorting and combining.
  */
 
-import { el, getBufferId, getSpillSlotId, getCombineSlotId, getBoxCombineId } from '../dom/selectors.js';
-import { createRecordElement, showRecord, turnActiveToGhosts, clearRecords } from '../dom/records.js';
+import {
+  el,
+  getBufferId,
+  getSpillSlotId,
+  getCombineSlotId,
+  getBoxCombineId
+} from '../dom/selectors.js';
+import {
+  createRecordElement,
+  showRecord,
+  turnActiveToGhosts,
+  clearRecords
+} from '../dom/records.js';
 import { flyRecord, wait, triggerCombineSweep } from '../dom/animations.js';
 import { sortAndCombineBuffer, sortByPartitionThenKey } from '../combiner.js';
 import { SWEEP_COLORS } from '../config.js';
@@ -86,7 +97,7 @@ export async function runSpill(state, mapperId, spillIdx, delay, callbacks) {
     if (!isRunning()) return;
 
     // Show combined records
-    combined.forEach(rec => {
+    combined.forEach((rec) => {
       const r = createRecordElement(rec, rec.count);
       (combineSlot || slot).appendChild(r);
       showRecord(r);

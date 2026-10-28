@@ -4,13 +4,19 @@
 
 import {
   el,
-  getFinalId, getFinalSegmentId,
+  getFinalId,
+  getFinalSegmentId,
   getReducerId,
   getReducerSegmentId,
   getReducerSegmentsId,
   ELEMENT_IDS
 } from '../dom/selectors.js';
-import { createRecordElement, showRecord, turnActiveToPersistent, clearRecords } from '../dom/records.js';
+import {
+  createRecordElement,
+  showRecord,
+  turnActiveToPersistent,
+  clearRecords
+} from '../dom/records.js';
 import { flyRecord, wait } from '../dom/animations.js';
 import { log } from '../dom/log.js';
 import { sortByPartitionThenKey } from '../combiner.js';
@@ -30,7 +36,7 @@ export async function runNetworkShuffle(state, tick, callbacks) {
   const teachingEnabled = isTeaching();
   const segmentTargets = {};
   if (teachingEnabled) {
-    [0, 1, 2].forEach(p => {
+    [0, 1, 2].forEach((p) => {
       const segmentsBox = el(getReducerSegmentsId(p));
       const seg0 = el(getReducerSegmentId(p, 0));
       const seg1 = el(getReducerSegmentId(p, 1));
@@ -52,7 +58,12 @@ export async function runNetworkShuffle(state, tick, callbacks) {
   /**
    * Transmits data from a single node to reducers.
    */
-  const transmitNodeData = async (records, baseSourceId, nodeName, sourceIndex) => {
+  const transmitNodeData = async (
+    records,
+    baseSourceId,
+    nodeName,
+    sourceIndex
+  ) => {
     const localQueue = sortByPartitionThenKey(records);
     const nicSpeed = tick / 4;
     let currentP = -1;
@@ -66,44 +77,52 @@ export async function runNetworkShuffle(state, tick, callbacks) {
         currentP = rec.p;
         await wait(Math.random() * 100, signal);
         if (!isRunning()) return;
-        log(`${nodeName}: Streaming batch for <strong>Partition ${currentP}</strong>...`, 'NET');
+        log(
+          `${nodeName}: Streaming batch for <strong>Partition ${currentP}</strong>...`,
+          'NET'
+        );
       }
 
+      // Fly to network hub from specific partition segment
+      const sourceId = getFinalSegmentId(sourceIndex, rec.p);
+      await flyRecord(sourceId, ELEMENT_IDS.NET_HUB, rec, tick * 0.5, signal);
+      if (!isRunning()) return;
 
-        // Fly to network hub from specific partition segment
-        const sourceId = getFinalSegmentId(sourceIndex, rec.p);
-        await flyRecord(sourceId, ELEMENT_IDS.NET_HUB, rec, tick * 0.5, signal);
-        if (!isRunning()) return;
+      // Update network counter
+      onNetPacket();
 
-        // Update network counter
-        onNetPacket();
+      // Small delay at hub
+      await wait(tick * 0.1 + Math.random() * 80, signal);
+      if (!isRunning()) return;
 
-        // Small delay at hub
-        await wait((tick * 0.1) + Math.random() * 80, signal);
-        if (!isRunning()) return;
+      const recordPayload = { ...rec, source: sourceIndex };
+      const segmentId = getReducerSegmentId(rec.p, sourceIndex);
+      const useSegments =
+        teachingEnabled && segmentTargets[String(rec.p)] === true;
+      const targetId = useSegments ? segmentId : getReducerId(rec.p);
 
-        const recordPayload = { ...rec, source: sourceIndex };
-        const segmentId = getReducerSegmentId(rec.p, sourceIndex);
-        const useSegments = teachingEnabled && segmentTargets[String(rec.p)] === true;
-        const targetId = useSegments ? segmentId : getReducerId(rec.p);
+      // Update state
+      if (state.reducers[rec.p]) {
+        state.reducers[rec.p].push(recordPayload);
+      }
 
-        // Update state
-        if (state.reducers[rec.p]) {
-          state.reducers[rec.p].push(recordPayload);
-        }
+      await flyRecord(
+        ELEMENT_IDS.NET_HUB,
+        targetId,
+        recordPayload,
+        tick * 0.5,
+        signal
+      );
 
-        await flyRecord(ELEMENT_IDS.NET_HUB, targetId, recordPayload, tick * 0.5, signal);
+      if (!isRunning()) return;
 
-        if (!isRunning()) return;
-
-        // Land in reducer
-        const targetBox = el(targetId);
-        if (targetBox) {
-          const r = createRecordElement(recordPayload, recordPayload.count);
-          targetBox.appendChild(r);
-          showRecord(r);
-        }
-
+      // Land in reducer
+      const targetBox = el(targetId);
+      if (targetBox) {
+        const r = createRecordElement(recordPayload, recordPayload.count);
+        targetBox.appendChild(r);
+        showRecord(r);
+      }
     });
 
     // Wait for all packets from this node

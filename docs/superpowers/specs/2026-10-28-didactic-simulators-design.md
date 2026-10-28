@@ -25,14 +25,14 @@ Non introdurre SimScript, un backend, servizi cloud o attori per ogni record.
 Le sei viste della homepage restano disponibili agli stessi URL. La tabella è
 un inventario iniziale da verificare contro il comportamento delle pagine:
 
-| Vista | Oggetto spiegato | Unità osservate |
-| --- | --- | --- |
-| Ecosystem | Relazione tra file, nodi e job | Blocchi, container, avanzamento aggregato |
-| Hadoop full | Allocazione congiunta di storage e calcolo | Nodi, risorse, allocazioni e locality |
-| HDFS | Placement, repliche e disponibilità dei dati | File, blocchi, repliche |
-| YARN | Contesa e rilascio delle risorse | Richieste, container e coda |
-| Pipeline automatica | Flusso concorrente fra mapper e reducer | Record, buffer, spill, partizioni |
-| Pipeline guidata | Spiegazione controllata delle operazioni | Passi didattici e gruppi di record |
+| Vista               | Oggetto spiegato                             | Unità osservate                           |
+| ------------------- | -------------------------------------------- | ----------------------------------------- |
+| Ecosystem           | Relazione tra file, nodi e job               | Blocchi, container, avanzamento aggregato |
+| Hadoop full         | Allocazione congiunta di storage e calcolo   | Nodi, risorse, allocazioni e locality     |
+| HDFS                | Placement, repliche e disponibilità dei dati | File, blocchi, repliche                   |
+| YARN                | Contesa e rilascio delle risorse             | Richieste, container e coda               |
+| Pipeline automatica | Flusso concorrente fra mapper e reducer      | Record, buffer, spill, partizioni         |
+| Pipeline guidata    | Spiegazione controllata delle operazioni     | Passi didattici e gruppi di record        |
 
 Prima di migrare una vista, documentare ciò che simula, omette e aggrega.
 Un passo guidato non deve corrispondere necessariamente a un tick o a un evento

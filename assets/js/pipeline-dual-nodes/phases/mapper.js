@@ -10,7 +10,11 @@ import {
   getSpillSlotId,
   getSourceRecordId
 } from '../dom/selectors.js';
-import { createRecordElement, showRecord, turnActiveToGhosts } from '../dom/records.js';
+import {
+  createRecordElement,
+  showRecord,
+  turnActiveToGhosts
+} from '../dom/records.js';
 import { flyRecord, wait } from '../dom/animations.js';
 import { log } from '../dom/log.js';
 import { updateBufferFill, setBufferLimit } from '../dom/buffers.js';
@@ -42,11 +46,14 @@ export async function runMapper(state, mapperId, delay, nodeId, callbacks) {
     if (!isRunning()) return;
 
     const split = splits[splitIdx];
-    const displayNode = (mapperId === 0) ? 'Node 01' : 'Node 02';
+    const displayNode = mapperId === 0 ? 'Node 01' : 'Node 02';
 
     // Log start of task (if significant splits exist)
     if (isTeaching() && splits.length > 1) {
-       log(`${displayNode}: <strong>Task ${splitIdx}</strong> processing Split ${splitIdx} (${split.length} records)...`, 'MAP');
+      log(
+        `${displayNode}: <strong>Task ${splitIdx}</strong> processing Split ${splitIdx} (${split.length} records)...`,
+        'MAP'
+      );
     }
 
     for (let i = 0; i < split.length; i++) {
@@ -61,8 +68,14 @@ export async function runMapper(state, mapperId, delay, nodeId, callbacks) {
       // Fly record from HDFS input to buffer
       // Note: we use globalRecordIndex to match the static input element IDs
       const sourceId = getSourceRecordId(mapperId, globalRecordIndex);
-      await flyRecord(sourceId, getBufferId(mapperId), record, delay * 0.4, signal);
-      
+      await flyRecord(
+        sourceId,
+        getBufferId(mapperId),
+        record,
+        delay * 0.4,
+        signal
+      );
+
       globalRecordIndex++;
 
       if (!isRunning()) return;
@@ -87,7 +100,10 @@ export async function runMapper(state, mapperId, delay, nodeId, callbacks) {
 
         if (isTeaching()) {
           const reason = isBufferFull ? `Buffer Full (${pct}%)` : `End of Task`;
-          log(`${displayNode}: <strong>${reason}.</strong> Spilling to disk.`, 'MAP');
+          log(
+            `${displayNode}: <strong>${reason}.</strong> Spilling to disk.`,
+            'MAP'
+          );
         }
 
         const spillBox = el(getBoxSpillId(mapperId));
@@ -103,7 +119,10 @@ export async function runMapper(state, mapperId, delay, nodeId, callbacks) {
         // Note: Combine row visibility is handled in spill.js
 
         if (isTeaching()) {
-           log(`${displayNode}: <strong>Combiner</strong> running... Writing Combine output.`, 'DISK');
+          log(
+            `${displayNode}: <strong>Combiner</strong> running... Writing Combine output.`,
+            'DISK'
+          );
         }
 
         await runSpill(state, mapperId, spillIdx, delay, callbacks);

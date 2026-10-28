@@ -79,7 +79,8 @@ export function createMapReduceEngine({
     state.mapReduceQueue = state.mapReduceQueue.filter((id) => id !== job.id);
     stopJobTimers(job);
     releaseJobResources(job);
-    if (state.mapReduceJobs.includes(job)) emit('mapreduce:failed', { job, reason });
+    if (state.mapReduceJobs.includes(job))
+      emit('mapreduce:failed', { job, reason });
   }
 
   function stopAll() {
@@ -93,10 +94,20 @@ export function createMapReduceEngine({
     const amMemory = config.mapReduce.amMemoryMb || 1024;
     const active = state.nodes.filter((node) => !node.failed);
     const cpu = (node) => node.cpuTotal - (useTotals ? 0 : node.cpuUsed);
-    const memory = (node) => node.memoryTotalMb - (useTotals ? 0 : node.memoryUsedMb);
-    return active.filter((master) => cpu(master) >= amCpu && memory(master) >= amMemory &&
-      active.some((mapper) => cpu(mapper) - (mapper === master ? amCpu : 0) >= config.mapReduce.mapperCpu &&
-        memory(mapper) - (mapper === master ? amMemory : 0) >= config.mapReduce.mapperMemoryMb));
+    const memory = (node) =>
+      node.memoryTotalMb - (useTotals ? 0 : node.memoryUsedMb);
+    return active.filter(
+      (master) =>
+        cpu(master) >= amCpu &&
+        memory(master) >= amMemory &&
+        active.some(
+          (mapper) =>
+            cpu(mapper) - (mapper === master ? amCpu : 0) >=
+              config.mapReduce.mapperCpu &&
+            memory(mapper) - (mapper === master ? amMemory : 0) >=
+              config.mapReduce.mapperMemoryMb
+        )
+    );
   }
 
   let draining = false;
@@ -105,20 +116,28 @@ export function createMapReduceEngine({
   function scheduleProgress(job, mapper) {
     mapper.intervalId = clock.setInterval(() => {
       if (job.status !== 'running') return;
-      mapper.progress = Math.min(100, mapper.progress + config.mapReduce.mapperProgressStep);
-      job.progress = job.mappers.reduce((sum, entry) => sum + entry.progress, 0) / job.mappers.length;
+      mapper.progress = Math.min(
+        100,
+        mapper.progress + config.mapReduce.mapperProgressStep
+      );
+      job.progress =
+        job.mappers.reduce((sum, entry) => sum + entry.progress, 0) /
+        job.mappers.length;
       emit('mapreduce:progress', { job });
-      if (!state.mapReduceJobs.includes(job) || job.status !== 'running') return;
+      if (!state.mapReduceJobs.includes(job) || job.status !== 'running')
+        return;
       if (mapper.progress === 100) {
         clock.clearInterval(mapper.intervalId);
         mapper.intervalId = null;
         mapper.completed = true;
         releaseContainer(mapper.name);
-        if (!state.mapReduceJobs.includes(job) || job.status !== 'running') return;
+        if (!state.mapReduceJobs.includes(job) || job.status !== 'running')
+          return;
         if (job.mappers.every((entry) => entry.completed)) {
           transitionJob(job, 'COMPLETE');
           releaseContainer(`AM-${job.name}`);
-          if (state.mapReduceJobs.includes(job)) emit('mapreduce:completed', { job });
+          if (state.mapReduceJobs.includes(job))
+            emit('mapreduce:completed', { job });
         }
         drain();
       }
@@ -126,7 +145,10 @@ export function createMapReduceEngine({
   }
 
   function drain() {
-    if (draining) { needsDrain = true; return; }
+    if (draining) {
+      needsDrain = true;
+      return;
+    }
     draining = true;
     try {
       do {
@@ -135,11 +157,21 @@ export function createMapReduceEngine({
           if (job.status !== 'queued' && job.status !== 'running') continue;
           if (job.status === 'queued') {
             const masters = possibleMasterNodes();
-            if (!masters.length || !allocateApplicationMaster(job, masters.map((node) => node.id))) break;
+            if (
+              !masters.length ||
+              !allocateApplicationMaster(
+                job,
+                masters.map((node) => node.id)
+              )
+            )
+              break;
             transitionJob(job, 'START');
-            state.mapReduceQueue = state.mapReduceQueue.filter((id) => id !== job.id);
+            state.mapReduceQueue = state.mapReduceQueue.filter(
+              (id) => id !== job.id
+            );
             emit('mapreduce:started', { job });
-            if (!state.mapReduceJobs.includes(job) || job.status !== 'running') continue;
+            if (!state.mapReduceJobs.includes(job) || job.status !== 'running')
+              continue;
           }
           const locations = buildBlockLocations(state.nodes, job.fileName);
           for (const mapper of job.mappers) {
@@ -149,14 +181,17 @@ export function createMapReduceEngine({
               failJob(job, 'lost-block');
               break;
             }
-            const allocation = allocateContainer({
-              name: mapper.name,
-              cpu: config.mapReduce.mapperCpu,
-              memoryMb: config.mapReduce.mapperMemoryMb,
-              jobId: job.id,
-              isMapReduce: true,
-              blockIds: [mapper.blockId]
-            }, preferred);
+            const allocation = allocateContainer(
+              {
+                name: mapper.name,
+                cpu: config.mapReduce.mapperCpu,
+                memoryMb: config.mapReduce.mapperMemoryMb,
+                jobId: job.id,
+                isMapReduce: true,
+                blockIds: [mapper.blockId]
+              },
+              preferred
+            );
             if (!allocation) break;
             mapper.nodeId = allocation.node.id;
             scheduleProgress(job, mapper);
@@ -168,7 +203,8 @@ export function createMapReduceEngine({
     }
   }
 
-  const unsubscribeRelease = emitter && emitter.on ? emitter.on('yarn:released', drain) : null;
+  const unsubscribeRelease =
+    emitter && emitter.on ? emitter.on('yarn:released', drain) : null;
 
   function dispose() {
     stopAll();
@@ -176,7 +212,9 @@ export function createMapReduceEngine({
   }
 
   function runJob({ fileName }) {
-    const file = fileName ? state.files.find((entry) => entry.name === fileName) : state.files[0];
+    const file = fileName
+      ? state.files.find((entry) => entry.name === fileName)
+      : state.files[0];
     if (!file) {
       emit('mapreduce:failed', { reason: 'no-file' });
       return null;
@@ -240,8 +278,10 @@ export function createMapReduceEngine({
       if (state.mapReduceJobs !== jobs) return;
       if (job.status === 'queued') {
         const locations = buildBlockLocations(state.nodes, job.fileName);
-        if (job.mappers.some((mapper) => !locations.has(mapper.blockId))) failJob(job, 'lost-block');
-        else if (!possibleMasterNodes(true).length) failJob(job, 'insufficient-capacity');
+        if (job.mappers.some((mapper) => !locations.has(mapper.blockId)))
+          failJob(job, 'lost-block');
+        else if (!possibleMasterNodes(true).length)
+          failJob(job, 'insufficient-capacity');
         return;
       }
       if (job.status !== 'running') {
@@ -253,17 +293,31 @@ export function createMapReduceEngine({
         return;
       }
       const locations = buildBlockLocations(state.nodes, job.fileName);
-      if (job.mappers.some((mapper) => !mapper.completed && !locations.has(mapper.blockId))) {
+      if (
+        job.mappers.some(
+          (mapper) => !mapper.completed && !locations.has(mapper.blockId)
+        )
+      ) {
         failJob(job, 'lost-block');
         return;
       }
-      const affected = job.mappers.filter((mapper) => !mapper.completed && mapper.nodeId === nodeId);
-      const needsMapper = job.mappers.some((mapper) => !mapper.completed && (mapper.nodeId == null || mapper.nodeId === nodeId));
+      const affected = job.mappers.filter(
+        (mapper) => !mapper.completed && mapper.nodeId === nodeId
+      );
+      const needsMapper = job.mappers.some(
+        (mapper) =>
+          !mapper.completed &&
+          (mapper.nodeId == null || mapper.nodeId === nodeId)
+      );
       const canFitMapper = state.nodes.some((node) => {
         if (node.failed) return false;
         const masterHere = node.id === job.appMasterNodeId;
-        return node.cpuTotal - (masterHere ? config.mapReduce.amCpu : 0) >= config.mapReduce.mapperCpu &&
-          node.memoryTotalMb - (masterHere ? config.mapReduce.amMemoryMb : 0) >= config.mapReduce.mapperMemoryMb;
+        return (
+          node.cpuTotal - (masterHere ? config.mapReduce.amCpu : 0) >=
+            config.mapReduce.mapperCpu &&
+          node.memoryTotalMb - (masterHere ? config.mapReduce.amMemoryMb : 0) >=
+            config.mapReduce.mapperMemoryMb
+        );
       });
       if (needsMapper && !canFitMapper) {
         failJob(job, 'insufficient-capacity');
@@ -280,23 +334,34 @@ export function createMapReduceEngine({
         mapper.nodeId = null;
         mapper.progress = 0;
         const hasReplica = state.nodes.some(
-          (node) => !node.failed && node.blocks.some((block) => block.id === mapper.blockId)
+          (node) =>
+            !node.failed &&
+            node.blocks.some((block) => block.id === mapper.blockId)
         );
         if (!hasReplica) failed += 1;
       });
       if (failed > 0) failJob(job, 'lost-block');
       affectedByJob.set(job.id, affected);
-      summaries.push({ jobId: job.id, rescheduled: 0, waiting: 0, failed, affected: affected.length });
-
+      summaries.push({
+        jobId: job.id,
+        rescheduled: 0,
+        waiting: 0,
+        failed,
+        affected: affected.length
+      });
     });
 
     if (state.mapReduceJobs !== jobs) return [];
     drain();
     summaries.forEach((summary) => {
-      const job = state.mapReduceJobs.find((entry) => entry.id === summary.jobId);
+      const job = state.mapReduceJobs.find(
+        (entry) => entry.id === summary.jobId
+      );
       if (!job || job.status !== 'running') return;
       const affected = affectedByJob.get(summary.jobId);
-      summary.rescheduled = affected.filter((mapper) => mapper.nodeId != null).length;
+      summary.rescheduled = affected.filter(
+        (mapper) => mapper.nodeId != null
+      ).length;
       summary.waiting = affected.length - summary.rescheduled;
     });
     emit('mapreduce:nodeFailed', { nodeId, summaries });
@@ -304,8 +369,12 @@ export function createMapReduceEngine({
   }
 
   function stats() {
-    const runningJobs = state.mapReduceJobs.filter((job) => job.status === 'running').length;
-    const completedJobs = state.mapReduceJobs.filter((job) => job.status === 'completed').length;
+    const runningJobs = state.mapReduceJobs.filter(
+      (job) => job.status === 'running'
+    ).length;
+    const completedJobs = state.mapReduceJobs.filter(
+      (job) => job.status === 'completed'
+    ).length;
 
     return {
       runningJobs,
@@ -324,10 +393,14 @@ export function createMapReduceEngine({
 }
 
 export function describeMapReduceFailure(reason) {
-  return {
-    'application-master-failed': 'ApplicationMaster failed; restart is not simulated.',
-    'lost-block': 'An input block has no available replica.',
-    'insufficient-capacity': 'The cluster cannot fit an ApplicationMaster and a mapper.',
-    'mapper-failed': 'A mapper could not be restarted.'
-  }[reason] || 'The job could not be completed.';
+  return (
+    {
+      'application-master-failed':
+        'ApplicationMaster failed; restart is not simulated.',
+      'lost-block': 'An input block has no available replica.',
+      'insufficient-capacity':
+        'The cluster cannot fit an ApplicationMaster and a mapper.',
+      'mapper-failed': 'A mapper could not be restarted.'
+    }[reason] || 'The job could not be completed.'
+  );
 }

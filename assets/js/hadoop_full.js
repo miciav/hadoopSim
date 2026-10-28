@@ -3,7 +3,14 @@ import { createSimulation } from './hadoop-sim/simulation.js';
 import { describeMapReduceFailure } from './hadoop-sim/mapreduce.js';
 import { randomInt } from './hadoop-sim/random.js';
 
-const COLORS = ['#3182ce', '#38a169', '#d69e2e', '#e53e3e', '#805ad5', '#dd6b20'];
+const COLORS = [
+  '#3182ce',
+  '#38a169',
+  '#d69e2e',
+  '#e53e3e',
+  '#805ad5',
+  '#dd6b20'
+];
 let colorIndex = 0;
 const fileColors = new Map();
 
@@ -114,7 +121,9 @@ function renderUnifiedNodes() {
 
                 if (container.isMapReduce && !isAM) {
                   for (const job of sim.state.mapReduceJobs) {
-                    const mapper = job.mappers.find((entry) => entry.name === container.name);
+                    const mapper = job.mappers.find(
+                      (entry) => entry.name === container.name
+                    );
                     if (mapper) {
                       if (mapper.progress === -1) {
                         mapperFailed = true;
@@ -328,7 +337,9 @@ function renderMapReduceJobs() {
         (job.mappers.length > 0
           ? Math.round(
               (job.mappers.filter((mapper) => {
-                const node = sim.state.nodes.find((n) => n.id === mapper.nodeId);
+                const node = sim.state.nodes.find(
+                  (n) => n.id === mapper.nodeId
+                );
                 return node && node.blocks.some((b) => b.id === mapper.blockId);
               }).length /
                 job.mappers.length) *
@@ -364,7 +375,8 @@ function renderMapReduceJobs() {
   html += sim.state.yarnJobs
     .map((job) => {
       const progress = (job.completedContainers / job.numContainers) * 100;
-      const status = job.completedContainers === job.numContainers ? 'completed' : 'running';
+      const status =
+        job.completedContainers === job.numContainers ? 'completed' : 'running';
 
       return `
         <div class="mapreduce-job">
@@ -395,12 +407,17 @@ function renderMapReduceJobs() {
 
 function updateStats() {
   const activeNodes = sim.state.nodes.filter((node) => !node.failed).length;
-  const totalBlocks = sim.state.nodes.reduce((sum, node) => sum + node.blocks.length, 0);
+  const totalBlocks = sim.state.nodes.reduce(
+    (sum, node) => sum + node.blocks.length,
+    0
+  );
   const activeJobs = sim.state.nodes.reduce(
     (sum, node) => sum + node.containers.filter((c) => !c.isMapReduce).length,
     0
   );
-  const mapReduceJobs = sim.state.mapReduceJobs.filter((job) => job.status === 'running').length;
+  const mapReduceJobs = sim.state.mapReduceJobs.filter(
+    (job) => job.status === 'running'
+  ).length;
 
   document.getElementById('totalNodes').textContent = sim.state.nodes.length;
   document.getElementById('activeNodes').textContent = activeNodes;
@@ -411,7 +428,8 @@ function updateStats() {
 
   const queuedJobsEl = document.getElementById('queuedJobs');
   if (queuedJobsEl) {
-    queuedJobsEl.textContent = sim.state.yarnQueue.length + sim.state.mapReduceQueue.length;
+    queuedJobsEl.textContent =
+      sim.state.yarnQueue.length + sim.state.mapReduceQueue.length;
   }
 }
 
@@ -427,7 +445,10 @@ function uploadFile() {
   ensureFileColor(result.file.name);
 
   if (result.results.some((entry) => entry.underReplicated)) {
-    notify(`⚠️ ${result.file.name} uploaded with under-replicated blocks`, 'warning');
+    notify(
+      `⚠️ ${result.file.name} uploaded with under-replicated blocks`,
+      'warning'
+    );
   } else {
     notify(`✅ ${result.file.name} uploaded!`, 'success');
   }
@@ -447,7 +468,10 @@ function uploadLargeFile() {
   ensureFileColor(result.file.name);
 
   if (result.results.some((entry) => entry.underReplicated)) {
-    notify(`⚠️ ${result.file.name} uploaded with under-replicated blocks`, 'warning');
+    notify(
+      `⚠️ ${result.file.name} uploaded with under-replicated blocks`,
+      'warning'
+    );
   } else {
     notify(`✅ ${result.file.name} uploaded!`, 'success');
   }
@@ -510,10 +534,16 @@ function submitBigYarnJob() {
   const allocated = results.filter((entry) => entry.allocated).length;
 
   if (allocated === numContainers) {
-    notify(`✅ Big YARN ${jobRecord.name} started (${allocated} containers)`, 'success');
+    notify(
+      `✅ Big YARN ${jobRecord.name} started (${allocated} containers)`,
+      'success'
+    );
   } else if (allocated > 0) {
-    notify(`⚠️ ${jobRecord.name}: ${allocated}/${numContainers} containers running`, 'warning');
-  } else if (results.some(entry => entry.queued)) {
+    notify(
+      `⚠️ ${jobRecord.name}: ${allocated}/${numContainers} containers running`,
+      'warning'
+    );
+  } else if (results.some((entry) => entry.queued)) {
     notify(`⏳ ${jobRecord.name} queued: insufficient resources`, 'warning');
   }
 
@@ -528,7 +558,10 @@ function submitBigYarnJob() {
 }
 
 sim.on('yarn:rejected', ({ request }) => {
-  notify(`❌ ${request.name} rejected: no active node can fit its CPU and memory request.`, 'error');
+  notify(
+    `❌ ${request.name} rejected: no active node can fit its CPU and memory request.`,
+    'error'
+  );
   renderCluster();
 });
 
@@ -567,9 +600,13 @@ function simulateFailure() {
     return;
   }
 
-  const randomNode = activeNodes[Math.floor(Math.random() * activeNodes.length)];
+  const randomNode =
+    activeNodes[Math.floor(Math.random() * activeNodes.length)];
   sim.actions.failNode(randomNode.id);
-  notify(`💥 ${randomNode.name} failed! HDFS will re-replicate blocks...`, 'warning');
+  notify(
+    `💥 ${randomNode.name} failed! HDFS will re-replicate blocks...`,
+    'warning'
+  );
 
   const timerId = setTimeout(() => {
     recoveryTimers.delete(timerId);
@@ -577,7 +614,10 @@ function simulateFailure() {
     if (summary.lost > 0) {
       notify(`❌ ${summary.lost} blocks permanently lost!`, 'error');
     } else if (summary.reReplicated > 0) {
-      notify(`✅ Re-replication complete! ${summary.reReplicated} replicas added`, 'success');
+      notify(
+        `✅ Re-replication complete! ${summary.reReplicated} replicas added`,
+        'success'
+      );
     }
     renderCluster();
   }, 2000);

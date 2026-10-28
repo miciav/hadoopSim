@@ -9,7 +9,12 @@ import { foldIntermediateRows, unfoldIntermediateRows } from './dom/fold.js';
 // Re-export for external use
 export { createSimulation } from './engine.js';
 export { createInitialState, RAW_DATA_A, RAW_DATA_B } from './state.js';
-export { combine, sortByPartitionThenKey, mergeSpills, aggregateByKey } from './combiner.js';
+export {
+  combine,
+  sortByPartitionThenKey,
+  mergeSpills,
+  aggregateByKey
+} from './combiner.js';
 export { CONFIG, PARTITIONS, LOG_TYPES } from './config.js';
 
 /**
@@ -39,7 +44,9 @@ export function initPipeline() {
           // Fold when teaching mode is turned OFF (if shuffle is complete)
           const state = simulation.getState();
           if (state.shuffleComplete) {
-            foldIntermediateRows(() => simulation.getState() === state && state.shuffleComplete);
+            foldIntermediateRows(
+              () => simulation.getState() === state && state.shuffleComplete
+            );
           }
         }
       });

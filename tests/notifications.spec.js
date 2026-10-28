@@ -7,7 +7,10 @@ for (const [path, action] of [
 ]) {
   test(`reset clears old notifications on ${path}`, async ({ page }) => {
     await page.goto(path);
-    await page.evaluate((name) => { window[name](); window.resetCluster(); }, action);
+    await page.evaluate((name) => {
+      window[name]();
+      window.resetCluster();
+    }, action);
     await expect(page.locator('.notification')).toHaveCount(1);
     await expect(page.locator('.notification')).toContainText(/reset/i);
   });

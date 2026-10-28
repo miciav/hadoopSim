@@ -1,8 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSimulation, initHeightSync } from '../../../assets/js/pipeline-dual-nodes/engine.js';
-import { CLEARABLE_CONTAINERS, ELEMENT_IDS } from '../../../assets/js/pipeline-dual-nodes/dom/selectors.js';
-import { setupMockDom, createElement, MockResizeObserver } from './dom-helpers.js';
+import {
+  createSimulation,
+  initHeightSync
+} from '../../../assets/js/pipeline-dual-nodes/engine.js';
+import {
+  CLEARABLE_CONTAINERS,
+  ELEMENT_IDS
+} from '../../../assets/js/pipeline-dual-nodes/dom/selectors.js';
+import {
+  setupMockDom,
+  createElement,
+  MockResizeObserver
+} from './dom-helpers.js';
 
 test('createSimulation reset restores state and enables start button', () => {
   const { document, restore } = setupMockDom();
@@ -21,7 +31,7 @@ test('createSimulation reset restores state and enables start button', () => {
   createElement(document, { id: ELEMENT_IDS.PCT_1 });
   const startBtn = createElement(document, { id: ELEMENT_IDS.START_BTN });
 
-  CLEARABLE_CONTAINERS.forEach(id => createElement(document, { id }));
+  CLEARABLE_CONTAINERS.forEach((id) => createElement(document, { id }));
 
   const simulation = createSimulation();
   const oldState = simulation.getState();

@@ -10,7 +10,12 @@ import {
   getReducerMergeId,
   getReducerOutputId
 } from '../dom/selectors.js';
-import { createRecordElement, showRecord, turnActiveToGhosts, clearRecords } from '../dom/records.js';
+import {
+  createRecordElement,
+  showRecord,
+  turnActiveToGhosts,
+  clearRecords
+} from '../dom/records.js';
 import { flyRecord, wait, triggerCombineSweep } from '../dom/animations.js';
 import { aggregateByKey } from '../combiner.js';
 import { PARTITIONS, SWEEP_COLORS } from '../config.js';
@@ -23,7 +28,7 @@ function splitReducerSegments(records) {
   const segmentBuckets = { 0: [], 1: [] };
   let hasUnknownSource = false;
 
-  records.forEach(rec => {
+  records.forEach((rec) => {
     if (rec.source === 0 || rec.source === 1) {
       segmentBuckets[rec.source].push(rec);
       return;
@@ -45,7 +50,10 @@ function mergeSortedSegments(segments) {
     segments.forEach((segment, index) => {
       if (positions[index] >= segment.length) return;
       const candidate = segment[positions[index]];
-      if (!minRecord || String(candidate.k).localeCompare(String(minRecord.k)) < 0) {
+      if (
+        !minRecord ||
+        String(candidate.k).localeCompare(String(minRecord.k)) < 0
+      ) {
         minRecord = candidate;
         minIndex = index;
       }
@@ -53,7 +61,10 @@ function mergeSortedSegments(segments) {
 
     if (minIndex === -1) break;
 
-    merged.push({ record: segments[minIndex][positions[minIndex]], source: minIndex });
+    merged.push({
+      record: segments[minIndex][positions[minIndex]],
+      source: minIndex
+    });
     positions[minIndex] += 1;
   }
 
@@ -67,7 +78,13 @@ function mergeSortedSegments(segments) {
  * @param {Function} isRunning - Check if simulation is running
  * @returns {Promise<void>}
  */
-export async function runReduceMergeSort(state, tick, isRunning, isTeaching = () => true, signal) {
+export async function runReduceMergeSort(
+  state,
+  tick,
+  isRunning,
+  isTeaching = () => true,
+  signal
+) {
   if (!isRunning()) return;
 
   const partitions = [0, 1, 2];
@@ -83,19 +100,20 @@ export async function runReduceMergeSort(state, tick, isRunning, isTeaching = ()
     await wait(Math.max(tick * 0.5, 300), signal);
     if (!isRunning()) return;
 
-    const { segments: rawSegments, hasUnknownSource } = splitReducerSegments(rawRecs);
+    const { segments: rawSegments, hasUnknownSource } =
+      splitReducerSegments(rawRecs);
     const canRenderSegments = isTeaching() && !hasUnknownSource;
     const segments = canRenderSegments
-      ? rawSegments.map(segment => sortReducerRecords(segment))
+      ? rawSegments.map((segment) => sortReducerRecords(segment))
       : [sortReducerRecords(rawRecs), []];
     const mergedOrder = mergeSortedSegments(segments);
-    const mergedRecords = mergedOrder.map(item => item.record);
+    const mergedRecords = mergedOrder.map((item) => item.record);
     state.reducers[p] = mergedRecords;
 
     if (!isTeaching()) {
       if (box) {
         clearRecords(box);
-        mergedRecords.forEach(rec => {
+        mergedRecords.forEach((rec) => {
           const r = createRecordElement(rec, rec.count);
           box.appendChild(r);
           showRecord(r);
@@ -127,12 +145,12 @@ export async function runReduceMergeSort(state, tick, isRunning, isTeaching = ()
       clearRecords(seg0Box);
       clearRecords(seg1Box);
 
-      segments[0].forEach(rec => {
+      segments[0].forEach((rec) => {
         const r = createRecordElement(rec, rec.count);
         seg0Box.appendChild(r);
         showRecord(r);
       });
-      segments[1].forEach(rec => {
+      segments[1].forEach((rec) => {
         const r = createRecordElement(rec, rec.count);
         seg1Box.appendChild(r);
         showRecord(r);
@@ -146,7 +164,9 @@ export async function runReduceMergeSort(state, tick, isRunning, isTeaching = ()
 
     for (const item of mergedOrder) {
       if (!isRunning()) return;
-      const fromId = useSegmentUI ? getReducerSegmentId(p, item.source) : getReducerId(p);
+      const fromId = useSegmentUI
+        ? getReducerSegmentId(p, item.source)
+        : getReducerId(p);
       const targetId = mergeBox ? getReducerMergeId(p) : getReducerId(p);
 
       await flyRecord(fromId, targetId, item.record, tick * 0.4, signal);

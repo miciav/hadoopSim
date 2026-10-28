@@ -5,7 +5,11 @@ import { createActor, fromPromise, toPromise } from 'xstate';
 
 import { createInitialState } from './state.js';
 import { el, ELEMENT_IDS, HEIGHT_SYNC_GROUPS } from './dom/selectors.js';
-import { highlightNodes, highlightBoxes, setNetworkActive } from './dom/highlights.js';
+import {
+  highlightNodes,
+  highlightBoxes,
+  setNetworkActive
+} from './dom/highlights.js';
 import { log } from './dom/log.js';
 import { wait } from './dom/animations.js';
 import { resetUI } from './dom/reset.js';
@@ -42,7 +46,6 @@ export function createSimulation() {
     }
   };
 
-
   /**
    * Runs the complete simulation.
    */
@@ -62,50 +65,59 @@ export function createSimulation() {
     const teachingLatched = callbacks.isTeaching();
     const runCallbacks = {
       ...callbacks,
-      isRunning: () => runState.running && state === runState && !runSignal?.aborted,
+      isRunning: () =>
+        runState.running && state === runState && !runSignal?.aborted,
       isTeaching: () => teachingLatched,
-      onRecordProcessed: () => { if (runState.running) callbacks.onRecordProcessed(); },
-      onSpillCreated: () => { if (runState.running) callbacks.onSpillCreated(); },
-      onNetPacket: () => { if (runState.running) callbacks.onNetPacket(); }
+      onRecordProcessed: () => {
+        if (runState.running) callbacks.onRecordProcessed();
+      },
+      onSpillCreated: () => {
+        if (runState.running) callbacks.onSpillCreated();
+      },
+      onNetPacket: () => {
+        if (runState.running) callbacks.onNetPacket();
+      }
     };
 
     const speed = parseFloat(el(ELEMENT_IDS.SPEED_SLIDER)?.value ?? 1.5);
     const tick = 1000 / speed;
 
-    const actor = createActor(fromPromise(async ({ signal }) => {
-      runSignal = signal;
-      runCallbacks.signal = signal;
-      // Phase 1: INPUT
-      if (!runCallbacks.isRunning()) return;
-      await runInputPhase(tick, runState, runCallbacks);
+    const actor = createActor(
+      fromPromise(async ({ signal }) => {
+        runSignal = signal;
+        runCallbacks.signal = signal;
+        // Phase 1: INPUT
+        if (!runCallbacks.isRunning()) return;
+        await runInputPhase(tick, runState, runCallbacks);
 
-      // Phase 2: MAP & BUFFER
-      if (!runCallbacks.isRunning()) return;
-      await runMapPhase(tick, runState, runCallbacks);
+        // Phase 2: MAP & BUFFER
+        if (!runCallbacks.isRunning()) return;
+        await runMapPhase(tick, runState, runCallbacks);
 
-      // Phase 3: MERGE
-      if (!runCallbacks.isRunning()) return;
-      await runMergePhase(tick, runState, runCallbacks);
+        // Phase 3: MERGE
+        if (!runCallbacks.isRunning()) return;
+        await runMergePhase(tick, runState, runCallbacks);
 
-      // Phase 4: SHUFFLE
-      if (!runCallbacks.isRunning()) return;
-      await runShufflePhase(tick, runState, runCallbacks);
+        // Phase 4: SHUFFLE
+        if (!runCallbacks.isRunning()) return;
+        await runShufflePhase(tick, runState, runCallbacks);
 
-      // Phase 5: REDUCE MERGE SORT
-      if (!runCallbacks.isRunning()) return;
-      await runReduceMergeSortPhase(tick, runState, runCallbacks);
+        // Phase 5: REDUCE MERGE SORT
+        if (!runCallbacks.isRunning()) return;
+        await runReduceMergeSortPhase(tick, runState, runCallbacks);
 
-      // Phase 6: REDUCE
-      if (!runCallbacks.isRunning()) return;
-      await runReducePhase(tick, runState, runCallbacks);
+        // Phase 6: REDUCE
+        if (!runCallbacks.isRunning()) return;
+        await runReducePhase(tick, runState, runCallbacks);
 
-      // Phase 7: OUTPUT
-      if (!runCallbacks.isRunning()) return;
-      await runOutputPhase(tick, runState, runCallbacks);
+        // Phase 7: OUTPUT
+        if (!runCallbacks.isRunning()) return;
+        await runOutputPhase(tick, runState, runCallbacks);
 
-      // Complete
-      if (runCallbacks.isRunning()) finishSimulation();
-    }));
+        // Complete
+        if (runCallbacks.isRunning()) finishSimulation();
+      })
+    );
     runActor = actor;
     actor.start();
     await toPromise(actor);
@@ -118,7 +130,10 @@ export function createSimulation() {
   async function runInputPhase(tick, runState, runCallbacks) {
     highlightNodes([ELEMENT_IDS.NODE_01, ELEMENT_IDS.NODE_02], 'Map Phase');
     highlightBoxes([ELEMENT_IDS.BOX_INPUT_0, ELEMENT_IDS.BOX_INPUT_1]);
-    log('<strong>YARN ResourceManager:</strong> Job accepted. Allocated Containers on Node 01, Node 02.', 'SYS');
+    log(
+      '<strong>YARN ResourceManager:</strong> Job accepted. Allocated Containers on Node 01, Node 02.',
+      'SYS'
+    );
     await wait(tick, runCallbacks.signal);
   }
 
@@ -126,9 +141,15 @@ export function createSimulation() {
    * Phase 2: Run mappers in parallel.
    */
   async function runMapPhase(tick, runState, runCallbacks) {
-    highlightNodes([ELEMENT_IDS.NODE_01, ELEMENT_IDS.NODE_02], 'Map Processing');
+    highlightNodes(
+      [ELEMENT_IDS.NODE_01, ELEMENT_IDS.NODE_02],
+      'Map Processing'
+    );
     highlightBoxes([ELEMENT_IDS.BOX_MAP_0, ELEMENT_IDS.BOX_MAP_1]);
-    log('<strong>Map Phase:</strong> Tasks started. Filling JVM Heap Buffers.', 'MAP');
+    log(
+      '<strong>Map Phase:</strong> Tasks started. Filling JVM Heap Buffers.',
+      'MAP'
+    );
 
     await Promise.all([
       runMapper(runState, 0, tick, ELEMENT_IDS.NODE_01, runCallbacks),
@@ -144,12 +165,27 @@ export function createSimulation() {
 
     highlightNodes([ELEMENT_IDS.NODE_01, ELEMENT_IDS.NODE_02], 'Merge Phase');
     highlightBoxes([ELEMENT_IDS.BOX_MERGE_0, ELEMENT_IDS.BOX_MERGE_1]);
-    log('<strong>Merge Phase:</strong> Multi-way merge of sorted spills...', 'DISK');
+    log(
+      '<strong>Merge Phase:</strong> Multi-way merge of sorted spills...',
+      'DISK'
+    );
 
     // Animation: fly records to merge output in sorted order
     await Promise.all([
-      runMergeAnimation(runState, 0, tick, runCallbacks.isRunning, runCallbacks.signal),
-      runMergeAnimation(runState, 1, tick * 1.05, runCallbacks.isRunning, runCallbacks.signal)
+      runMergeAnimation(
+        runState,
+        0,
+        tick,
+        runCallbacks.isRunning,
+        runCallbacks.signal
+      ),
+      runMergeAnimation(
+        runState,
+        1,
+        tick * 1.05,
+        runCallbacks.isRunning,
+        runCallbacks.signal
+      )
     ]);
 
     if (!runState.running) return;
@@ -157,8 +193,20 @@ export function createSimulation() {
 
     // Finalize merge output (ghost source spills)
     await Promise.all([
-      runMergeSortOutput(runState, 0, tick, runCallbacks.isRunning, runCallbacks.signal),
-      runMergeSortOutput(runState, 1, tick, runCallbacks.isRunning, runCallbacks.signal)
+      runMergeSortOutput(
+        runState,
+        0,
+        tick,
+        runCallbacks.isRunning,
+        runCallbacks.signal
+      ),
+      runMergeSortOutput(
+        runState,
+        1,
+        tick,
+        runCallbacks.isRunning,
+        runCallbacks.signal
+      )
     ]);
   }
 
@@ -170,7 +218,10 @@ export function createSimulation() {
 
     highlightNodes(null, 'Network Shuffle');
     setNetworkActive(true);
-    log('<strong>Shuffle Phase:</strong> Nodes streaming partitions in parallel via HTTP.', 'NET');
+    log(
+      '<strong>Shuffle Phase:</strong> Nodes streaming partitions in parallel via HTTP.',
+      'NET'
+    );
 
     await runNetworkShuffle(runState, tick, runCallbacks);
 
@@ -192,10 +243,22 @@ export function createSimulation() {
     if (!runState.running) return;
 
     highlightNodes(null, 'Reduce Phase');
-    highlightBoxes([ELEMENT_IDS.BOX_RED_0, ELEMENT_IDS.BOX_RED_1, ELEMENT_IDS.BOX_RED_2]);
-    log('<strong>Reduce Phase:</strong> Sort/Group & Aggregation started.', 'RED');
+    highlightBoxes([
+      ELEMENT_IDS.BOX_RED_0,
+      ELEMENT_IDS.BOX_RED_1,
+      ELEMENT_IDS.BOX_RED_2
+    ]);
+    log(
+      '<strong>Reduce Phase:</strong> Sort/Group & Aggregation started.',
+      'RED'
+    );
 
-    await runReduce(runState, tick, runCallbacks.isRunning, runCallbacks.signal);
+    await runReduce(
+      runState,
+      tick,
+      runCallbacks.isRunning,
+      runCallbacks.signal
+    );
   }
 
   /**
@@ -205,10 +268,23 @@ export function createSimulation() {
     if (!runState.running) return;
 
     highlightNodes(null, 'Reduce Merge Sort');
-    highlightBoxes([ELEMENT_IDS.BOX_RED_0, ELEMENT_IDS.BOX_RED_1, ELEMENT_IDS.BOX_RED_2]);
-    log('<strong>Reduce Merge Sort:</strong> Merging sorted map outputs...', 'RED');
+    highlightBoxes([
+      ELEMENT_IDS.BOX_RED_0,
+      ELEMENT_IDS.BOX_RED_1,
+      ELEMENT_IDS.BOX_RED_2
+    ]);
+    log(
+      '<strong>Reduce Merge Sort:</strong> Merging sorted map outputs...',
+      'RED'
+    );
 
-    await runReduceMergeSort(runState, tick, runCallbacks.isRunning, runCallbacks.isTeaching, runCallbacks.signal);
+    await runReduceMergeSort(
+      runState,
+      tick,
+      runCallbacks.isRunning,
+      runCallbacks.isTeaching,
+      runCallbacks.signal
+    );
   }
 
   /**
@@ -221,7 +297,12 @@ export function createSimulation() {
     highlightBoxes([ELEMENT_IDS.BOX_HDFS_OUTPUT]);
     log('<strong>Output Phase:</strong> Writing results to HDFS...', 'SYS');
 
-    await runOutput(runState, tick, runCallbacks.isRunning, runCallbacks.signal);
+    await runOutput(
+      runState,
+      tick,
+      runCallbacks.isRunning,
+      runCallbacks.signal
+    );
   }
 
   /**
@@ -262,7 +343,10 @@ export function createSimulation() {
     runActor = null;
     const splitInput = el(ELEMENT_IDS.SPLIT_SIZE_INPUT);
     const requestedSize = Number(splitInput?.value);
-    const splitSize = Number.isInteger(requestedSize) && requestedSize > 0 ? requestedSize : state.splitSize;
+    const splitSize =
+      Number.isInteger(requestedSize) && requestedSize > 0
+        ? requestedSize
+        : state.splitSize;
     if (splitInput) splitInput.value = String(splitSize);
     state = createInitialState(undefined, undefined, splitSize);
     resetUI(state);
@@ -300,19 +384,19 @@ export function initHeightSync() {
     window.requestAnimationFrame(() => {
       isAdjusting = true;
 
-      HEIGHT_SYNC_GROUPS.forEach(ids => {
-        const elements = ids.map(id => el(id)).filter(e => e !== null);
+      HEIGHT_SYNC_GROUPS.forEach((ids) => {
+        const elements = ids.map((id) => el(id)).filter((e) => e !== null);
         if (elements.length < 2) return;
 
         // Reset heights
-        elements.forEach(e => e.style.minHeight = '');
+        elements.forEach((e) => (e.style.minHeight = ''));
 
         // Measure natural heights
-        const heights = elements.map(e => e.scrollHeight);
+        const heights = elements.map((e) => e.scrollHeight);
 
         // Apply max height to all
         const maxH = Math.max(...heights);
-        elements.forEach(e => e.style.minHeight = `${maxH}px`);
+        elements.forEach((e) => (e.style.minHeight = `${maxH}px`));
       });
 
       isAdjusting = false;
@@ -320,7 +404,7 @@ export function initHeightSync() {
   });
 
   // Observe all synced elements
-  HEIGHT_SYNC_GROUPS.flat().forEach(id => {
+  HEIGHT_SYNC_GROUPS.flat().forEach((id) => {
     const e = el(id);
     if (e) ro.observe(e);
   });

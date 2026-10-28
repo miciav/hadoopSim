@@ -60,5 +60,5 @@ test('constants expose expected ids and groups', () => {
   assert.ok(ELEMENT_IDS.START_BTN);
   assert.ok(ELEMENT_IDS.NETWORK_LAYER);
   assert.ok(CLEARABLE_CONTAINERS.includes('finalA-p0'));
-  assert.ok(HEIGHT_SYNC_GROUPS.some(group => group.includes('boxInput0')));
+  assert.ok(HEIGHT_SYNC_GROUPS.some((group) => group.includes('boxInput0')));
 });

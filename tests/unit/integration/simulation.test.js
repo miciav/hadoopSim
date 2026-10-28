@@ -37,7 +37,10 @@ test('simulation runs upload + mapreduce to completion', () => {
 
 test('reset stops previous job timers before new resources are allocated', () => {
   const clock = createManualClock();
-  const sim = createSimulation({ mapReduce: { mapperIntervalMs: 10 } }, { clock });
+  const sim = createSimulation(
+    { mapReduce: { mapperIntervalMs: 10 } },
+    { clock }
+  );
   sim.actions.uploadFile(10);
   sim.actions.submitMapReduce({});
   clock.advance(10);
@@ -46,14 +49,21 @@ test('reset stops previous job timers before new resources are allocated', () =>
   const job = sim.actions.submitMapReduce({});
   clock.advance(150);
   assert.equal(job.status, 'running');
-  assert.ok(sim.state.nodes.flatMap(node => node.containers).some(c => c.jobId === job.id));
+  assert.ok(
+    sim.state.nodes
+      .flatMap((node) => node.containers)
+      .some((c) => c.jobId === job.id)
+  );
 });
 
 test('job fails when its input block has no live replica', () => {
   const clock = createManualClock();
-  const sim = createSimulation({ nodeCount: 2, replicationFactor: 1 }, { clock });
+  const sim = createSimulation(
+    { nodeCount: 2, replicationFactor: 1 },
+    { clock }
+  );
   sim.actions.uploadFile(10);
-  const holder = sim.state.nodes.find(node => node.blocks.length);
+  const holder = sim.state.nodes.find((node) => node.blocks.length);
   sim.actions.failNode(holder.id);
   const job = sim.actions.submitMapReduce({});
   assert.equal(job.status, 'failed');
@@ -66,12 +76,20 @@ test('job fails if the application master node fails', () => {
   const job = sim.actions.submitMapReduce({});
   sim.actions.failNode(job.appMasterNodeId);
   assert.equal(job.status, 'failed');
-  assert.equal(sim.state.nodes.flatMap(node => node.containers).length, 0);
+  assert.equal(sim.state.nodes.flatMap((node) => node.containers).length, 0);
 });
 
 test('queued job starts after an earlier job releases capacity', () => {
   const clock = createManualClock();
-  const sim = createSimulation({ nodeCount: 1, blockSizeMb: 10, nodeTemplate: { cpuTotal: 3 }, mapReduce: { mapperIntervalMs: 10 } }, { clock });
+  const sim = createSimulation(
+    {
+      nodeCount: 1,
+      blockSizeMb: 10,
+      nodeTemplate: { cpuTotal: 3 },
+      mapReduce: { mapperIntervalMs: 10 }
+    },
+    { clock }
+  );
   sim.actions.uploadFile(10);
   const first = sim.actions.submitMapReduce({});
   const second = sim.actions.submitMapReduce({});
@@ -84,18 +102,33 @@ test('queued job starts after an earlier job releases capacity', () => {
 
 test('mappers execute in waves when only one fits at a time', () => {
   const clock = createManualClock();
-  const sim = createSimulation({ nodeCount: 1, blockSizeMb: 10, nodeTemplate: { cpuTotal: 3 }, mapReduce: { mapperIntervalMs: 10 } }, { clock });
+  const sim = createSimulation(
+    {
+      nodeCount: 1,
+      blockSizeMb: 10,
+      nodeTemplate: { cpuTotal: 3 },
+      mapReduce: { mapperIntervalMs: 10 }
+    },
+    { clock }
+  );
   sim.actions.uploadFile(30);
   const job = sim.actions.submitMapReduce({});
   clock.advance(600);
   assert.equal(job.status, 'completed');
   assert.equal(job.mappers.length, 3);
-  assert.ok(job.mappers.every(mapper => mapper.progress === 100));
+  assert.ok(job.mappers.every((mapper) => mapper.progress === 100));
 });
 
 test('impossible job fails without holding resources or occupying the queue', () => {
   const clock = createManualClock();
-  const sim = createSimulation({ nodeCount: 1, nodeTemplate: { cpuTotal: 2 }, mapReduce: { mapperCpu: 2 } }, { clock });
+  const sim = createSimulation(
+    {
+      nodeCount: 1,
+      nodeTemplate: { cpuTotal: 2 },
+      mapReduce: { mapperCpu: 2 }
+    },
+    { clock }
+  );
   sim.actions.uploadFile(10);
   const job = sim.actions.submitMapReduce({});
   assert.equal(job.status, 'failed');
@@ -107,31 +140,57 @@ test('invalid requests do not mutate the cluster', () => {
   const sim = createSimulation();
   const before = JSON.stringify(sim.state);
   assert.throws(() => sim.actions.uploadFile(-1), RangeError);
-  assert.throws(() => sim.actions.submitYarnJob({ cpu: -1, memoryMb: 512 }), RangeError);
+  assert.throws(
+    () => sim.actions.submitYarnJob({ cpu: -1, memoryMb: 512 }),
+    RangeError
+  );
   assert.equal(JSON.stringify(sim.state), before);
 });
 
 test('seed zero produces the same placement after reset', () => {
-  const sim = createSimulation({ nodeCount: 6, replicationFactor: 2, hdfs: { placementPolicy: 'random' } }, { seed: 0 });
+  const sim = createSimulation(
+    { nodeCount: 6, replicationFactor: 2, hdfs: { placementPolicy: 'random' } },
+    { seed: 0 }
+  );
   sim.actions.uploadFile(20);
-  const placement = sim.state.nodes.map(node => node.blocks.map(block => block.id));
+  const placement = sim.state.nodes.map((node) =>
+    node.blocks.map((block) => block.id)
+  );
   sim.actions.reset();
   sim.actions.uploadFile(20);
-  assert.deepEqual(sim.state.nodes.map(node => node.blocks.map(block => block.id)), placement);
+  assert.deepEqual(
+    sim.state.nodes.map((node) => node.blocks.map((block) => block.id)),
+    placement
+  );
 });
 
 test('mapper waits when a replica survives but compute is temporarily unavailable', () => {
   const clock = createManualClock();
-  const sim = createSimulation({ nodeCount: 2, replicationFactor: 2, nodeTemplate: { cpuTotal: 3 }, mapReduce: { mapperIntervalMs: 10 } }, { clock });
+  const sim = createSimulation(
+    {
+      nodeCount: 2,
+      replicationFactor: 2,
+      nodeTemplate: { cpuTotal: 3 },
+      mapReduce: { mapperIntervalMs: 10 }
+    },
+    { clock }
+  );
   sim.actions.uploadFile(10);
   const job = sim.actions.submitMapReduce({});
   const mapperNode = job.mappers[0].nodeId;
   assert.notEqual(mapperNode, job.appMasterNodeId);
-  const master = sim.state.nodes.find(node => node.id === job.appMasterNodeId);
-  const blocker = sim.yarn.allocateContainer({ name: 'blocker', cpu: 2, memoryMb: 1 }, [master.id]);
+  const master = sim.state.nodes.find(
+    (node) => node.id === job.appMasterNodeId
+  );
+  const blocker = sim.yarn.allocateContainer(
+    { name: 'blocker', cpu: 2, memoryMb: 1 },
+    [master.id]
+  );
   assert.ok(blocker);
   let failureSummary;
-  sim.on('mapreduce:nodeFailed', event => { failureSummary = event.summaries[0]; });
+  sim.on('mapreduce:nodeFailed', (event) => {
+    failureSummary = event.summaries[0];
+  });
   sim.actions.failNode(mapperNode);
   assert.equal(failureSummary.rescheduled, 0);
   assert.equal(failureSummary.waiting, 1);
@@ -143,12 +202,24 @@ test('mapper waits when a replica survives but compute is temporarily unavailabl
 
 test('queued job fails and leaves the queue when its only replica is lost', () => {
   const clock = createManualClock();
-  const sim = createSimulation({ nodeCount: 2, replicationFactor: 1, nodeTemplate: { cpuTotal: 3 }, mapReduce: { mapperIntervalMs: 10 } }, { clock });
+  const sim = createSimulation(
+    {
+      nodeCount: 2,
+      replicationFactor: 1,
+      nodeTemplate: { cpuTotal: 3 },
+      mapReduce: { mapperIntervalMs: 10 }
+    },
+    { clock }
+  );
   sim.actions.uploadFile(10);
-  for (const node of sim.state.nodes) sim.yarn.allocateContainer({ name: `blocker-${node.id}`, cpu: 3, memoryMb: 1 }, [node.id]);
+  for (const node of sim.state.nodes)
+    sim.yarn.allocateContainer(
+      { name: `blocker-${node.id}`, cpu: 3, memoryMb: 1 },
+      [node.id]
+    );
   const job = sim.actions.submitMapReduce({});
   assert.equal(job.status, 'queued');
-  const holder = sim.state.nodes.find(node => node.blocks.length);
+  const holder = sim.state.nodes.find((node) => node.blocks.length);
   sim.actions.failNode(holder.id);
   assert.equal(job.status, 'failed');
   assert.equal(sim.state.mapReduceQueue.length, 0);
@@ -156,7 +227,10 @@ test('queued job fails and leaves the queue when its only replica is lost', () =
 
 test('disposing a simulation prevents further job progress', () => {
   const clock = createManualClock();
-  const sim = createSimulation({ mapReduce: { mapperIntervalMs: 10 } }, { clock });
+  const sim = createSimulation(
+    { mapReduce: { mapperIntervalMs: 10 } },
+    { clock }
+  );
   sim.actions.uploadFile(10);
   const job = sim.actions.submitMapReduce({});
   clock.advance(10);
@@ -172,7 +246,7 @@ test('empty file job completes without allocating a container', () => {
   const job = sim.actions.submitMapReduce({});
   assert.equal(job.status, 'completed');
   assert.equal(job.progress, 100);
-  assert.equal(sim.state.nodes.flatMap(node => node.containers).length, 0);
+  assert.equal(sim.state.nodes.flatMap((node) => node.containers).length, 0);
 });
 
 test('an explicitly missing file does not fall back to an existing file', () => {
@@ -183,10 +257,13 @@ test('an explicitly missing file does not fall back to an existing file', () => 
 });
 
 test('queued job fails if node failure makes its resource needs impossible', () => {
-  const sim = createSimulation({ nodes: [
-    { id: 1, cpuTotal: 2, memoryTotalMb: 8192, storageTotalMb: 100 },
-    { id: 2, cpuTotal: 2, memoryTotalMb: 8192, storageTotalMb: 100 }
-  ], replicationFactor: 2 });
+  const sim = createSimulation({
+    nodes: [
+      { id: 1, cpuTotal: 2, memoryTotalMb: 8192, storageTotalMb: 100 },
+      { id: 2, cpuTotal: 2, memoryTotalMb: 8192, storageTotalMb: 100 }
+    ],
+    replicationFactor: 2
+  });
   sim.actions.uploadFile(10);
   sim.yarn.allocateContainer({ name: 'blocker-1', cpu: 2, memoryMb: 1 }, [1]);
   sim.yarn.allocateContainer({ name: 'blocker-2', cpu: 2, memoryMb: 1 }, [2]);
@@ -200,22 +277,37 @@ test('queued job fails if node failure makes its resource needs impossible', () 
 
 test('a running job fails if its remaining node can never run a mapper beside its master', () => {
   const clock = createManualClock();
-  const sim = createSimulation({ nodes: [
-    { id: 1, cpuTotal: 2, memoryTotalMb: 8192, storageTotalMb: 100 },
-    { id: 2, cpuTotal: 2, memoryTotalMb: 8192, storageTotalMb: 100 }
-  ], replicationFactor: 2, mapReduce: { mapperIntervalMs: 10 } }, { clock });
+  const sim = createSimulation(
+    {
+      nodes: [
+        { id: 1, cpuTotal: 2, memoryTotalMb: 8192, storageTotalMb: 100 },
+        { id: 2, cpuTotal: 2, memoryTotalMb: 8192, storageTotalMb: 100 }
+      ],
+      replicationFactor: 2,
+      mapReduce: { mapperIntervalMs: 10 }
+    },
+    { clock }
+  );
   sim.actions.uploadFile(10);
   const job = sim.actions.submitMapReduce({});
   assert.notEqual(job.appMasterNodeId, job.mappers[0].nodeId);
   sim.actions.failNode(job.mappers[0].nodeId);
   assert.equal(job.status, 'failed');
   assert.equal(job.failureReason, 'insufficient-capacity');
-  assert.equal(sim.state.nodes.filter(node => !node.failed).flatMap(node => node.containers).length, 0);
+  assert.equal(
+    sim.state.nodes
+      .filter((node) => !node.failed)
+      .flatMap((node) => node.containers).length,
+    0
+  );
 });
 
 test('reset from a progress listener cannot release a newly created job', () => {
   const clock = createManualClock();
-  const sim = createSimulation({ mapReduce: { mapperIntervalMs: 10, mapperProgressStep: 100 } }, { clock });
+  const sim = createSimulation(
+    { mapReduce: { mapperIntervalMs: 10, mapperProgressStep: 100 } },
+    { clock }
+  );
   sim.actions.uploadFile(10);
   let replacement;
   sim.on('mapreduce:progress', () => {
@@ -227,7 +319,7 @@ test('reset from a progress listener cannot release a newly created job', () => 
   sim.actions.submitMapReduce({});
   clock.advance(10);
   assert.equal(replacement.status, 'running');
-  assert.equal(sim.state.nodes.flatMap(node => node.containers).length, 2);
+  assert.equal(sim.state.nodes.flatMap((node) => node.containers).length, 2);
 });
 
 test('reset from a started listener schedules the replacement job', () => {
@@ -245,29 +337,36 @@ test('reset from a started listener schedules the replacement job', () => {
   });
   sim.actions.submitMapReduce({});
   assert.equal(replacement.status, 'running');
-  assert.equal(sim.state.nodes.flatMap(node => node.containers).length, 2);
+  assert.equal(sim.state.nodes.flatMap((node) => node.containers).length, 2);
 });
 
 test('remote mapper fails when its last input replica is lost', () => {
   const clock = createManualClock();
-  const sim = createSimulation({
-    replicationFactor: 1,
-    nodes: [
-      { id: 1, cpuTotal: 1, memoryTotalMb: 10000, storageTotalMb: 100 },
-      { id: 2, cpuTotal: 2, memoryTotalMb: 10000, storageTotalMb: 100 },
-      { id: 3, cpuTotal: 1, memoryTotalMb: 10000, storageTotalMb: 1000 }
-    ]
-  }, { clock });
+  const sim = createSimulation(
+    {
+      replicationFactor: 1,
+      nodes: [
+        { id: 1, cpuTotal: 1, memoryTotalMb: 10000, storageTotalMb: 100 },
+        { id: 2, cpuTotal: 2, memoryTotalMb: 10000, storageTotalMb: 100 },
+        { id: 3, cpuTotal: 1, memoryTotalMb: 10000, storageTotalMb: 1000 }
+      ]
+    },
+    { clock }
+  );
   sim.actions.uploadFile(10);
   const job = sim.actions.submitMapReduce({});
-  const source = sim.state.nodes.find(node => node.blocks.length);
+  const source = sim.state.nodes.find((node) => node.blocks.length);
   assert.notEqual(job.mappers[0].nodeId, source.id);
   assert.notEqual(job.appMasterNodeId, source.id);
   sim.actions.failNode(source.id);
   clock.advance(20000);
   assert.equal(job.status, 'failed');
   assert.equal(job.failureReason, 'lost-block');
-  assert.ok(sim.state.nodes.every(node => node.cpuUsed === 0 && node.memoryUsedMb === 0));
+  assert.ok(
+    sim.state.nodes.every(
+      (node) => node.cpuUsed === 0 && node.memoryUsedMb === 0
+    )
+  );
   sim.dispose();
 });
 

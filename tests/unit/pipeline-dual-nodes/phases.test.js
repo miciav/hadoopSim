@@ -2,11 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runMapper } from '../../../assets/js/pipeline-dual-nodes/phases/mapper.js';
 import { runSpill } from '../../../assets/js/pipeline-dual-nodes/phases/spill.js';
-import { runMergeAnimation, runMergeSortOutput } from '../../../assets/js/pipeline-dual-nodes/phases/merge.js';
+import {
+  runMergeAnimation,
+  runMergeSortOutput
+} from '../../../assets/js/pipeline-dual-nodes/phases/merge.js';
 import { runNetworkShuffle } from '../../../assets/js/pipeline-dual-nodes/phases/shuffle.js';
-import { runReduce, runReduceMergeSort } from '../../../assets/js/pipeline-dual-nodes/phases/reduce.js';
+import {
+  runReduce,
+  runReduceMergeSort
+} from '../../../assets/js/pipeline-dual-nodes/phases/reduce.js';
 import { runOutput } from '../../../assets/js/pipeline-dual-nodes/phases/output.js';
-import { setupMockDom, createElement, useImmediateTimers } from './dom-helpers.js';
+import {
+  setupMockDom,
+  createElement,
+  useImmediateTimers
+} from './dom-helpers.js';
 
 function createBaseState() {
   return {
@@ -37,7 +47,9 @@ test('runSpill stores combined spill data', async () => {
   let spillCount = 0;
   await runSpill(state, 0, 0, 1, {
     isRunning: () => true,
-    onSpillCreated: () => { spillCount += 1; }
+    onSpillCreated: () => {
+      spillCount += 1;
+    }
   });
 
   assert.equal(state.mappers[0].spills.length, 1);
@@ -66,7 +78,9 @@ test('runMapper processes records and triggers spill', async () => {
   await runMapper(state, 0, 1, 'node01', {
     isRunning: () => true,
     isTeaching: () => false,
-    onRecordProcessed: () => { processed += 1; },
+    onRecordProcessed: () => {
+      processed += 1;
+    },
     onSpillCreated: () => {}
   });
 
@@ -122,9 +136,7 @@ test('runNetworkShuffle distributes records to reducers', async () => {
     { k: 'cat', p: 0, c: 'bg-p0', count: 1 },
     { k: 'dog', p: 1, c: 'bg-p1', count: 1 }
   ];
-  state.mappers[1].final = [
-    { k: 'ant', p: 2, c: 'bg-p2', count: 1 }
-  ];
+  state.mappers[1].final = [{ k: 'ant', p: 2, c: 'bg-p2', count: 1 }];
 
   createElement(document, { id: 'finalA' });
   createElement(document, { id: 'finalB' });
@@ -137,7 +149,9 @@ test('runNetworkShuffle distributes records to reducers', async () => {
   await runNetworkShuffle(state, 1, {
     isRunning: () => true,
     isTeaching: () => false,
-    onNetPacket: () => { packets += 1; }
+    onNetPacket: () => {
+      packets += 1;
+    }
   });
 
   assert.equal(state.reducers[0].length, 1);
@@ -191,7 +205,12 @@ test('runReduceMergeSort sorts reducer inputs by key', async () => {
   createElement(document, { id: 'red0Seg1' });
   createElement(document, { id: 'red0Merge' });
 
-  await runReduceMergeSort(state, 1, () => true, () => true);
+  await runReduceMergeSort(
+    state,
+    1,
+    () => true,
+    () => true
+  );
 
   assert.equal(state.reducers[0][0].k, 'ant');
   assert.equal(state.reducers[0][1].k, 'cat');
@@ -240,8 +259,12 @@ test('runMapper processes data even without a fill indicator', async () => {
   let processed = 0;
   try {
     await runMapper(state, 0, 1, 'node01', {
-      isRunning: () => true, isTeaching: () => false,
-      onRecordProcessed: () => { processed++; }, onSpillCreated: () => {}
+      isRunning: () => true,
+      isTeaching: () => false,
+      onRecordProcessed: () => {
+        processed++;
+      },
+      onSpillCreated: () => {}
     });
     assert.equal(processed, 1);
     assert.equal(state.mappers[0].spills[0][0].k, 'cat');
@@ -257,28 +280,61 @@ test('mapper can process records without a DOM', async () => {
   state.mappers[0].data = [record];
   state.inputSplits[0] = [[record]];
   await runMapper(state, 0, 0, 'node01', {
-    isRunning: () => true, isTeaching: () => false,
-    onRecordProcessed: () => {}, onSpillCreated: () => {}
+    isRunning: () => true,
+    isTeaching: () => false,
+    onRecordProcessed: () => {},
+    onSpillCreated: () => {}
   });
-  assert.deepEqual(state.mappers[0].spills.map(spill => spill.map(item => [item.k, item.count])), [[['cat', 1]]]);
+  assert.deepEqual(
+    state.mappers[0].spills.map((spill) =>
+      spill.map((item) => [item.k, item.count])
+    ),
+    [[['cat', 1]]]
+  );
 });
 
 test('automatic pipeline processes its default data without a DOM', async () => {
-  const { createInitialState } = await import('../../../assets/js/pipeline-dual-nodes/state.js');
+  const { createInitialState } =
+    await import('../../../assets/js/pipeline-dual-nodes/state.js');
   const state = createInitialState();
   state.running = true;
   const originalTimeout = globalThis.setTimeout;
-  globalThis.setTimeout = (callback) => { queueMicrotask(callback); return 1; };
-  const callbacks = { isRunning: () => true, isTeaching: () => false,
-    onRecordProcessed: () => {}, onSpillCreated: () => {}, onNetPacket: () => {} };
+  globalThis.setTimeout = (callback) => {
+    queueMicrotask(callback);
+    return 1;
+  };
+  const callbacks = {
+    isRunning: () => true,
+    isTeaching: () => false,
+    onRecordProcessed: () => {},
+    onSpillCreated: () => {},
+    onNetPacket: () => {}
+  };
   try {
-    await Promise.all([runMapper(state, 0, 0, 'node01', callbacks), runMapper(state, 1, 0, 'node02', callbacks)]);
-    await Promise.all([runMergeAnimation(state, 0, 0, callbacks.isRunning), runMergeAnimation(state, 1, 0, callbacks.isRunning)]);
+    await Promise.all([
+      runMapper(state, 0, 0, 'node01', callbacks),
+      runMapper(state, 1, 0, 'node02', callbacks)
+    ]);
+    await Promise.all([
+      runMergeAnimation(state, 0, 0, callbacks.isRunning),
+      runMergeAnimation(state, 1, 0, callbacks.isRunning)
+    ]);
     await runNetworkShuffle(state, 0, callbacks);
-    await runReduceMergeSort(state, 0, callbacks.isRunning, callbacks.isTeaching);
+    await runReduceMergeSort(
+      state,
+      0,
+      callbacks.isRunning,
+      callbacks.isTeaching
+    );
     await runReduce(state, 0, callbacks.isRunning);
-    assert.deepEqual(Object.fromEntries(Object.values(state.reduceOutput).flat().map(record => [record.k, record.count])),
-      { ant: 7, arm: 2, car: 5, cat: 1, cup: 3, day: 3, dog: 2, dot: 1 });
+    assert.deepEqual(
+      Object.fromEntries(
+        Object.values(state.reduceOutput)
+          .flat()
+          .map((record) => [record.k, record.count])
+      ),
+      { ant: 7, arm: 2, car: 5, cat: 1, cup: 3, day: 3, dog: 2, dot: 1 }
+    );
   } finally {
     globalThis.setTimeout = originalTimeout;
   }

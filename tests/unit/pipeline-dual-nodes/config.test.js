@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CONFIG, PARTITIONS, LOG_TYPES, SWEEP_COLORS } from '../../../assets/js/pipeline-dual-nodes/config.js';
+import {
+  CONFIG,
+  PARTITIONS,
+  LOG_TYPES,
+  SWEEP_COLORS
+} from '../../../assets/js/pipeline-dual-nodes/config.js';
 
 test('CONFIG is frozen', () => {
   assert.ok(Object.isFrozen(CONFIG));

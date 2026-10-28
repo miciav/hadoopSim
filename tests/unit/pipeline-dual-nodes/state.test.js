@@ -88,7 +88,13 @@ test('addToBuffer returns new state without mutation', () => {
 });
 
 test('addToBuffer preserves other properties', () => {
-  const mapper = { id: 0, buffer: [{ k: 'existing' }], spills: [['spill']], final: ['final'], data: ['data'] };
+  const mapper = {
+    id: 0,
+    buffer: [{ k: 'existing' }],
+    spills: [['spill']],
+    final: ['final'],
+    data: ['data']
+  };
   const record = { k: 'cat', p: 0, c: 'bg-p0' };
 
   const newMapper = addToBuffer(mapper, record);
@@ -100,7 +106,13 @@ test('addToBuffer preserves other properties', () => {
 });
 
 test('clearBuffer returns new state with empty buffer', () => {
-  const mapper = { id: 0, buffer: [{ k: 'cat' }, { k: 'dog' }], spills: [], final: [], data: [] };
+  const mapper = {
+    id: 0,
+    buffer: [{ k: 'cat' }, { k: 'dog' }],
+    spills: [],
+    final: [],
+    data: []
+  };
 
   const newMapper = clearBuffer(mapper);
 
@@ -121,7 +133,13 @@ test('addSpill returns new state with additional spill', () => {
 
 test('addSpill preserves existing spills', () => {
   const existingSpill = [{ k: 'existing', count: 1 }];
-  const mapper = { id: 0, buffer: [], spills: [existingSpill], final: [], data: [] };
+  const mapper = {
+    id: 0,
+    buffer: [],
+    spills: [existingSpill],
+    final: [],
+    data: []
+  };
   const newSpill = [{ k: 'new', count: 2 }];
 
   const newMapper = addSpill(mapper, newSpill);
@@ -238,7 +256,10 @@ test('calculateSpillCount rounds up for partial spills', () => {
 
 test('split size must be a positive integer', () => {
   for (const size of [0, -1, 1.5, NaN, Infinity]) {
-    assert.throws(() => createInitialState(undefined, undefined, size), RangeError);
+    assert.throws(
+      () => createInitialState(undefined, undefined, size),
+      RangeError
+    );
     assert.throws(() => splitInputData([{ k: 'x' }], size), RangeError);
   }
 });

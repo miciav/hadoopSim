@@ -12,7 +12,10 @@ import { createRecordElement } from './records.js';
  */
 export function wait(ms, signal) {
   return new Promise((resolve, reject) => {
-    if (signal?.aborted) { reject(signal.reason); return; }
+    if (signal?.aborted) {
+      reject(signal.reason);
+      return;
+    }
     const abort = () => {
       clearTimeout(timer);
       reject(signal.reason);
@@ -32,7 +35,13 @@ export function wait(ms, signal) {
  * @param {Object} recordData - Record data for display
  * @param {number} duration - Animation duration in ms
  */
-export async function flyRecord(sourceId, targetId, recordData, duration, signal) {
+export async function flyRecord(
+  sourceId,
+  targetId,
+  recordData,
+  duration,
+  signal
+) {
   signal?.throwIfAborted();
   const src = el(sourceId);
   const tgt = el(targetId);
@@ -46,15 +55,15 @@ export async function flyRecord(sourceId, targetId, recordData, duration, signal
   document.body.appendChild(flyer);
 
   // Position at source center
-  flyer.style.left = (r1.left + r1.width / 2 + window.scrollX - 15) + 'px';
-  flyer.style.top = (r1.top + r1.height / 2 + window.scrollY - 8) + 'px';
+  flyer.style.left = r1.left + r1.width / 2 + window.scrollX - 15 + 'px';
+  flyer.style.top = r1.top + r1.height / 2 + window.scrollY - 8 + 'px';
 
   // Force reflow to enable transition
   flyer.getBoundingClientRect();
 
   // Animate to target center
-  flyer.style.left = (r2.left + r2.width / 2 + window.scrollX - 15) + 'px';
-  flyer.style.top = (r2.top + r2.height / 2 + window.scrollY - 8) + 'px';
+  flyer.style.left = r2.left + r2.width / 2 + window.scrollX - 15 + 'px';
+  flyer.style.top = r2.top + r2.height / 2 + window.scrollY - 8 + 'px';
   flyer.style.transition = `top ${duration}ms ease-in-out, left ${duration}ms ease-in-out`;
 
   try {

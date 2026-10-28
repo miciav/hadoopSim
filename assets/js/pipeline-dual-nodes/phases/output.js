@@ -3,7 +3,11 @@
  */
 
 import { el, getReducerOutputId } from '../dom/selectors.js';
-import { createRecordElement, showRecord, markAsGhost } from '../dom/records.js';
+import {
+  createRecordElement,
+  showRecord,
+  markAsGhost
+} from '../dom/records.js';
 import { flyRecord, wait } from '../dom/animations.js';
 
 /**

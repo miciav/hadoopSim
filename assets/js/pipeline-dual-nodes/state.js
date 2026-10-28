@@ -11,21 +11,33 @@ import { CONFIG } from './config.js';
 // P2: day, dog, dot (D)
 
 export const RAW_DATA_A = Object.freeze([
-  { k: 'ant', p: 0, c: 'bg-p0' }, { k: 'ant', p: 0, c: 'bg-p0' },
-  { k: 'car', p: 1, c: 'bg-p1' }, { k: 'car', p: 1, c: 'bg-p1' },
-  { k: 'day', p: 2, c: 'bg-p2' }, { k: 'day', p: 2, c: 'bg-p2' },
-  { k: 'arm', p: 0, c: 'bg-p0' }, { k: 'cat', p: 1, c: 'bg-p1' },
-  { k: 'ant', p: 0, c: 'bg-p0' }, { k: 'car', p: 1, c: 'bg-p1' },
-  { k: 'day', p: 2, c: 'bg-p2' }, { k: 'arm', p: 0, c: 'bg-p0' }
+  { k: 'ant', p: 0, c: 'bg-p0' },
+  { k: 'ant', p: 0, c: 'bg-p0' },
+  { k: 'car', p: 1, c: 'bg-p1' },
+  { k: 'car', p: 1, c: 'bg-p1' },
+  { k: 'day', p: 2, c: 'bg-p2' },
+  { k: 'day', p: 2, c: 'bg-p2' },
+  { k: 'arm', p: 0, c: 'bg-p0' },
+  { k: 'cat', p: 1, c: 'bg-p1' },
+  { k: 'ant', p: 0, c: 'bg-p0' },
+  { k: 'car', p: 1, c: 'bg-p1' },
+  { k: 'day', p: 2, c: 'bg-p2' },
+  { k: 'arm', p: 0, c: 'bg-p0' }
 ]);
 
 export const RAW_DATA_B = Object.freeze([
-  { k: 'cup', p: 1, c: 'bg-p1' }, { k: 'dog', p: 2, c: 'bg-p2' },
-  { k: 'dog', p: 2, c: 'bg-p2' }, { k: 'ant', p: 0, c: 'bg-p0' },
-  { k: 'cup', p: 1, c: 'bg-p1' }, { k: 'ant', p: 0, c: 'bg-p0' },
-  { k: 'car', p: 1, c: 'bg-p1' }, { k: 'ant', p: 0, c: 'bg-p0' },
-  { k: 'cup', p: 1, c: 'bg-p1' }, { k: 'dot', p: 2, c: 'bg-p2' },
-  { k: 'ant', p: 0, c: 'bg-p0' }, { k: 'car', p: 1, c: 'bg-p1' }
+  { k: 'cup', p: 1, c: 'bg-p1' },
+  { k: 'dog', p: 2, c: 'bg-p2' },
+  { k: 'dog', p: 2, c: 'bg-p2' },
+  { k: 'ant', p: 0, c: 'bg-p0' },
+  { k: 'cup', p: 1, c: 'bg-p1' },
+  { k: 'ant', p: 0, c: 'bg-p0' },
+  { k: 'car', p: 1, c: 'bg-p1' },
+  { k: 'ant', p: 0, c: 'bg-p0' },
+  { k: 'cup', p: 1, c: 'bg-p1' },
+  { k: 'dot', p: 2, c: 'bg-p2' },
+  { k: 'ant', p: 0, c: 'bg-p0' },
+  { k: 'car', p: 1, c: 'bg-p1' }
 ]);
 
 /**
@@ -35,7 +47,8 @@ export const RAW_DATA_B = Object.freeze([
  * @returns {Array<Array>}
  */
 export function splitInputData(data, splitSize = CONFIG.INPUT_SPLIT_RECORDS) {
-  if (!Number.isInteger(splitSize) || splitSize <= 0) throw new RangeError('Invalid split size');
+  if (!Number.isInteger(splitSize) || splitSize <= 0)
+    throw new RangeError('Invalid split size');
   const size = splitSize;
   const splits = [];
   for (let i = 0; i < data.length; i += size) {
@@ -50,7 +63,10 @@ export function splitInputData(data, splitSize = CONFIG.INPUT_SPLIT_RECORDS) {
  * @param {number} threshold
  * @returns {number}
  */
-export function getSpillTriggerCount(capacity = CONFIG.BUFFER_CAPACITY, threshold = CONFIG.SPILL_THRESHOLD) {
+export function getSpillTriggerCount(
+  capacity = CONFIG.BUFFER_CAPACITY,
+  threshold = CONFIG.SPILL_THRESHOLD
+) {
   return Math.max(1, Math.ceil(capacity * threshold));
 }
 
@@ -61,7 +77,11 @@ export function getSpillTriggerCount(capacity = CONFIG.BUFFER_CAPACITY, threshol
  * @param {number} threshold
  * @returns {number}
  */
-export function calculateSpillCount(recordsLength, capacity = CONFIG.BUFFER_CAPACITY, threshold = CONFIG.SPILL_THRESHOLD) {
+export function calculateSpillCount(
+  recordsLength,
+  capacity = CONFIG.BUFFER_CAPACITY,
+  threshold = CONFIG.SPILL_THRESHOLD
+) {
   if (!recordsLength || recordsLength <= 0) return 0;
   const trigger = getSpillTriggerCount(capacity, threshold);
   return Math.ceil(recordsLength / trigger);
@@ -91,18 +111,21 @@ function createMapperState(id, data) {
  * @param {number} splitSize - Records per split
  * @returns {Object} Initial state
  */
-export function createInitialState(dataA = RAW_DATA_A, dataB = RAW_DATA_B, splitSize = CONFIG.INPUT_SPLIT_RECORDS) {
-  const mappers = [
-    createMapperState(0, dataA),
-    createMapperState(1, dataB)
-  ];
+export function createInitialState(
+  dataA = RAW_DATA_A,
+  dataB = RAW_DATA_B,
+  splitSize = CONFIG.INPUT_SPLIT_RECORDS
+) {
+  const mappers = [createMapperState(0, dataA), createMapperState(1, dataB)];
 
   const inputSplits = [
     splitInputData(mappers[0].data, splitSize),
     splitInputData(mappers[1].data, splitSize)
   ];
 
-  const spillCounts = inputSplits.map(splits => splits.reduce((sum, split) => sum + calculateSpillCount(split.length), 0));
+  const spillCounts = inputSplits.map((splits) =>
+    splits.reduce((sum, split) => sum + calculateSpillCount(split.length), 0)
+  );
 
   return {
     running: false,
@@ -191,7 +214,10 @@ export function addToReducer(reducersState, partition, record) {
  * @param {number} capacity - Buffer capacity (defaults to CONFIG.BUFFER_CAPACITY)
  * @returns {number} Usage ratio
  */
-export function calculateBufferUsage(buffer, capacity = CONFIG.BUFFER_CAPACITY) {
+export function calculateBufferUsage(
+  buffer,
+  capacity = CONFIG.BUFFER_CAPACITY
+) {
   return buffer.length / capacity;
 }
 
@@ -202,7 +228,11 @@ export function calculateBufferUsage(buffer, capacity = CONFIG.BUFFER_CAPACITY) 
  * @param {number} capacity - Buffer capacity (defaults to CONFIG.BUFFER_CAPACITY)
  * @returns {boolean} True if buffer should spill
  */
-export function shouldSpill(buffer, threshold = CONFIG.SPILL_THRESHOLD, capacity = CONFIG.BUFFER_CAPACITY) {
+export function shouldSpill(
+  buffer,
+  threshold = CONFIG.SPILL_THRESHOLD,
+  capacity = CONFIG.BUFFER_CAPACITY
+) {
   return calculateBufferUsage(buffer, capacity) >= threshold;
 }
 
@@ -212,6 +242,12 @@ export function shouldSpill(buffer, threshold = CONFIG.SPILL_THRESHOLD, capacity
  * @param {number} capacity
  * @returns {number} Percentage (capped at 100)
  */
-export function calculateBufferPercentage(buffer, capacity = CONFIG.BUFFER_CAPACITY) {
-  return Math.min(100, Math.round(calculateBufferUsage(buffer, capacity) * 100));
+export function calculateBufferPercentage(
+  buffer,
+  capacity = CONFIG.BUFFER_CAPACITY
+) {
+  return Math.min(
+    100,
+    Math.round(calculateBufferUsage(buffer, capacity) * 100)
+  );
 }

@@ -14,7 +14,7 @@ export function combine(records) {
   for (const record of records) {
     const existing = map.get(record.k);
     if (existing) {
-      existing.count += (record.count || 1);
+      existing.count += record.count || 1;
     } else {
       map.set(record.k, { ...record, count: record.count || 1 });
     }
@@ -80,13 +80,22 @@ export function mergeSortedSpills(spills) {
     let selected = -1;
     spills.forEach((records, index) => {
       const candidate = records[positions[index]];
-      const current = selected < 0 ? null : spills[selected][positions[selected]];
-      if (candidate && (!current || candidate.p < current.p ||
-          (candidate.p === current.p && String(candidate.k).localeCompare(String(current.k)) < 0))) {
+      const current =
+        selected < 0 ? null : spills[selected][positions[selected]];
+      if (
+        candidate &&
+        (!current ||
+          candidate.p < current.p ||
+          (candidate.p === current.p &&
+            String(candidate.k).localeCompare(String(current.k)) < 0))
+      ) {
         selected = index;
       }
     });
     if (selected < 0) return merged;
-    merged.push({ record: spills[selected][positions[selected]++], sourceIndex: selected });
+    merged.push({
+      record: spills[selected][positions[selected]++],
+      sourceIndex: selected
+    });
   }
 }

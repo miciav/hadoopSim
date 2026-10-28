@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSeededRng, randomInt, shuffle } from '../../../assets/js/hadoop-sim/random.js';
+import {
+  createSeededRng,
+  randomInt,
+  shuffle
+} from '../../../assets/js/hadoop-sim/random.js';
 
 test('seeded rng is deterministic', () => {
   const rngA = createSeededRng(123);

@@ -14,7 +14,11 @@ import {
 } from './selectors.js';
 import { clearLog } from './log.js';
 import { resetAllBufferFills } from './buffers.js';
-import { clearRecords, clearFlyingRecords, createInputRecordElement } from './records.js';
+import {
+  clearRecords,
+  clearFlyingRecords,
+  createInputRecordElement
+} from './records.js';
 import { highlightNodes, setNetworkActive } from './highlights.js';
 import { unfoldIntermediateRows } from './fold.js';
 import { splitInputData, calculateSpillCount } from '../state.js';
@@ -43,10 +47,16 @@ export function resetState(state) {
   }
 
   const size = state.splitSize || 10;
-  state.inputSplits = state.mappers.map(mapper => splitInputData(mapper.data || [], size));
-  state.spillCounts = state.inputSplits.map(splits => splits.reduce((sum, split) => sum + calculateSpillCount(split.length), 0));
+  state.inputSplits = state.mappers.map((mapper) =>
+    splitInputData(mapper.data || [], size)
+  );
+  state.spillCounts = state.inputSplits.map((splits) =>
+    splits.reduce((sum, split) => sum + calculateSpillCount(split.length), 0)
+  );
 
-  const reducerKeys = state.reducers ? Object.keys(state.reducers) : ['0', '1', '2'];
+  const reducerKeys = state.reducers
+    ? Object.keys(state.reducers)
+    : ['0', '1', '2'];
   state.reducers = reducerKeys.reduce((acc, key) => {
     acc[key] = [];
     return acc;
@@ -61,7 +71,11 @@ export function resetState(state) {
  * Resets all metrics counters to zero.
  */
 export function resetMetrics() {
-  [ELEMENT_IDS.RECORDS_COUNT, ELEMENT_IDS.SPILLS_COUNT, ELEMENT_IDS.NET_COUNT].forEach(id => {
+  [
+    ELEMENT_IDS.RECORDS_COUNT,
+    ELEMENT_IDS.SPILLS_COUNT,
+    ELEMENT_IDS.NET_COUNT
+  ].forEach((id) => {
     const elem = el(id);
     if (elem) elem.innerText = '0';
   });
@@ -74,7 +88,7 @@ export function resetMetrics() {
  * Clears all record containers.
  */
 export function clearAllContainers() {
-  CLEARABLE_CONTAINERS.forEach(id => {
+  CLEARABLE_CONTAINERS.forEach((id) => {
     clearRecords(el(id));
   });
   clearFlyingRecords();
@@ -98,23 +112,37 @@ function renderSpillCombineSlots(state) {
   if (!state?.mappers?.length) return;
 
   state.mappers.forEach((mapper, mapperId) => {
-    const spillCount = state.spillCounts?.[mapperId] ?? calculateSpillCount(mapper.data.length);
+    const spillCount =
+      state.spillCounts?.[mapperId] ?? calculateSpillCount(mapper.data.length);
     const spillBox = el(getBoxSpillId(mapperId));
-    const spillContainer = spillBox ? spillBox.querySelector('.spill-container') : null;
+    const spillContainer = spillBox
+      ? spillBox.querySelector('.spill-container')
+      : null;
     if (spillContainer) {
       spillContainer.innerHTML = '';
       for (let i = 0; i < spillCount; i += 1) {
-        const slot = buildSlot(getSpillSlotId(mapperId, i), `Spill ${i}`, 'spill-slot', true);
+        const slot = buildSlot(
+          getSpillSlotId(mapperId, i),
+          `Spill ${i}`,
+          'spill-slot',
+          true
+        );
         spillContainer.appendChild(slot);
       }
     }
 
     const combineBox = el(getBoxCombineId(mapperId));
-    const combineContainer = combineBox ? combineBox.querySelector('.combine-container') : null;
+    const combineContainer = combineBox
+      ? combineBox.querySelector('.combine-container')
+      : null;
     if (combineContainer) {
       combineContainer.innerHTML = '';
       for (let i = 0; i < spillCount; i += 1) {
-        const slot = buildSlot(getCombineSlotId(mapperId, i), `Combine ${i}`, 'combine-slot');
+        const slot = buildSlot(
+          getCombineSlotId(mapperId, i),
+          `Combine ${i}`,
+          'combine-slot'
+        );
         combineContainer.appendChild(slot);
       }
     }
@@ -132,7 +160,9 @@ export function populateInputs(state) {
   [input0, input1].forEach((box, mapperId) => {
     if (!box) return;
 
-    const splits = state.inputSplits?.[mapperId] ?? splitInputData(state.mappers?.[mapperId]?.data || []);
+    const splits =
+      state.inputSplits?.[mapperId] ??
+      splitInputData(state.mappers?.[mapperId]?.data || []);
     box.innerHTML = '';
     const container = document.createElement('div');
     container.className = 'input-splits';
@@ -147,8 +177,11 @@ export function populateInputs(state) {
       label.textContent = `Split ${splitIndex}`;
       splitBox.appendChild(label);
 
-      split.forEach(rec => {
-        const r = createInputRecordElement(rec, getSourceRecordId(mapperId, recordIndex));
+      split.forEach((rec) => {
+        const r = createInputRecordElement(
+          rec,
+          getSourceRecordId(mapperId, recordIndex)
+        );
         splitBox.appendChild(r);
         recordIndex += 1;
       });
@@ -168,16 +201,18 @@ export function resetUI(state) {
   resetMetrics();
   clearAllContainers();
   renderSpillCombineSlots(state);
-  document.querySelectorAll('.reducer-segments.active, .reducer-merge.active').forEach(el => {
-    el.classList.remove('active');
-  });
-  document.querySelectorAll('.spill-slot').forEach(el => {
+  document
+    .querySelectorAll('.reducer-segments.active, .reducer-merge.active')
+    .forEach((el) => {
+      el.classList.remove('active');
+    });
+  document.querySelectorAll('.spill-slot').forEach((el) => {
     el.classList.add('is-hidden');
   });
-  document.querySelectorAll('.combine-row').forEach(el => {
+  document.querySelectorAll('.combine-row').forEach((el) => {
     el.classList.add('is-hidden');
   });
-  document.querySelectorAll('.reducer-inner.is-hidden').forEach(el => {
+  document.querySelectorAll('.reducer-inner.is-hidden').forEach((el) => {
     el.classList.remove('is-hidden');
   });
   populateInputs(state);

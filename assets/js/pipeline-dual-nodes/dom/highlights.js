@@ -11,17 +11,17 @@ import { el, ELEMENT_IDS } from './selectors.js';
  */
 export function highlightNodes(nodeIds, phaseName) {
   // Clear all node highlights
-  document.querySelectorAll('.node-container').forEach(n =>
-    n.classList.remove('active-node')
-  );
+  document
+    .querySelectorAll('.node-container')
+    .forEach((n) => n.classList.remove('active-node'));
   // Clear all box highlights
-  document.querySelectorAll('.box-content').forEach(b =>
-    b.classList.remove('active')
-  );
+  document
+    .querySelectorAll('.box-content')
+    .forEach((b) => b.classList.remove('active'));
 
   // Apply new node highlights
   if (nodeIds) {
-    nodeIds.forEach(id => {
+    nodeIds.forEach((id) => {
       const n = el(id);
       if (n) n.classList.add('active-node');
     });
@@ -38,13 +38,13 @@ export function highlightNodes(nodeIds, phaseName) {
  */
 export function highlightBoxes(boxIds) {
   // Clear all box highlights
-  document.querySelectorAll('.box-content').forEach(b =>
-    b.classList.remove('active')
-  );
+  document
+    .querySelectorAll('.box-content')
+    .forEach((b) => b.classList.remove('active'));
 
   // Apply new box highlights
   if (boxIds) {
-    boxIds.forEach(id => {
+    boxIds.forEach((id) => {
       const b = el(id);
       if (b) b.classList.add('active');
     });

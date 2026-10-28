@@ -5,7 +5,10 @@ export const test = base.extend({
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('console', (message) => {
-      if (message.type() === 'error' || (message.type() === 'warning' && /react/i.test(message.text()))) {
+      if (
+        message.type() === 'error' ||
+        (message.type() === 'warning' && /react/i.test(message.text()))
+      ) {
         errors.push(message.text());
       }
     });

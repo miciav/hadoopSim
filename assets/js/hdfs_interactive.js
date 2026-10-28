@@ -73,18 +73,16 @@ function renderCluster() {
             <div class="blocks-title">Blocks (${node.blocks.length})</div>
             <div class="blocks-container">
               ${node.blocks
-                .map(
-                  (block) => {
-                    const color = fileColors.get(block.fileName) || '#a0aec0';
-                    return `
+                .map((block) => {
+                  const color = fileColors.get(block.fileName) || '#a0aec0';
+                  return `
                     <div class="block ${block.isReplica ? 'replica' : ''}"
                       style="background-color: ${color};"
                       title="${block.fileName} - Block ${block.index + 1}">
                       ${block.isReplica ? '🔄' : '📦'} ${block.id}
                     </div>
                   `;
-                  }
-                )
+                })
                 .join('')}
             </div>
           </div>
@@ -103,8 +101,10 @@ function updateStats() {
   document.getElementById('activeNodes').textContent = stats.activeNodes;
   document.getElementById('totalFiles').textContent = stats.totalFiles;
   document.getElementById('totalBlocks').textContent = stats.totalBlocks;
-  document.getElementById('storageUsage').textContent = `${stats.storageUsagePercent.toFixed(1)}%`;
-  document.getElementById('replicationFactor').textContent = stats.replicationFactor;
+  document.getElementById('storageUsage').textContent =
+    `${stats.storageUsagePercent.toFixed(1)}%`;
+  document.getElementById('replicationFactor').textContent =
+    stats.replicationFactor;
 }
 
 function updateFilesList() {
@@ -156,7 +156,10 @@ function uploadFile() {
     notify(`❌ Failed to upload file (${size} MB). Not enough space.`, 'error');
   } else if (result.results.some((entry) => entry.underReplicated)) {
     fileColors.set(result.file.name, nextColor());
-    notify(`⚠️ Uploaded ${result.file.name} with under-replicated blocks`, 'warning');
+    notify(
+      `⚠️ Uploaded ${result.file.name} with under-replicated blocks`,
+      'warning'
+    );
   } else {
     fileColors.set(result.file.name, nextColor());
     notify(`✅ ${result.file.name} uploaded (${size} MB).`, 'success');
@@ -173,7 +176,10 @@ function uploadLargeFile() {
     notify(`❌ Failed to upload file (${size} MB). Not enough space.`, 'error');
   } else if (result.results.some((entry) => entry.underReplicated)) {
     fileColors.set(result.file.name, nextColor());
-    notify(`⚠️ Uploaded ${result.file.name} with under-replicated blocks`, 'warning');
+    notify(
+      `⚠️ Uploaded ${result.file.name} with under-replicated blocks`,
+      'warning'
+    );
   } else {
     fileColors.set(result.file.name, nextColor());
     notify(`✅ ${result.file.name} uploaded (${size} MB).`, 'success');
@@ -191,7 +197,8 @@ function simulateNodeFailure() {
     return;
   }
 
-  const randomNode = activeNodes[Math.floor(Math.random() * activeNodes.length)];
+  const randomNode =
+    activeNodes[Math.floor(Math.random() * activeNodes.length)];
   sim.actions.failNode(randomNode.id);
   notify(`⚠️ ${randomNode.name} failed. Re-replicating...`, 'warning');
 

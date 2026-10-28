@@ -159,13 +159,34 @@ export function el(id) {
 
 // All container IDs that need to be cleared on reset
 export const CLEARABLE_CONTAINERS = Object.freeze([
-  'buf0', 'buf1',
-  'finalA-p0', 'finalA-p1', 'finalA-p2', 'finalB-p0', 'finalB-p1', 'finalB-p2',
-  'mergeInner0', 'mergeInner1', 'red0', 'red1', 'red2',
-  'red0Reduce', 'red1Reduce', 'red2Reduce',
-  'red0Seg0', 'red0Seg1', 'red1Seg0', 'red1Seg1', 'red2Seg0', 'red2Seg1',
-  'red0Merge', 'red1Merge', 'red2Merge',
-  'hdfsOut0', 'hdfsOut1', 'hdfsOut2'
+  'buf0',
+  'buf1',
+  'finalA-p0',
+  'finalA-p1',
+  'finalA-p2',
+  'finalB-p0',
+  'finalB-p1',
+  'finalB-p2',
+  'mergeInner0',
+  'mergeInner1',
+  'red0',
+  'red1',
+  'red2',
+  'red0Reduce',
+  'red1Reduce',
+  'red2Reduce',
+  'red0Seg0',
+  'red0Seg1',
+  'red1Seg0',
+  'red1Seg1',
+  'red2Seg0',
+  'red2Seg1',
+  'red0Merge',
+  'red1Merge',
+  'red2Merge',
+  'hdfsOut0',
+  'hdfsOut1',
+  'hdfsOut2'
 ]);
 
 // Box pairs for height sync

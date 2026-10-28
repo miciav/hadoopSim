@@ -61,7 +61,9 @@ export function markAsPersistent(element) {
  */
 export function turnActiveToGhosts(container) {
   if (!container) return;
-  const records = container.querySelectorAll('.kv-record:not(.ghost):not(.persistent):not(.reduce-output)');
+  const records = container.querySelectorAll(
+    '.kv-record:not(.ghost):not(.persistent):not(.reduce-output)'
+  );
   records.forEach(markAsGhost);
 }
 
@@ -71,7 +73,9 @@ export function turnActiveToGhosts(container) {
  */
 export function turnActiveToPersistent(container) {
   if (!container) return;
-  const records = container.querySelectorAll('.kv-record:not(.ghost):not(.persistent):not(.reduce-output)');
+  const records = container.querySelectorAll(
+    '.kv-record:not(.ghost):not(.persistent):not(.reduce-output)'
+  );
   records.forEach(markAsPersistent);
 }
 
@@ -81,12 +85,12 @@ export function turnActiveToPersistent(container) {
  */
 export function clearRecords(container) {
   if (!container) return;
-  container.querySelectorAll('.kv-record').forEach(r => r.remove());
+  container.querySelectorAll('.kv-record').forEach((r) => r.remove());
 }
 
 /**
  * Removes all flying record elements from the document.
  */
 export function clearFlyingRecords() {
-  document.querySelectorAll('.flying-record').forEach(r => r.remove());
+  document.querySelectorAll('.flying-record').forEach((r) => r.remove());
 }

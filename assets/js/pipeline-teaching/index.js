@@ -15,57 +15,68 @@ import { unfoldIntermediateRows } from '../pipeline-dual-nodes/dom/fold.js';
 const PHASE_EXPLANATIONS = {
   READY: {
     title: 'Welcome to Hadoop MapReduce',
-    description: 'Click "Next Step" to begin the step-by-step simulation. Each step will show you how data flows through the MapReduce pipeline, from input splits to final output files.',
+    description:
+      'Click "Next Step" to begin the step-by-step simulation. Each step will show you how data flows through the MapReduce pipeline, from input splits to final output files.',
     targetSelector: null
   },
   INPUT: {
     title: 'Reading Input Splits',
-    description: 'The <strong>InputFormat</strong> reads data from HDFS and divides it into <strong>Input Splits</strong>. Each split is processed by one Map task. The records are shown as colored boxes - each color represents a different <strong>partition</strong> (determined by the key\'s hash).',
+    description:
+      "The <strong>InputFormat</strong> reads data from HDFS and divides it into <strong>Input Splits</strong>. Each split is processed by one Map task. The records are shown as colored boxes - each color represents a different <strong>partition</strong> (determined by the key's hash).",
     targetSelector: '#node02 .box-hdfs'
   },
   MAP: {
     title: 'Map Phase - Processing Records',
-    description: 'Records fly from the input split into the <strong>Map buffer (JVM RAM)</strong>. The mapper\'s <code>map()</code> function transforms each input record into key-value pairs. The buffer fills up as records are processed.',
+    description:
+      "Records fly from the input split into the <strong>Map buffer (JVM RAM)</strong>. The mapper's <code>map()</code> function transforms each input record into key-value pairs. The buffer fills up as records are processed.",
     targetSelector: '#node02 .box-ram'
   },
   SPILL: {
     title: 'Spill to Disk',
-    description: 'When the buffer reaches its 75% threshold, or a split ends, a <strong>spill</strong> occurs. Records are <strong>sorted by partition and key</strong>, then written to the local disk. The sorted data is stored in spill files on the local filesystem.',
+    description:
+      'When the buffer reaches its 75% threshold, or a split ends, a <strong>spill</strong> occurs. Records are <strong>sorted by partition and key</strong>, then written to the local disk. The sorted data is stored in spill files on the local filesystem.',
     targetSelector: '#node02 .box-disk'
   },
   COMBINE: {
     title: 'Combiner (Mini-Reducer)',
-    description: 'The <strong>Combiner</strong> acts as a local reducer, aggregating values for the same key before the shuffle. This reduces network traffic by sending fewer, pre-aggregated records. For word count, it sums counts locally: <code>(apple,1), (apple,1) → (apple,2)</code>.',
+    description:
+      'The <strong>Combiner</strong> acts as a local reducer, aggregating values for the same key before the shuffle. This reduces network traffic by sending fewer, pre-aggregated records. For word count, it sums counts locally: <code>(apple,1), (apple,1) → (apple,2)</code>.',
     targetSelector: '#node02 .box-combine'
   },
   MERGE: {
     title: 'Local Merge Sort',
-    description: 'After all map output is generated, the <strong>Local Merge Sort</strong> combines all spill files into a single sorted output file using a <strong>multi-way merge</strong> algorithm. The result is partitioned and ready for the shuffle phase.',
+    description:
+      'After all map output is generated, the <strong>Local Merge Sort</strong> combines all spill files into a single sorted output file using a <strong>multi-way merge</strong> algorithm. The result is partitioned and ready for the shuffle phase.',
     targetSelector: '#node02 .mapper-merge-row'
   },
   SHUFFLE: {
     title: 'Shuffle Phase - Network Transfer',
-    description: 'The <strong>Shuffle</strong> moves map outputs across the network to reducer nodes. Each reducer fetches only the partition it needs from all mappers. This is often the most expensive phase due to network I/O.',
+    description:
+      'The <strong>Shuffle</strong> moves map outputs across the network to reducer nodes. Each reducer fetches only the partition it needs from all mappers. This is often the most expensive phase due to network I/O.',
     targetSelector: '.network-layer'
   },
   REDUCE_MERGE: {
     title: 'Reducer Merge Sort',
-    description: 'Each reducer receives segments from multiple mappers. These segments are <strong>merge-sorted</strong> to group all values for the same key together. This prepares the data for the reduce function.',
+    description:
+      'Each reducer receives segments from multiple mappers. These segments are <strong>merge-sorted</strong> to group all values for the same key together. This prepares the data for the reduce function.',
     targetSelector: '#nodeRed2 .box-reduce'
   },
   REDUCE: {
     title: 'Reduce Phase - Aggregation',
-    description: 'The <strong>reduce()</strong> function processes each unique key and all its associated values. In word count, this sums up all the counts for each word. The output is the final result.',
+    description:
+      'The <strong>reduce()</strong> function processes each unique key and all its associated values. In word count, this sums up all the counts for each word. The output is the final result.',
     targetSelector: '#nodeRed2 .reducer-output'
   },
   OUTPUT: {
     title: 'Writing to HDFS',
-    description: 'Final results are written to <strong>HDFS output files</strong>. Each reducer writes one output file (<code>part-r-00000</code>, <code>part-r-00001</code>, etc.). The job is complete when all reducers finish writing.',
+    description:
+      'Final results are written to <strong>HDFS output files</strong>. Each reducer writes one output file (<code>part-r-00000</code>, <code>part-r-00001</code>, etc.). The job is complete when all reducers finish writing.',
     targetSelector: '.node-output'
   },
   FINISH: {
     title: 'Job Complete!',
-    description: 'The MapReduce job has finished successfully. All input data has been processed through the pipeline: <strong>Input → Map → Shuffle → Reduce → Output</strong>. The results are now available in HDFS.',
+    description:
+      'The MapReduce job has finished successfully. All input data has been processed through the pipeline: <strong>Input → Map → Shuffle → Reduce → Output</strong>. The results are now available in HDFS.',
     targetSelector: '.node-output'
   }
 };
@@ -74,16 +85,16 @@ const PHASE_EXPLANATIONS = {
  * Maps step types to phase names for explanation lookup
  */
 const STEP_TO_PHASE = {
-  'INPUT_INIT': 'INPUT',
-  'MAP_BATCH': 'MAP',
-  'SPILL_SORT': 'SPILL',
-  'COMBINE': 'COMBINE',
-  'MERGE': 'MERGE',
-  'SHUFFLE': 'SHUFFLE',
-  'REDUCE_MERGE': 'REDUCE_MERGE',
-  'REDUCE': 'REDUCE',
-  'OUTPUT': 'OUTPUT',
-  'FINISH': 'FINISH'
+  INPUT_INIT: 'INPUT',
+  MAP_BATCH: 'MAP',
+  SPILL_SORT: 'SPILL',
+  COMBINE: 'COMBINE',
+  MERGE: 'MERGE',
+  SHUFFLE: 'SHUFFLE',
+  REDUCE_MERGE: 'REDUCE_MERGE',
+  REDUCE: 'REDUCE',
+  OUTPUT: 'OUTPUT',
+  FINISH: 'FINISH'
 };
 
 /**
@@ -118,7 +129,9 @@ function updatePhaseCallout(phase) {
 }
 
 function readCssPx(varName, fallback) {
-  const value = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+  const value = getComputedStyle(document.documentElement)
+    .getPropertyValue(varName)
+    .trim();
   const parsed = parseFloat(value);
   return Number.isNaN(parsed) ? fallback : parsed;
 }
@@ -144,7 +157,9 @@ function positionPhaseCallout(phase) {
   const arrowSize = readCssPx('--callout-arrow-size', 10);
 
   const stepConsole = document.querySelector('.step-console');
-  const stepConsoleRect = stepConsole ? stepConsole.getBoundingClientRect() : null;
+  const stepConsoleRect = stepConsole
+    ? stepConsole.getBoundingClientRect()
+    : null;
   const maxLeft = stepConsoleRect
     ? stepConsoleRect.left - calloutGap - calloutWidth
     : viewportWidth - calloutWidth - screenPadding;
@@ -164,8 +179,14 @@ function positionPhaseCallout(phase) {
     arrowCenter = targetCenter - top;
   }
 
-  top = Math.min(Math.max(top, screenPadding), viewportHeight - calloutHeight - screenPadding);
-  arrowCenter = Math.min(Math.max(arrowCenter, arrowSize + 4), calloutHeight - arrowSize - 4);
+  top = Math.min(
+    Math.max(top, screenPadding),
+    viewportHeight - calloutHeight - screenPadding
+  );
+  arrowCenter = Math.min(
+    Math.max(arrowCenter, arrowSize + 4),
+    calloutHeight - arrowSize - 4
+  );
 
   wrapper.style.left = `${left}px`;
   wrapper.style.right = 'auto';
@@ -185,7 +206,15 @@ export function initTeachingPipeline() {
     const stepBtn = document.getElementById('stepBtn');
     const resetStepBtn = document.getElementById('resetStepBtn');
     const playStepBtn = document.getElementById('playStepBtn');
-    const playback = createActor(createMachine({ initial: 'paused', states: { paused: { on: { PLAY: 'playing' } }, playing: { on: { PAUSE: 'paused' } } } })).start();
+    const playback = createActor(
+      createMachine({
+        initial: 'paused',
+        states: {
+          paused: { on: { PLAY: 'playing' } },
+          playing: { on: { PAUSE: 'paused' } }
+        }
+      })
+    ).start();
     let playbackVersion = 0;
     const stepInfo = document.getElementById('stepInfo');
     const stepCounter = document.getElementById('stepCounter');
@@ -239,7 +268,10 @@ export function initTeachingPipeline() {
       }
 
       if (stepBtn) {
-        stepBtn.disabled = info.isComplete || simulation.isBusy() || playback.getSnapshot().matches('playing');
+        stepBtn.disabled =
+          info.isComplete ||
+          simulation.isBusy() ||
+          playback.getSnapshot().matches('playing');
         stepBtn.textContent = info.isComplete ? 'Complete' : 'Next Step';
       }
 
@@ -257,7 +289,8 @@ export function initTeachingPipeline() {
 
     // Set up step complete callback (for callout positioning AFTER step executes)
     simulation.onStepComplete((completedStep) => {
-      lastCompletedPhase = STEP_TO_PHASE[completedStep.type] || completedStep.phase;
+      lastCompletedPhase =
+        STEP_TO_PHASE[completedStep.type] || completedStep.phase;
       updatePhaseCallout(lastCompletedPhase);
     });
 
@@ -266,7 +299,9 @@ export function initTeachingPipeline() {
     };
 
     window.addEventListener('resize', scheduleCalloutPosition);
-    window.addEventListener('scroll', scheduleCalloutPosition, { passive: true });
+    window.addEventListener('scroll', scheduleCalloutPosition, {
+      passive: true
+    });
 
     // Step button handler
     if (stepBtn) {
@@ -275,7 +310,10 @@ export function initTeachingPipeline() {
 
         // Initialize on first click
         const info = simulation.getCurrentStepInfo();
-        if (info.total === 0 || info.index === 0 && !simulation.getState().running) {
+        if (
+          info.total === 0 ||
+          (info.index === 0 && !simulation.getState().running)
+        ) {
           simulation.init();
           unfoldIntermediateRows();
         }
@@ -284,9 +322,15 @@ export function initTeachingPipeline() {
         try {
           await simulation.nextStep();
         } catch (error) {
-          if (stepError) { stepError.textContent = `Error: ${error.message}`; stepError.hidden = false; }
+          if (stepError) {
+            stepError.textContent = `Error: ${error.message}`;
+            stepError.hidden = false;
+          }
         } finally {
-          stepBtn.disabled = simulation.isComplete() || simulation.isBusy() || playback.getSnapshot().matches('playing');
+          stepBtn.disabled =
+            simulation.isComplete() ||
+            simulation.isBusy() ||
+            playback.getSnapshot().matches('playing');
         }
       });
     }
@@ -301,7 +345,10 @@ export function initTeachingPipeline() {
         }
         if (simulation.isBusy()) return;
         const info = simulation.getCurrentStepInfo();
-        if (info.total === 0 || (info.index === 0 && !simulation.getState().running)) {
+        if (
+          info.total === 0 ||
+          (info.index === 0 && !simulation.getState().running)
+        ) {
           simulation.init();
           unfoldIntermediateRows();
         }
@@ -310,11 +357,18 @@ export function initTeachingPipeline() {
         stepBtn.disabled = true;
         const version = ++playbackVersion;
         try {
-          while (version === playbackVersion && playback.getSnapshot().matches('playing') && !simulation.isComplete()) {
+          while (
+            version === playbackVersion &&
+            playback.getSnapshot().matches('playing') &&
+            !simulation.isComplete()
+          ) {
             await simulation.nextStep();
           }
         } catch (error) {
-          if (stepError) { stepError.textContent = `Error: ${error.message}`; stepError.hidden = false; }
+          if (stepError) {
+            stepError.textContent = `Error: ${error.message}`;
+            stepError.hidden = false;
+          }
         } finally {
           if (version === playbackVersion) {
             playback.send({ type: 'PAUSE' });
@@ -331,9 +385,15 @@ export function initTeachingPipeline() {
       resetStepBtn.addEventListener('click', () => {
         playbackVersion++;
         playback.send({ type: 'PAUSE' });
-        if (playStepBtn) { playStepBtn.textContent = 'Play'; playStepBtn.disabled = false; }
+        if (playStepBtn) {
+          playStepBtn.textContent = 'Play';
+          playStepBtn.disabled = false;
+        }
         simulation.reset();
-        if (stepError) { stepError.hidden = true; stepError.textContent = ''; }
+        if (stepError) {
+          stepError.hidden = true;
+          stepError.textContent = '';
+        }
         updateStepUI({
           step: null,
           index: 0,

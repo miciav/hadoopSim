@@ -48,18 +48,18 @@ non deve essere sostituita da una migrazione incompleta.
 
 ## Mappa dei file
 
-| Area | File e responsabilità |
-| --- | --- |
-| Contratto didattico | `docs/teaching-contracts.md`: cosa rappresenta ogni pagina e come verificarlo |
-| Core cluster | `assets/js/hadoop-sim/{config,state,hdfs,yarn,mapreduce,simulation,clock}.js`: dominio, risorse, lifecycle |
-| Lifecycle job | Nuovo `assets/js/hadoop-sim/job-machine.js`: stati XState del job, senza rendering |
-| Pipeline guidata | `assets/js/pipeline-teaching/engine-step.js`: API UI; nuovi `model.js` e `playback-machine.js`: calcolo e lifecycle |
+| Area                | File e responsabilità                                                                                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Contratto didattico | `docs/teaching-contracts.md`: cosa rappresenta ogni pagina e come verificarlo                                                                          |
+| Core cluster        | `assets/js/hadoop-sim/{config,state,hdfs,yarn,mapreduce,simulation,clock}.js`: dominio, risorse, lifecycle                                             |
+| Lifecycle job       | Nuovo `assets/js/hadoop-sim/job-machine.js`: stati XState del job, senza rendering                                                                     |
+| Pipeline guidata    | `assets/js/pipeline-teaching/engine-step.js`: API UI; nuovi `model.js` e `playback-machine.js`: calcolo e lifecycle                                    |
 | Pipeline automatica | `assets/js/pipeline-dual-nodes/engine.js`, `phases/*.js`, nuovo `run-machine.js`: orchestrazione concorrente senza imporre i passi della vista guidata |
-| Animazioni | `assets/js/pipeline-dual-nodes/dom/*.js`, `pipeline-teaching/dom-helpers.js`: presentazione e cleanup |
-| Adattatori UI | `assets/js/{hadoop-ecosystem-simulator,hadoop_full,hdfs_interactive,yarn_interactive}.js` |
-| Build | Nuovo `scripts/build.mjs`, `package.json`, `.gitignore`, HTML di ingresso |
-| Qualità | Nuovi `eslint.config.js`, `.prettierrc.json`, `.prettierignore`; test esistenti e nuovi test elencati sotto |
-| Deploy | `.github/workflows/pages.yml`, `playwright.config.js`: test sull'output e pubblicazione |
+| Animazioni          | `assets/js/pipeline-dual-nodes/dom/*.js`, `pipeline-teaching/dom-helpers.js`: presentazione e cleanup                                                  |
+| Adattatori UI       | `assets/js/{hadoop-ecosystem-simulator,hadoop_full,hdfs_interactive,yarn_interactive}.js`                                                              |
+| Build               | Nuovo `scripts/build.mjs`, `package.json`, `.gitignore`, HTML di ingresso                                                                              |
+| Qualità             | Nuovi `eslint.config.js`, `.prettierrc.json`, `.prettierignore`; test esistenti e nuovi test elencati sotto                                            |
+| Deploy              | `.github/workflows/pages.yml`, `playwright.config.js`: test sull'output e pubblicazione                                                                |
 
 ## Task 1: fissare i contratti didattici delle viste
 
@@ -198,20 +198,20 @@ Non attendere la fine dell'intero blocco per verificare il lavoro.
 
 ## Copertura dei findings e consegna
 
-| Audit | Task |
-| --- | --- |
-| 1 timer/reset cluster | 8 |
-| 2 blocchi persi, 3 mapper falliti, 4 AM, 5 coda | 8 |
-| 6 reset animazioni | 5, 7 |
-| 7 clock, 8 CONFIG, 10 fixture/seed | 2 |
-| 9 validazione | 8 |
-| 11 CI/test discovery | 2, 9 |
-| 12 DOM/dominio | 6, 7 |
-| 13 script morto, 14 vis-timeline/documentazione | 3, 9 |
-| old_stuff | 3 |
-| XState | 5, 7, 8 |
-| Build/GitHub Pages | 4, 9 |
-| Differenze didattiche/granularità | 1, 6, 7, 8, 9 |
+| Audit                                           | Task          |
+| ----------------------------------------------- | ------------- |
+| 1 timer/reset cluster                           | 8             |
+| 2 blocchi persi, 3 mapper falliti, 4 AM, 5 coda | 8             |
+| 6 reset animazioni                              | 5, 7          |
+| 7 clock, 8 CONFIG, 10 fixture/seed              | 2             |
+| 9 validazione                                   | 8             |
+| 11 CI/test discovery                            | 2, 9          |
+| 12 DOM/dominio                                  | 6, 7          |
+| 13 script morto, 14 vis-timeline/documentazione | 3, 9          |
+| old_stuff                                       | 3             |
+| XState                                          | 5, 7, 8       |
+| Build/GitHub Pages                              | 4, 9          |
+| Differenze didattiche/granularità               | 1, 6, 7, 8, 9 |
 
 Self-review: tutte le aree approvate hanno task e criterio di verifica; i tre
 modelli di esecuzione non dipendono da una falsa identità dei passi. Resta da

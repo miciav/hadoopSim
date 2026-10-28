@@ -2,8 +2,18 @@
  * DOM helper functions for step-by-step simulation.
  */
 
-import { el, getSpillSlotId, getCombineSlotId, getSourceRecordId } from '../pipeline-dual-nodes/dom/selectors.js';
-import { createRecordElement, showRecord, markAsGhost, markAsPersistent } from '../pipeline-dual-nodes/dom/records.js';
+import {
+  el,
+  getSpillSlotId,
+  getCombineSlotId,
+  getSourceRecordId
+} from '../pipeline-dual-nodes/dom/selectors.js';
+import {
+  createRecordElement,
+  showRecord,
+  markAsGhost,
+  markAsPersistent
+} from '../pipeline-dual-nodes/dom/records.js';
 
 /**
  * Gets the label for a mapper (A or B).
@@ -167,8 +177,10 @@ export function renderRecordInHdfsOutput(partition, record, id) {
  */
 export function removeActiveRecords(container) {
   if (!container) return;
-  const records = container.querySelectorAll('.kv-record:not(.ghost):not(.persistent)');
-  records.forEach(r => r.remove());
+  const records = container.querySelectorAll(
+    '.kv-record:not(.ghost):not(.persistent)'
+  );
+  records.forEach((r) => r.remove());
 }
 
 /**
@@ -243,7 +255,7 @@ export function createCombineSlot(mapperId, spillIndex) {
  * Used to reset combine slots so they can be created dynamically.
  */
 export function clearCombineSlots() {
-  ['node01', 'node02'].forEach(nodeId => {
+  ['node01', 'node02'].forEach((nodeId) => {
     const nodeEl = el(nodeId);
     if (!nodeEl) return;
 

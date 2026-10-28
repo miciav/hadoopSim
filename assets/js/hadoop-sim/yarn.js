@@ -1,8 +1,13 @@
 import { shuffle } from './random.js';
 
 function validateRequest(request) {
-  if (!request || !Number.isInteger(request.cpu) || request.cpu <= 0 ||
-      !Number.isFinite(request.memoryMb) || request.memoryMb <= 0) {
+  if (
+    !request ||
+    !Number.isInteger(request.cpu) ||
+    request.cpu <= 0 ||
+    !Number.isFinite(request.memoryMb) ||
+    request.memoryMb <= 0
+  ) {
     throw new RangeError('Invalid CPU or memory request');
   }
 }
@@ -93,7 +98,12 @@ export function createYarnEngine({ state, rng = Math.random, emitter = null }) {
   }
 
   function canEverAllocate(request) {
-    return state.nodes.some(node => !node.failed && node.cpuTotal >= request.cpu && node.memoryTotalMb >= request.memoryMb);
+    return state.nodes.some(
+      (node) =>
+        !node.failed &&
+        node.cpuTotal >= request.cpu &&
+        node.memoryTotalMb >= request.memoryMb
+    );
   }
 
   function submitJob(request) {
@@ -104,13 +114,30 @@ export function createYarnEngine({ state, rng = Math.random, emitter = null }) {
     };
 
     if (!canEverAllocate(entry)) {
-      emit('yarn:rejected', { request: entry, reason: 'insufficient-capacity' });
-      return { allocated: false, queued: false, reason: 'insufficient-capacity' };
+      emit('yarn:rejected', {
+        request: entry,
+        reason: 'insufficient-capacity'
+      });
+      return {
+        allocated: false,
+        queued: false,
+        reason: 'insufficient-capacity'
+      };
     }
-    const allocation = allocateContainer(entry, request.preferredNodeIds || null);
+    const allocation = allocateContainer(
+      entry,
+      request.preferredNodeIds || null
+    );
     if (allocation) {
-      emit('yarn:allocated', { container: allocation.container, nodeId: allocation.node.id });
-      return { allocated: true, nodeId: allocation.node.id, container: allocation.container };
+      emit('yarn:allocated', {
+        container: allocation.container,
+        nodeId: allocation.node.id
+      });
+      return {
+        allocated: true,
+        nodeId: allocation.node.id,
+        container: allocation.container
+      };
     }
 
     if (state.yarnQueue.length < config.yarn.queueLimit) {
@@ -135,7 +162,9 @@ export function createYarnEngine({ state, rng = Math.random, emitter = null }) {
   function releaseContainer(containerName) {
     let released = null;
     state.nodes.forEach((node) => {
-      const index = node.containers.findIndex((container) => container.name === containerName);
+      const index = node.containers.findIndex(
+        (container) => container.name === containerName
+      );
       if (index !== -1) {
         const container = node.containers[index];
         node.cpuUsed = Math.max(0, node.cpuUsed - container.cpu);
@@ -168,11 +197,17 @@ export function createYarnEngine({ state, rng = Math.random, emitter = null }) {
         emit('yarn:rejected', { request, reason: 'insufficient-capacity' });
         continue;
       }
-      const allocation = allocateContainer(request, request.preferredNodeIds || null);
+      const allocation = allocateContainer(
+        request,
+        request.preferredNodeIds || null
+      );
       if (allocation) {
         state.yarnQueue.splice(index, 1);
         started.push(allocation);
-        emit('yarn:allocated', { container: allocation.container, nodeId: allocation.node.id });
+        emit('yarn:allocated', {
+          container: allocation.container,
+          nodeId: allocation.node.id
+        });
       } else {
         index += 1;
       }

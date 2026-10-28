@@ -8,8 +8,8 @@
     "build": "node scripts/build.mjs",
     "preview": "python3 -m http.server 5173 --directory dist",
     "lint": "eslint assets/js tests scripts *.js",
-    "format:check": "prettier --check scripts/build.mjs eslint.config.js package.json",
-    "format": "prettier --write scripts/build.mjs eslint.config.js package.json"
+    "format:check": "prettier --check .",
+    "format": "prettier --write ."
   },
   "devDependencies": {
     "@playwright/test": "1.57.0",

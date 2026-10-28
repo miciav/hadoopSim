@@ -12,9 +12,11 @@ export function createInitialState(config = {}) {
         name: node.name || `${resolved.nodeTemplate.namePrefix}${id}`,
         cpuTotal: node.cpuTotal ?? resolved.nodeTemplate.cpuTotal,
         cpuUsed: 0,
-        memoryTotalMb: node.memoryTotalMb ?? resolved.nodeTemplate.memoryTotalMb,
+        memoryTotalMb:
+          node.memoryTotalMb ?? resolved.nodeTemplate.memoryTotalMb,
         memoryUsedMb: 0,
-        storageTotalMb: node.storageTotalMb ?? resolved.nodeTemplate.storageTotalMb,
+        storageTotalMb:
+          node.storageTotalMb ?? resolved.nodeTemplate.storageTotalMb,
         storageUsedMb: 0,
         blocks: [],
         containers: [],

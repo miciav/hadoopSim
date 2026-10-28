@@ -3,12 +3,48 @@ import { createSimulation } from './hadoop-sim/simulation.js';
 import { randomInt } from './hadoop-sim/random.js';
 
 const nodes = [
-  { id: 1, name: 'Node-01', cpuTotal: 8, memoryTotalMb: 16 * 1024, storageTotalMb: 50000 },
-  { id: 2, name: 'Node-02', cpuTotal: 8, memoryTotalMb: 16 * 1024, storageTotalMb: 50000 },
-  { id: 3, name: 'Node-03', cpuTotal: 12, memoryTotalMb: 24 * 1024, storageTotalMb: 60000 },
-  { id: 4, name: 'Node-04', cpuTotal: 12, memoryTotalMb: 24 * 1024, storageTotalMb: 60000 },
-  { id: 5, name: 'Node-05', cpuTotal: 16, memoryTotalMb: 32 * 1024, storageTotalMb: 80000 },
-  { id: 6, name: 'Node-06', cpuTotal: 16, memoryTotalMb: 32 * 1024, storageTotalMb: 80000 }
+  {
+    id: 1,
+    name: 'Node-01',
+    cpuTotal: 8,
+    memoryTotalMb: 16 * 1024,
+    storageTotalMb: 50000
+  },
+  {
+    id: 2,
+    name: 'Node-02',
+    cpuTotal: 8,
+    memoryTotalMb: 16 * 1024,
+    storageTotalMb: 50000
+  },
+  {
+    id: 3,
+    name: 'Node-03',
+    cpuTotal: 12,
+    memoryTotalMb: 24 * 1024,
+    storageTotalMb: 60000
+  },
+  {
+    id: 4,
+    name: 'Node-04',
+    cpuTotal: 12,
+    memoryTotalMb: 24 * 1024,
+    storageTotalMb: 60000
+  },
+  {
+    id: 5,
+    name: 'Node-05',
+    cpuTotal: 16,
+    memoryTotalMb: 32 * 1024,
+    storageTotalMb: 80000
+  },
+  {
+    id: 6,
+    name: 'Node-06',
+    cpuTotal: 16,
+    memoryTotalMb: 32 * 1024,
+    storageTotalMb: 80000
+  }
 ];
 
 const sim = createSimulation({ nodes });
@@ -31,7 +67,10 @@ function scheduleCompletion(container) {
 }
 
 sim.on('yarn:rejected', ({ request }) => {
-  notify(`❌ ${request.name} rejected: no active node can fit its CPU and memory request.`, 'error');
+  notify(
+    `❌ ${request.name} rejected: no active node can fit its CPU and memory request.`,
+    'error'
+  );
   renderCluster();
 });
 
@@ -50,7 +89,9 @@ function renderCluster() {
 
   sim.state.nodes.forEach((node) => {
     const cpuPercent = ((node.cpuUsed / node.cpuTotal) * 100).toFixed(0);
-    const memPercent = ((node.memoryUsedMb / node.memoryTotalMb) * 100).toFixed(0);
+    const memPercent = ((node.memoryUsedMb / node.memoryTotalMb) * 100).toFixed(
+      0
+    );
 
     let status = 'idle';
     let statusClass = 'active';
@@ -97,7 +138,10 @@ function renderCluster() {
         <div class="containers-title">📦 Running Containers: ${node.containers.length}</div>
         <div class="container-list">
           ${node.containers
-            .map((container) => `<div class="container-item">${container.name}</div>`)
+            .map(
+              (container) =>
+                `<div class="container-item">${container.name}</div>`
+            )
             .join('')}
         </div>
       </div>
@@ -114,8 +158,10 @@ function updateStats() {
   document.getElementById('totalNodes').textContent = sim.state.nodes.length;
   document.getElementById('activeApps').textContent = stats.activeContainers;
   document.getElementById('queuedJobs').textContent = stats.queuedRequests;
-  document.getElementById('cpuUsage').textContent = `${stats.cpuUsagePercent.toFixed(1)}%`;
-  document.getElementById('memoryUsage').textContent = `${stats.memoryUsagePercent.toFixed(1)}%`;
+  document.getElementById('cpuUsage').textContent =
+    `${stats.cpuUsagePercent.toFixed(1)}%`;
+  document.getElementById('memoryUsage').textContent =
+    `${stats.memoryUsagePercent.toFixed(1)}%`;
 }
 
 function updateQueue() {
@@ -174,9 +220,15 @@ function submitBigJob() {
   const queued = results.filter((entry) => entry.queued).length;
 
   if (allocated === numContainers) {
-    notify(`✅ Big Job-${jobId} distributed across ${allocated} nodes!`, 'success');
+    notify(
+      `✅ Big Job-${jobId} distributed across ${allocated} nodes!`,
+      'success'
+    );
   } else if (allocated > 0) {
-    notify(`⚠️ Big Job-${jobId}: ${allocated}/${numContainers} running, ${queued} queued`, 'info');
+    notify(
+      `⚠️ Big Job-${jobId}: ${allocated}/${numContainers} running, ${queued} queued`,
+      'info'
+    );
   } else if (queued > 0) {
     notify(`⏳ Big Job-${jobId}: ${queued} containers queued`, 'info');
   }

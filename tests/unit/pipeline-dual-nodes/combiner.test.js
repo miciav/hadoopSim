@@ -19,8 +19,8 @@ test('combine aggregates records by key', () => {
   const result = combine(input);
 
   assert.equal(result.length, 2);
-  const cat = result.find(r => r.k === 'cat');
-  const dog = result.find(r => r.k === 'dog');
+  const cat = result.find((r) => r.k === 'cat');
+  const dog = result.find((r) => r.k === 'dog');
   assert.equal(cat.count, 2);
   assert.equal(dog.count, 1);
 });
@@ -101,14 +101,17 @@ test('sortByPartitionThenKey handles empty input', () => {
 test('mergeSpills combines and sorts multiple spills', () => {
   const spills = [
     [{ k: 'cat', p: 0, c: 'bg-p0', count: 2 }],
-    [{ k: 'cat', p: 0, c: 'bg-p0', count: 1 }, { k: 'dog', p: 1, c: 'bg-p1', count: 1 }]
+    [
+      { k: 'cat', p: 0, c: 'bg-p0', count: 1 },
+      { k: 'dog', p: 1, c: 'bg-p1', count: 1 }
+    ]
   ];
 
   const result = mergeSpills(spills);
 
   assert.equal(result.length, 2);
-  assert.equal(result.find(r => r.k === 'cat').count, 3);
-  assert.equal(result.find(r => r.k === 'dog').count, 1);
+  assert.equal(result.find((r) => r.k === 'cat').count, 3);
+  assert.equal(result.find((r) => r.k === 'dog').count, 1);
 });
 
 test('mergeSpills maintains partition order', () => {
@@ -148,10 +151,7 @@ test('aggregateByKey produces final counts', () => {
 });
 
 test('aggregateByKey handles records without count', () => {
-  const input = [
-    { k: 'cat' },
-    { k: 'cat' }
-  ];
+  const input = [{ k: 'cat' }, { k: 'cat' }];
 
   const result = aggregateByKey(input);
 
@@ -186,11 +186,26 @@ test('sortAndCombineBuffer sorts and combines', () => {
 
 test('mergeSortedSpills preserves source and does not combine records', () => {
   const spills = [
-    [{ k: 'ant', p: 0 }, { k: 'car', p: 1 }],
-    [{ k: 'ant', p: 0 }, { k: 'dog', p: 2 }]
+    [
+      { k: 'ant', p: 0 },
+      { k: 'car', p: 1 }
+    ],
+    [
+      { k: 'ant', p: 0 },
+      { k: 'dog', p: 2 }
+    ]
   ];
-  assert.deepEqual(mergeSortedSpills(spills).map(({ record, sourceIndex }) => [record.k, sourceIndex]), [
-    ['ant', 0], ['ant', 1], ['car', 0], ['dog', 1]
-  ]);
+  assert.deepEqual(
+    mergeSortedSpills(spills).map(({ record, sourceIndex }) => [
+      record.k,
+      sourceIndex
+    ]),
+    [
+      ['ant', 0],
+      ['ant', 1],
+      ['car', 0],
+      ['dog', 1]
+    ]
+  );
   assert.equal(spills[0].length, 2);
 });
