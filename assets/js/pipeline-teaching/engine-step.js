@@ -128,20 +128,11 @@ export function createStepSimulation() {
     }
   }
 
-  function abortable(promise, signal) {
-    return new Promise((resolve, reject) => {
-      const abort = () => reject(new DOMException('Step cancelled', 'AbortError'));
-      if (signal.aborted) return abort();
-      signal.addEventListener('abort', abort, { once: true });
-      promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
-    });
-  }
-
   // Step execution functions
 
   async function executeInputInit(tick, signal) {
-    const wait = (ms) => abortable(baseWait(ms), signal);
-    const flyRecord = (...args) => abortable(baseFlyRecord(...args), signal);
+    const wait = (ms) => baseWait(ms, signal);
+    const flyRecord = (...args) => baseFlyRecord(...args, signal);
     highlightNodes([ELEMENT_IDS.NODE_01, ELEMENT_IDS.NODE_02], 'Input Phase');
     highlightBoxes([ELEMENT_IDS.BOX_INPUT_0, ELEMENT_IDS.BOX_INPUT_1]);
     log('<strong>YARN ResourceManager:</strong> Job accepted. Allocated Containers on Node 01, Node 02.', 'SYS');
@@ -153,8 +144,8 @@ export function createStepSimulation() {
    * Execute MAP_BATCH: Read batch of records into buffer (parallel on both nodes)
    */
   async function executeMapBatch(step, tick, signal) {
-    const wait = (ms) => abortable(baseWait(ms), signal);
-    const flyRecord = (...args) => abortable(baseFlyRecord(...args), signal);
+    const wait = (ms) => baseWait(ms, signal);
+    const flyRecord = (...args) => baseFlyRecord(...args, signal);
     const { batches } = step;
 
     highlightNodes([ELEMENT_IDS.NODE_01, ELEMENT_IDS.NODE_02], 'Map Processing');
@@ -205,8 +196,8 @@ export function createStepSimulation() {
    * Execute SPILL_SORT: Sort and spill to disk (parallel on both nodes)
    */
   async function executeSpillSort(step, tick, signal) {
-    const wait = (ms) => abortable(baseWait(ms), signal);
-    const flyRecord = (...args) => abortable(baseFlyRecord(...args), signal);
+    const wait = (ms) => baseWait(ms, signal);
+    const flyRecord = (...args) => baseFlyRecord(...args, signal);
     const { spillIndex } = step;
 
     highlightBoxes([ELEMENT_IDS.BOX_SPILL_0, ELEMENT_IDS.BOX_SPILL_1]);
@@ -259,8 +250,8 @@ export function createStepSimulation() {
    * Execute COMBINE: Apply combiner to spilled data (parallel on both nodes)
    */
   async function executeCombine(step, tick, signal) {
-    const wait = (ms) => abortable(baseWait(ms), signal);
-    const flyRecord = (...args) => abortable(baseFlyRecord(...args), signal);
+    const wait = (ms) => baseWait(ms, signal);
+    const flyRecord = (...args) => baseFlyRecord(...args, signal);
     const { spillIndex } = step;
 
     // Highlight combine boxes
@@ -284,7 +275,7 @@ export function createStepSimulation() {
       const spillContainerId = getSpillSlotId(mapperId, spillIndex);
       const combineContainerId = getCombineSlotId(mapperId, spillIndex);
 
-      triggerCombineSweep(spillContainerId, SWEEP_COLORS.AMBER);
+      triggerCombineSweep(spillContainerId, SWEEP_COLORS.AMBER, signal);
 
       await wait(tick * 0.4);
 
@@ -318,8 +309,8 @@ export function createStepSimulation() {
    * Execute MERGE: Merge phase (parallel on both nodes)
    */
   async function executeMerge(tick, signal) {
-    const wait = (ms) => abortable(baseWait(ms), signal);
-    const flyRecord = (...args) => abortable(baseFlyRecord(...args), signal);
+    const wait = (ms) => baseWait(ms, signal);
+    const flyRecord = (...args) => baseFlyRecord(...args, signal);
     highlightNodes([ELEMENT_IDS.NODE_01, ELEMENT_IDS.NODE_02], 'Merge Phase');
     highlightBoxes([ELEMENT_IDS.BOX_MERGE_0, ELEMENT_IDS.BOX_MERGE_1]);
     updatePhaseDisplay('MERGE');
@@ -411,8 +402,8 @@ export function createStepSimulation() {
    * Execute SHUFFLE: Network shuffle (all at once, parallel)
    */
   async function executeShuffle(tick, signal) {
-    const wait = (ms) => abortable(baseWait(ms), signal);
-    const flyRecord = (...args) => abortable(baseFlyRecord(...args), signal);
+    const wait = (ms) => baseWait(ms, signal);
+    const flyRecord = (...args) => baseFlyRecord(...args, signal);
     highlightNodes(null, 'Network Shuffle');
     setNetworkActive(true);
     updatePhaseDisplay('SHUFFLE');
@@ -466,8 +457,8 @@ export function createStepSimulation() {
    * Execute REDUCE_MERGE: Merge sort in all reducers (parallel)
    */
   async function executeReduceMerge(tick, signal) {
-    const wait = (ms) => abortable(baseWait(ms), signal);
-    const flyRecord = (...args) => abortable(baseFlyRecord(...args), signal);
+    const wait = (ms) => baseWait(ms, signal);
+    const flyRecord = (...args) => baseFlyRecord(...args, signal);
     highlightNodes(null, 'Reduce Merge Sort');
     highlightBoxes([ELEMENT_IDS.BOX_RED_0, ELEMENT_IDS.BOX_RED_1, ELEMENT_IDS.BOX_RED_2]);
     updatePhaseDisplay('REDUCE_MERGE');
@@ -481,7 +472,7 @@ export function createStepSimulation() {
       const records = state.reducers[p];
       const sorted = sortByPartitionThenKey(records);
 
-      triggerCombineSweep(`red${p}Merge`, SWEEP_COLORS.PURPLE);
+      triggerCombineSweep(`red${p}Merge`, SWEEP_COLORS.PURPLE, signal);
       await wait(tick * 0.4);
 
       // Render sorted in merge box (with stagger)
@@ -508,8 +499,8 @@ export function createStepSimulation() {
    * Execute REDUCE: Aggregate by key in all reducers (parallel)
    */
   async function executeReduce(tick, signal) {
-    const wait = (ms) => abortable(baseWait(ms), signal);
-    const flyRecord = (...args) => abortable(baseFlyRecord(...args), signal);
+    const wait = (ms) => baseWait(ms, signal);
+    const flyRecord = (...args) => baseFlyRecord(...args, signal);
     highlightNodes(null, 'Reduce Phase');
     highlightBoxes([ELEMENT_IDS.BOX_RED_0, ELEMENT_IDS.BOX_RED_1, ELEMENT_IDS.BOX_RED_2]);
     updatePhaseDisplay('REDUCE');
@@ -520,7 +511,7 @@ export function createStepSimulation() {
       const records = state.reducers[partition];
       const aggregated = aggregateByKey(records);
 
-      triggerCombineSweep(`red${partition}Reduce`, SWEEP_COLORS.PURPLE);
+      triggerCombineSweep(`red${partition}Reduce`, SWEEP_COLORS.PURPLE, signal);
       await wait(tick * 0.4);
 
       // Ghost merge records
@@ -547,8 +538,8 @@ export function createStepSimulation() {
    * Execute OUTPUT: Write all partitions to HDFS
    */
   async function executeOutput(tick, signal) {
-    const wait = (ms) => abortable(baseWait(ms), signal);
-    const flyRecord = (...args) => abortable(baseFlyRecord(...args), signal);
+    const wait = (ms) => baseWait(ms, signal);
+    const flyRecord = (...args) => baseFlyRecord(...args, signal);
     highlightNodes(null, 'Output Phase');
     highlightBoxes([ELEMENT_IDS.BOX_HDFS_OUTPUT]);
     updatePhaseDisplay('OUTPUT');
@@ -579,8 +570,8 @@ export function createStepSimulation() {
   }
 
   async function executeFinish(signal) {
-    const wait = (ms) => abortable(baseWait(ms), signal);
-    const flyRecord = (...args) => abortable(baseFlyRecord(...args), signal);
+    const wait = (ms) => baseWait(ms, signal);
+    const flyRecord = (...args) => baseFlyRecord(...args, signal);
     log('<strong>Job Complete.</strong> Output written to HDFS.', 'SYS');
     updatePhaseDisplay('FINISHED');
 
@@ -647,6 +638,7 @@ export function createStepSimulation() {
       state = nextState;
       // Notify that this step completed (before incrementing index)
       notifyStepComplete(step);
+      if (generation !== stepGeneration) return false;
       currentStepIndex++;
       updateProgress();
       notifyStepChange();

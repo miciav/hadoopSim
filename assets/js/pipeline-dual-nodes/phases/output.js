@@ -14,7 +14,7 @@ import { flyRecord, wait } from '../dom/animations.js';
  * @param {Function} isRunning - Check if simulation is running
  * @returns {Promise<void>}
  */
-export async function runOutput(state, tick, isRunning) {
+export async function runOutput(state, tick, isRunning, signal) {
   if (!isRunning()) return;
 
   const partitions = [0, 1, 2];
@@ -27,7 +27,7 @@ export async function runOutput(state, tick, isRunning) {
     const targetId = `hdfsOut${p}`;
     const records = state.reduceOutput[p] || [];
 
-    await wait(tick * 0.3);
+    await wait(tick * 0.3, signal);
 
     if (!isRunning()) return;
 
@@ -36,7 +36,7 @@ export async function runOutput(state, tick, isRunning) {
       if (!isRunning()) return;
 
       // Fly record from reducer to HDFS output
-      await flyRecord(sourceId, targetId, rec, tick * 0.5);
+      await flyRecord(sourceId, targetId, rec, tick * 0.5, signal);
       if (!isRunning()) return;
 
       // Land in HDFS output file
@@ -48,7 +48,7 @@ export async function runOutput(state, tick, isRunning) {
         showRecord(r);
       }
 
-      await wait(tick * 0.25);
+      await wait(tick * 0.25, signal);
 
       if (!isRunning()) return;
     }

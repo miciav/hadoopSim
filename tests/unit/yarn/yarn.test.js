@@ -49,3 +49,24 @@ test('YARN queue drains when resources free up', () => {
   assert.equal(state.nodes[0].containers.length, 1);
   assert.equal(state.nodes[0].containers[0].name, 'Job-B');
 });
+
+test('YARN rejects requests that cannot fit any node without queuing them', () => {
+  const state = createInitialState({ nodeCount: 1 });
+  const yarn = createYarnEngine({ state });
+  const result = yarn.submitJob({ cpu: state.nodes[0].cpuTotal + 1, memoryMb: 1 });
+  assert.deepEqual(result, { allocated: false, queued: false, reason: 'insufficient-capacity' });
+  assert.equal(state.yarnQueue.length, 0);
+  assert.equal(state.nodes[0].cpuUsed, 0);
+});
+
+test('YARN removes queued requests after loss of the only eligible node', () => {
+  const state = createInitialState({ nodeCount: 1 });
+  const yarn = createYarnEngine({ state });
+  const request = { cpu: state.nodes[0].cpuTotal, memoryMb: 1 };
+  yarn.submitJob(request);
+  yarn.submitJob(request);
+  assert.equal(state.yarnQueue.length, 1);
+  state.nodes[0].failed = true;
+  yarn.drainQueue();
+  assert.equal(state.yarnQueue.length, 0);
+});

@@ -27,7 +27,7 @@ import { runSpill } from './spill.js';
  * @returns {Promise<void>}
  */
 export async function runMapper(state, mapperId, delay, nodeId, callbacks) {
-  const { isRunning, isTeaching, onRecordProcessed } = callbacks;
+  const { isRunning, isTeaching, onRecordProcessed, signal } = callbacks;
 
   if (!isRunning()) return;
 
@@ -61,7 +61,7 @@ export async function runMapper(state, mapperId, delay, nodeId, callbacks) {
       // Fly record from HDFS input to buffer
       // Note: we use globalRecordIndex to match the static input element IDs
       const sourceId = getSourceRecordId(mapperId, globalRecordIndex);
-      await flyRecord(sourceId, getBufferId(mapperId), record, delay * 0.4);
+      await flyRecord(sourceId, getBufferId(mapperId), record, delay * 0.4, signal);
       
       globalRecordIndex++;
 
@@ -93,7 +93,7 @@ export async function runMapper(state, mapperId, delay, nodeId, callbacks) {
         const spillBox = el(getBoxSpillId(mapperId));
         if (spillBox) spillBox.classList.add('active');
 
-        await wait(delay);
+        await wait(delay, signal);
         if (!isRunning()) return;
 
         const spillIdx = mapper.spills.length;
@@ -118,7 +118,7 @@ export async function runMapper(state, mapperId, delay, nodeId, callbacks) {
         setBufferLimit(mapperId, false);
       }
 
-      await wait(delay * 0.2);
+      await wait(delay * 0.2, signal);
     }
   }
 }

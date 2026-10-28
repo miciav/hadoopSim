@@ -67,7 +67,7 @@ function mergeSortedSegments(segments) {
  * @param {Function} isRunning - Check if simulation is running
  * @returns {Promise<void>}
  */
-export async function runReduceMergeSort(state, tick, isRunning, isTeaching = () => true) {
+export async function runReduceMergeSort(state, tick, isRunning, isTeaching = () => true, signal) {
   if (!isRunning()) return;
 
   const partitions = [0, 1, 2];
@@ -80,7 +80,7 @@ export async function runReduceMergeSort(state, tick, isRunning, isTeaching = ()
     if (rawRecs.length === 0) return;
 
     turnActiveToGhosts(box);
-    await wait(Math.max(tick * 0.5, 300));
+    await wait(Math.max(tick * 0.5, 300), signal);
     if (!isRunning()) return;
 
     const { segments: rawSegments, hasUnknownSource } = splitReducerSegments(rawRecs);
@@ -149,7 +149,7 @@ export async function runReduceMergeSort(state, tick, isRunning, isTeaching = ()
       const fromId = useSegmentUI ? getReducerSegmentId(p, item.source) : getReducerId(p);
       const targetId = mergeBox ? getReducerMergeId(p) : getReducerId(p);
 
-      await flyRecord(fromId, targetId, item.record, tick * 0.4);
+      await flyRecord(fromId, targetId, item.record, tick * 0.4, signal);
 
       if (!isRunning()) return;
 
@@ -159,13 +159,13 @@ export async function runReduceMergeSort(state, tick, isRunning, isTeaching = ()
         targetBox.appendChild(r);
         showRecord(r);
       }
-      await wait(Math.max(tick * 0.1, 80));
+      await wait(Math.max(tick * 0.1, 80), signal);
       if (!isRunning()) return;
     }
 
     if (mergeBox) {
-      triggerCombineSweep(getReducerMergeId(p), SWEEP_COLORS.PURPLE);
-      await wait(Math.max(tick * 0.4, 400));
+      triggerCombineSweep(getReducerMergeId(p), SWEEP_COLORS.PURPLE, signal);
+      await wait(Math.max(tick * 0.4, 400), signal);
       if (!isRunning()) return;
       turnActiveToGhosts(mergeBox);
     }
@@ -183,7 +183,7 @@ export async function runReduceMergeSort(state, tick, isRunning, isTeaching = ()
           const r = createRecordElement(rec, rec.count);
           box.appendChild(r);
           showRecord(r);
-          await wait(Math.max(tick * 0.1, 80));
+          await wait(Math.max(tick * 0.1, 80), signal);
           if (!isRunning()) return;
         }
       }
@@ -200,7 +200,7 @@ export async function runReduceMergeSort(state, tick, isRunning, isTeaching = ()
  * @param {Function} isRunning - Check if simulation is running
  * @returns {Promise<void>}
  */
-export async function runReduce(state, tick, isRunning) {
+export async function runReduce(state, tick, isRunning, signal) {
   if (!isRunning()) return;
 
   const partitions = [0, 1, 2];
@@ -216,8 +216,8 @@ export async function runReduce(state, tick, isRunning) {
     turnActiveToGhosts(box);
 
     // Sweep effect for reduce aggregation
-    triggerCombineSweep(getReducerOutputId(p), SWEEP_COLORS.PURPLE);
-    await wait(Math.max(tick, 800));
+    triggerCombineSweep(getReducerOutputId(p), SWEEP_COLORS.PURPLE, signal);
+    await wait(Math.max(tick, 800), signal);
     if (!isRunning()) return;
 
     // Aggregate by key
@@ -244,7 +244,7 @@ export async function runReduce(state, tick, isRunning) {
         showRecord(r);
       }
 
-      await wait(tick * 0.3);
+      await wait(tick * 0.3, signal);
 
       if (!isRunning()) return;
     }

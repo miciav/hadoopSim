@@ -617,7 +617,7 @@ const STYLES = `
 const bootstrap = () => {
 
   const NotificationToaster = ({ notifications }) => (
-  <div>
+  <div role="status" aria-live="polite" aria-relevant="additions text">
     {notifications.map((notice) => (
       <div key={notice.id} className={`notification ${notice.type}`}>
         {notice.message}

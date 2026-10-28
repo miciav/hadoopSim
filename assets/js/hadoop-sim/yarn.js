@@ -92,6 +92,10 @@ export function createYarnEngine({ state, rng = Math.random, emitter = null }) {
     return { node, container };
   }
 
+  function canEverAllocate(request) {
+    return state.nodes.some(node => !node.failed && node.cpuTotal >= request.cpu && node.memoryTotalMb >= request.memoryMb);
+  }
+
   function submitJob(request) {
     validateRequest(request);
     const entry = {
@@ -99,6 +103,10 @@ export function createYarnEngine({ state, rng = Math.random, emitter = null }) {
       name: request.name || `Job-${state.counters.job++}`
     };
 
+    if (!canEverAllocate(entry)) {
+      emit('yarn:rejected', { request: entry, reason: 'insufficient-capacity' });
+      return { allocated: false, queued: false, reason: 'insufficient-capacity' };
+    }
     const allocation = allocateContainer(entry, request.preferredNodeIds || null);
     if (allocation) {
       emit('yarn:allocated', { container: allocation.container, nodeId: allocation.node.id });
@@ -155,6 +163,11 @@ export function createYarnEngine({ state, rng = Math.random, emitter = null }) {
 
     while (index < state.yarnQueue.length) {
       const request = state.yarnQueue[index];
+      if (!canEverAllocate(request)) {
+        state.yarnQueue.splice(index, 1);
+        emit('yarn:rejected', { request, reason: 'insufficient-capacity' });
+        continue;
+      }
       const allocation = allocateContainer(request, request.preferredNodeIds || null);
       if (allocation) {
         state.yarnQueue.splice(index, 1);

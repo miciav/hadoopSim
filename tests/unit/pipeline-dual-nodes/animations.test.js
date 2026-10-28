@@ -51,3 +51,26 @@ test('triggerCombineSweep adds and removes sweep element', () => {
   global.setTimeout = originalSetTimeout;
   restore();
 });
+
+test('abort cancels an animation wait and clears its timer', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const controller = new AbortController();
+  const pending = wait(10000, controller.signal);
+  const rejected = assert.rejects(pending, { name: 'AbortError' });
+  controller.abort();
+  t.mock.timers.tick(10000);
+  await rejected;
+});
+
+test('abort removes combine sweep immediately', () => {
+  const { document, restore } = setupMockDom();
+  try {
+    const container = createElement(document, { id: 'target' });
+    const controller = new AbortController();
+    triggerCombineSweep('target', 'sweep-amber', controller.signal);
+    controller.abort();
+    assert.equal(container.querySelectorAll('.combine-sweep').length, 0);
+  } finally {
+    restore();
+  }
+});

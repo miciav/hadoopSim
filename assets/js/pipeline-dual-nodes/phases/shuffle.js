@@ -23,7 +23,7 @@ import { sortByPartitionThenKey } from '../combiner.js';
  * @returns {Promise<void>}
  */
 export async function runNetworkShuffle(state, tick, callbacks) {
-  const { isRunning, isTeaching, onNetPacket } = callbacks;
+  const { isRunning, isTeaching, onNetPacket, signal } = callbacks;
 
   if (!isRunning()) return;
 
@@ -54,35 +54,32 @@ export async function runNetworkShuffle(state, tick, callbacks) {
    */
   const transmitNodeData = async (records, baseSourceId, nodeName, sourceIndex) => {
     const localQueue = sortByPartitionThenKey(records);
-    const nodePromises = [];
     const nicSpeed = tick / 4;
     let currentP = -1;
 
-    for (const rec of localQueue) {
-      if (!isRunning()) break;
+    const nodePromises = localQueue.map(async (rec, index) => {
+      await wait(index * nicSpeed, signal);
+      if (!isRunning()) return;
 
       // Log partition changes in teaching mode
       if (teachingEnabled && rec.p !== currentP) {
         currentP = rec.p;
-        await wait(Math.random() * 100);
+        await wait(Math.random() * 100, signal);
         if (!isRunning()) return;
         log(`${nodeName}: Streaming batch for <strong>Partition ${currentP}</strong>...`, 'NET');
       }
 
-      // Create async packet journey
-      const packetJourney = async () => {
-        if (!isRunning()) return;
 
         // Fly to network hub from specific partition segment
         const sourceId = getFinalSegmentId(sourceIndex, rec.p);
-        await flyRecord(sourceId, ELEMENT_IDS.NET_HUB, rec, tick * 0.5);
+        await flyRecord(sourceId, ELEMENT_IDS.NET_HUB, rec, tick * 0.5, signal);
         if (!isRunning()) return;
 
         // Update network counter
         onNetPacket();
 
         // Small delay at hub
-        await wait((tick * 0.1) + Math.random() * 80);
+        await wait((tick * 0.1) + Math.random() * 80, signal);
         if (!isRunning()) return;
 
         const recordPayload = { ...rec, source: sourceIndex };
@@ -95,7 +92,7 @@ export async function runNetworkShuffle(state, tick, callbacks) {
           state.reducers[rec.p].push(recordPayload);
         }
 
-        await flyRecord(ELEMENT_IDS.NET_HUB, targetId, recordPayload, tick * 0.5);
+        await flyRecord(ELEMENT_IDS.NET_HUB, targetId, recordPayload, tick * 0.5, signal);
 
         if (!isRunning()) return;
 
@@ -107,13 +104,7 @@ export async function runNetworkShuffle(state, tick, callbacks) {
           showRecord(r);
         }
 
-      };
-
-      // Launch packet and continue (parallel transmission)
-      nodePromises.push(packetJourney());
-      await wait(nicSpeed);
-      if (!isRunning()) return;
-    }
+    });
 
     // Wait for all packets from this node
     await Promise.all(nodePromises);

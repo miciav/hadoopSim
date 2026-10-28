@@ -23,7 +23,7 @@ import { mergeSortedSpills } from '../combiner.js';
  * @param {Function} isRunning - Check if simulation is running
  * @returns {Promise<void>}
  */
-export async function runMergeAnimation(state, mapperId, tick, isRunning) {
+export async function runMergeAnimation(state, mapperId, tick, isRunning, signal) {
   if (!isRunning()) return;
 
   const mapper = state.mappers[mapperId];
@@ -52,7 +52,7 @@ export async function runMergeAnimation(state, mapperId, tick, isRunning) {
   // 2. Fly to Merge Sort box
   for (const item of mergedOrder) {
     if (!isRunning()) return;
-    await flyRecord(item.sourceId, mergeInnerId, item.rec, tick * 0.5);
+    await flyRecord(item.sourceId, mergeInnerId, item.rec, tick * 0.5, signal);
     if (!isRunning()) return;
     if (mergeInner) {
       const r = createRecordElement(item.rec, item.rec.count);
@@ -60,12 +60,12 @@ export async function runMergeAnimation(state, mapperId, tick, isRunning) {
       showRecord(r);
       item.mergeEl = r; // Keep reference to ghost it later
     }
-    await wait(tick * 0.1);
+    await wait(tick * 0.1, signal);
     if (!isRunning()) return;
   }
 
   // 3. Pause for sort completion
-  await wait(tick * 0.5);
+  await wait(tick * 0.5, signal);
   if (!isRunning()) return;
 
   // 4. Save to Disk (Copy to final segments and ghost in merge box)
@@ -74,7 +74,7 @@ export async function runMergeAnimation(state, mapperId, tick, isRunning) {
     const segmentId = getFinalSegmentId(mapperId, item.rec.p);
     
     // Fly to segment
-    await flyRecord(mergeInnerId, segmentId, item.rec, tick * 0.5);
+    await flyRecord(mergeInnerId, segmentId, item.rec, tick * 0.5, signal);
     if (!isRunning()) return;
     
     // Ghost the record in Local Merge box instead of removing it
@@ -86,7 +86,7 @@ export async function runMergeAnimation(state, mapperId, tick, isRunning) {
       segment.appendChild(r);
       showRecord(r);
     }
-    await wait(tick * 0.05);
+    await wait(tick * 0.05, signal);
     if (!isRunning()) return;
   }
 
@@ -96,7 +96,7 @@ export async function runMergeAnimation(state, mapperId, tick, isRunning) {
 /**
  * Finalizes the merge phase.
  */
-export async function runMergeSortOutput(state, mapperId, tick, isRunning) {
+export async function runMergeSortOutput(state, mapperId, tick, isRunning, signal) {
   if (!isRunning()) return;
   const mapper = state.mappers[mapperId];
   

@@ -43,6 +43,7 @@ export function createSimulation(config = {}, deps = {}) {
     const node = hdfs.failNode(nodeId);
     if (node) {
       mapreduce.handleNodeFailure(nodeId);
+      if (state.nodes.includes(node)) yarn.drainQueue();
     }
     return node;
   }

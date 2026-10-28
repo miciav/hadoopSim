@@ -247,3 +247,40 @@ test('reset from a started listener schedules the replacement job', () => {
   assert.equal(replacement.status, 'running');
   assert.equal(sim.state.nodes.flatMap(node => node.containers).length, 2);
 });
+
+test('remote mapper fails when its last input replica is lost', () => {
+  const clock = createManualClock();
+  const sim = createSimulation({
+    replicationFactor: 1,
+    nodes: [
+      { id: 1, cpuTotal: 1, memoryTotalMb: 10000, storageTotalMb: 100 },
+      { id: 2, cpuTotal: 2, memoryTotalMb: 10000, storageTotalMb: 100 },
+      { id: 3, cpuTotal: 1, memoryTotalMb: 10000, storageTotalMb: 1000 }
+    ]
+  }, { clock });
+  sim.actions.uploadFile(10);
+  const job = sim.actions.submitMapReduce({});
+  const source = sim.state.nodes.find(node => node.blocks.length);
+  assert.notEqual(job.mappers[0].nodeId, source.id);
+  assert.notEqual(job.appMasterNodeId, source.id);
+  sim.actions.failNode(source.id);
+  clock.advance(20000);
+  assert.equal(job.status, 'failed');
+  assert.equal(job.failureReason, 'lost-block');
+  assert.ok(sim.state.nodes.every(node => node.cpuUsed === 0 && node.memoryUsedMb === 0));
+  sim.dispose();
+});
+
+test('reset from a failure callback stops processing old queued jobs', () => {
+  const clock = createManualClock();
+  const sim = createSimulation({ nodeCount: 1 }, { clock });
+  sim.actions.uploadFile(10);
+  sim.actions.submitMapReduce({});
+  sim.actions.submitMapReduce({});
+  sim.on('mapreduce:failed', () => sim.actions.reset());
+  assert.doesNotThrow(() => sim.actions.failNode(1));
+  assert.equal(sim.state.mapReduceJobs.length, 0);
+  clock.advance(20000);
+  assert.equal(sim.state.mapReduceJobs.length, 0);
+  sim.dispose();
+});

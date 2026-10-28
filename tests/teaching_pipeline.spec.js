@@ -140,3 +140,40 @@ test('empty split input restores the previous valid value on reset', async ({ pa
   const sizes = await page.evaluate(() => window.teachingSimulation.getState().inputSplits.map(splits => splits.flat().length));
   expect(sizes).toEqual([12, 12]);
 });
+
+test('reset in a completion callback preserves the new step cursor', async ({ page }) => {
+  await page.goto('/hadoopsim-teaching.html');
+  const index = await page.evaluate(async () => {
+    const sim = window.teachingSimulation;
+    sim.init();
+    sim.onStepComplete(() => { sim.reset(); sim.init(); });
+    await sim.nextStep();
+    return sim.getCurrentStepInfo().index;
+  });
+  expect(index).toBe(0);
+});
+
+test('every guided phase can reset immediately without leaving overlays', async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = window.setTimeout;
+    window.setTimeout = (fn, ms, ...args) => original(fn, Math.min(ms, 2), ...args);
+  });
+  await page.goto('/hadoopsim-teaching.html');
+  const phases = await page.evaluate(async () => {
+    const sim = window.teachingSimulation;
+    const checked = [];
+    for (const type of ['INPUT_INIT', 'MAP_BATCH', 'SPILL_SORT', 'COMBINE', 'MERGE', 'SHUFFLE', 'REDUCE_MERGE', 'REDUCE', 'OUTPUT', 'FINISH']) {
+      sim.reset();
+      sim.init();
+      while (sim.getCurrentStepInfo().step?.type !== type && !sim.isComplete()) await sim.nextStep();
+      if (sim.isComplete()) throw new Error(`Missing phase ${type}`);
+      const pending = sim.nextStep();
+      sim.reset();
+      await pending;
+      if (sim.getCurrentStepInfo().index !== 0 || document.querySelector('.flying-record, .combine-sweep')) throw new Error(`Stale step or overlay after ${type}`);
+      checked.push(type);
+    }
+    return checked.length;
+  });
+  expect(phases).toBe(10);
+});

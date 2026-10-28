@@ -25,3 +25,11 @@ test('reset removes notifications from the previous cluster', async ({ page }) =
   await expect(page.locator('.notification')).toHaveCount(1);
   await expect(page.locator('.notification')).toContainText('reset');
 });
+
+test('ecosystem announces notifications through a persistent live region', async ({ page }) => {
+  await page.goto('/hadoop-ecosystem-simulator.html');
+  const status = page.getByRole('status');
+  await expect(status).toHaveAttribute('aria-live', 'polite');
+  await page.getByRole('button', { name: /Upload 256 MB/i }).click();
+  await expect(status).toContainText('uploaded');
+});

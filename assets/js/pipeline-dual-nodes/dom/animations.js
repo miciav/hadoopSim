@@ -10,8 +10,19 @@ import { createRecordElement } from './records.js';
  * @param {number} ms - Milliseconds to wait
  * @returns {Promise<void>}
  */
-export function wait(ms) {
-  return new Promise(r => setTimeout(r, ms));
+export function wait(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) { reject(signal.reason); return; }
+    const abort = () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', abort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', abort, { once: true });
+  });
 }
 
 /**
@@ -21,7 +32,8 @@ export function wait(ms) {
  * @param {Object} recordData - Record data for display
  * @param {number} duration - Animation duration in ms
  */
-export async function flyRecord(sourceId, targetId, recordData, duration) {
+export async function flyRecord(sourceId, targetId, recordData, duration, signal) {
+  signal?.throwIfAborted();
   const src = el(sourceId);
   const tgt = el(targetId);
   if (!src || !tgt) return;
@@ -45,8 +57,11 @@ export async function flyRecord(sourceId, targetId, recordData, duration) {
   flyer.style.top = (r2.top + r2.height / 2 + window.scrollY - 8) + 'px';
   flyer.style.transition = `top ${duration}ms ease-in-out, left ${duration}ms ease-in-out`;
 
-  await wait(duration);
-  flyer.remove();
+  try {
+    await wait(duration, signal);
+  } finally {
+    flyer.remove();
+  }
 }
 
 /**
@@ -54,7 +69,8 @@ export async function flyRecord(sourceId, targetId, recordData, duration) {
  * @param {string} elementId - Container element ID
  * @param {string} colorVariant - CSS class for color (e.g., 'sweep-amber')
  */
-export function triggerCombineSweep(elementId, colorVariant = '') {
+export function triggerCombineSweep(elementId, colorVariant = '', signal) {
+  if (signal?.aborted) return;
   const container = el(elementId);
   if (!container) return;
 
@@ -68,5 +84,12 @@ export function triggerCombineSweep(elementId, colorVariant = '') {
   container.appendChild(sweep);
 
   // Clean up after animation
-  setTimeout(() => sweep.remove(), 1100);
+  let timer;
+  const cleanup = () => {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', cleanup);
+    sweep.remove();
+  };
+  timer = setTimeout(cleanup, 1100);
+  signal?.addEventListener('abort', cleanup, { once: true });
 }

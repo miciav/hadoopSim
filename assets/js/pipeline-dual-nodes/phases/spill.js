@@ -18,7 +18,7 @@ import { SWEEP_COLORS } from '../config.js';
  * @returns {Promise<void>}
  */
 export async function runSpill(state, mapperId, spillIdx, delay, callbacks) {
-  const { isRunning, onSpillCreated } = callbacks;
+  const { isRunning, onSpillCreated, signal } = callbacks;
 
   if (!isRunning()) return;
 
@@ -42,7 +42,7 @@ export async function runSpill(state, mapperId, spillIdx, delay, callbacks) {
   for (const rec of sortedBuffer) {
     if (!isRunning()) return;
 
-    await flyRecord(bufId, slotId, rec, delay * 0.5);
+    await flyRecord(bufId, slotId, rec, delay * 0.5, signal);
 
     if (!isRunning()) return;
 
@@ -53,7 +53,7 @@ export async function runSpill(state, mapperId, spillIdx, delay, callbacks) {
       showRecord(r);
     }
 
-    await wait(delay * 0.1);
+    await wait(delay * 0.1, signal);
 
     if (!isRunning()) return;
   }
@@ -68,7 +68,7 @@ export async function runSpill(state, mapperId, spillIdx, delay, callbacks) {
   onSpillCreated();
 
   if (slot) {
-    await wait(delay * 0.5);
+    await wait(delay * 0.5, signal);
     if (!isRunning()) return;
 
     if (combineRow) {
@@ -81,15 +81,15 @@ export async function runSpill(state, mapperId, spillIdx, delay, callbacks) {
     // Sweep effect for combine
     if (combineSlot) clearRecords(combineSlot);
     const sweepTargetId = combineSlot ? combineSlotId : slotId;
-    triggerCombineSweep(sweepTargetId, SWEEP_COLORS.AMBER);
-    await wait(800);
+    triggerCombineSweep(sweepTargetId, SWEEP_COLORS.AMBER, signal);
+    await wait(800, signal);
     if (!isRunning()) return;
 
     // Show combined records
     combined.forEach(rec => {
       const r = createRecordElement(rec, rec.count);
       (combineSlot || slot).appendChild(r);
-      setTimeout(() => showRecord(r), 20);
+      showRecord(r);
     });
   }
 }

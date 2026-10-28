@@ -473,7 +473,7 @@ function submitYarnJob() {
     scheduleYarnCompletion(result.container.name, null);
   } else if (result.queued) {
     notify(`⏳ ${name} queued (insufficient resources)`, 'warning');
-  } else {
+  } else if (!result.reason) {
     notify(`❌ ${name} rejected (queue full)`, 'error');
   }
 
@@ -513,7 +513,7 @@ function submitBigYarnJob() {
     notify(`✅ Big YARN ${jobRecord.name} started (${allocated} containers)`, 'success');
   } else if (allocated > 0) {
     notify(`⚠️ ${jobRecord.name}: ${allocated}/${numContainers} containers running`, 'warning');
-  } else {
+  } else if (results.some(entry => entry.queued)) {
     notify(`⏳ ${jobRecord.name} queued: insufficient resources`, 'warning');
   }
 
@@ -526,6 +526,11 @@ function submitBigYarnJob() {
 
   renderCluster();
 }
+
+sim.on('yarn:rejected', ({ request }) => {
+  notify(`❌ ${request.name} rejected: no active node can fit its CPU and memory request.`, 'error');
+  renderCluster();
+});
 
 sim.on('yarn:allocated', ({ container }) => {
   const jobRecord = yarnJobsByContainer.get(container.name) || null;

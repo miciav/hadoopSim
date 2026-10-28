@@ -30,6 +30,11 @@ function scheduleCompletion(container) {
   completionTimers.set(container.name, timeoutId);
 }
 
+sim.on('yarn:rejected', ({ request }) => {
+  notify(`❌ ${request.name} rejected: no active node can fit its CPU and memory request.`, 'error');
+  renderCluster();
+});
+
 sim.on('yarn:allocated', ({ container }) => {
   scheduleCompletion(container);
   renderCluster();
@@ -141,7 +146,7 @@ function submitJob() {
     notify(`✅ ${name} allocated successfully!`, 'success');
   } else if (result.queued) {
     notify(`⏳ ${name} queued (waiting for resources)`, 'info');
-  } else {
+  } else if (!result.reason) {
     notify(`❌ ${name} rejected (queue full)`, 'error');
   }
 
@@ -172,8 +177,8 @@ function submitBigJob() {
     notify(`✅ Big Job-${jobId} distributed across ${allocated} nodes!`, 'success');
   } else if (allocated > 0) {
     notify(`⚠️ Big Job-${jobId}: ${allocated}/${numContainers} running, ${queued} queued`, 'info');
-  } else {
-    notify(`⏳ Big Job-${jobId} fully queued (${numContainers} containers)`, 'info');
+  } else if (queued > 0) {
+    notify(`⏳ Big Job-${jobId}: ${queued} containers queued`, 'info');
   }
 
   renderCluster();

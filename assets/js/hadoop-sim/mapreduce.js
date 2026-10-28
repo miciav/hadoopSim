@@ -235,7 +235,9 @@ export function createMapReduceEngine({
     const summaries = [];
     const affectedByJob = new Map();
 
-    state.mapReduceJobs.forEach((job) => {
+    const jobs = state.mapReduceJobs;
+    jobs.forEach((job) => {
+      if (state.mapReduceJobs !== jobs) return;
       if (job.status === 'queued') {
         const locations = buildBlockLocations(state.nodes, job.fileName);
         if (job.mappers.some((mapper) => !locations.has(mapper.blockId))) failJob(job, 'lost-block');
@@ -248,6 +250,11 @@ export function createMapReduceEngine({
 
       if (job.appMasterNodeId === nodeId) {
         failJob(job, 'application-master-failed');
+        return;
+      }
+      const locations = buildBlockLocations(state.nodes, job.fileName);
+      if (job.mappers.some((mapper) => !mapper.completed && !locations.has(mapper.blockId))) {
+        failJob(job, 'lost-block');
         return;
       }
       const affected = job.mappers.filter((mapper) => !mapper.completed && mapper.nodeId === nodeId);
@@ -283,6 +290,7 @@ export function createMapReduceEngine({
 
     });
 
+    if (state.mapReduceJobs !== jobs) return [];
     drain();
     summaries.forEach((summary) => {
       const job = state.mapReduceJobs.find((entry) => entry.id === summary.jobId);

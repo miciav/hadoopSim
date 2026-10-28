@@ -74,6 +74,7 @@ export function createSimulation() {
 
     const actor = createActor(fromPromise(async ({ signal }) => {
       runSignal = signal;
+      runCallbacks.signal = signal;
       // Phase 1: INPUT
       if (!runCallbacks.isRunning()) return;
       await runInputPhase(tick, runState, runCallbacks);
@@ -118,7 +119,7 @@ export function createSimulation() {
     highlightNodes([ELEMENT_IDS.NODE_01, ELEMENT_IDS.NODE_02], 'Map Phase');
     highlightBoxes([ELEMENT_IDS.BOX_INPUT_0, ELEMENT_IDS.BOX_INPUT_1]);
     log('<strong>YARN ResourceManager:</strong> Job accepted. Allocated Containers on Node 01, Node 02.', 'SYS');
-    await wait(tick);
+    await wait(tick, runCallbacks.signal);
   }
 
   /**
@@ -147,17 +148,17 @@ export function createSimulation() {
 
     // Animation: fly records to merge output in sorted order
     await Promise.all([
-      runMergeAnimation(runState, 0, tick, runCallbacks.isRunning),
-      runMergeAnimation(runState, 1, tick * 1.05, runCallbacks.isRunning)
+      runMergeAnimation(runState, 0, tick, runCallbacks.isRunning, runCallbacks.signal),
+      runMergeAnimation(runState, 1, tick * 1.05, runCallbacks.isRunning, runCallbacks.signal)
     ]);
 
     if (!runState.running) return;
-    await wait(tick);
+    await wait(tick, runCallbacks.signal);
 
     // Finalize merge output (ghost source spills)
     await Promise.all([
-      runMergeSortOutput(runState, 0, tick, runCallbacks.isRunning),
-      runMergeSortOutput(runState, 1, tick, runCallbacks.isRunning)
+      runMergeSortOutput(runState, 0, tick, runCallbacks.isRunning, runCallbacks.signal),
+      runMergeSortOutput(runState, 1, tick, runCallbacks.isRunning, runCallbacks.signal)
     ]);
   }
 
@@ -180,7 +181,7 @@ export function createSimulation() {
 
     // Fold if teaching mode is OFF
     if (!runCallbacks.isTeaching()) {
-      await foldIntermediateRows(runCallbacks.isRunning);
+      await foldIntermediateRows(runCallbacks.isRunning, runCallbacks.signal);
     }
   }
 
@@ -194,7 +195,7 @@ export function createSimulation() {
     highlightBoxes([ELEMENT_IDS.BOX_RED_0, ELEMENT_IDS.BOX_RED_1, ELEMENT_IDS.BOX_RED_2]);
     log('<strong>Reduce Phase:</strong> Sort/Group & Aggregation started.', 'RED');
 
-    await runReduce(runState, tick, runCallbacks.isRunning);
+    await runReduce(runState, tick, runCallbacks.isRunning, runCallbacks.signal);
   }
 
   /**
@@ -207,7 +208,7 @@ export function createSimulation() {
     highlightBoxes([ELEMENT_IDS.BOX_RED_0, ELEMENT_IDS.BOX_RED_1, ELEMENT_IDS.BOX_RED_2]);
     log('<strong>Reduce Merge Sort:</strong> Merging sorted map outputs...', 'RED');
 
-    await runReduceMergeSort(runState, tick, runCallbacks.isRunning, runCallbacks.isTeaching);
+    await runReduceMergeSort(runState, tick, runCallbacks.isRunning, runCallbacks.isTeaching, runCallbacks.signal);
   }
 
   /**
@@ -220,7 +221,7 @@ export function createSimulation() {
     highlightBoxes([ELEMENT_IDS.BOX_HDFS_OUTPUT]);
     log('<strong>Output Phase:</strong> Writing results to HDFS...', 'SYS');
 
-    await runOutput(runState, tick, runCallbacks.isRunning);
+    await runOutput(runState, tick, runCallbacks.isRunning, runCallbacks.signal);
   }
 
   /**
