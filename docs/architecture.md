@@ -2,7 +2,7 @@
 
 ## Goals
 
-- Single, testable JS library (no DOM/React dependencies).
+- A testable cluster library and separate record-pipeline models; pure domain logic has no DOM/React dependency.
 - High cohesion per subsystem (HDFS, YARN, MapReduce) and low coupling via a shared state model.
 - Deterministic simulations through injected RNG/Clock.
 
@@ -22,12 +22,12 @@
 - MapReduce allocates one mapper per block; locality preferred.
 - Failed nodes never receive new allocations.
 
-## Library API (planned)
+## Library API
 
-- `createSimulation(config, deps)` -> `{ state, actions, on, off }`
+- `createSimulation(config, deps)` -> `{ state, actions, on, off, dispose, hdfs, yarn, mapreduce }`
 - `config.nodes` can define heterogeneous nodes (overrides nodeCount/nodeTemplate)
-- `actions`: `uploadFile`, `submitYarnJob`, `submitMapReduce`, `failNode`, `reset`
-- `deps`: `{ rng, clock, emitter }` for deterministic tests.
+- `actions`: `uploadFile`, `submitYarnJob`, `submitDistributedJob`, `submitMapReduce`, `failNode`, `reReplicate`, `reset`
+- `deps`: `{ seed, rng, clock, emitter }` for deterministic tests.
 
 ## Didactic boundaries
 

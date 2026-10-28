@@ -54,7 +54,10 @@ function scheduleYarnCompletion(containerName, jobRecord = null) {
 
     if (jobRecord) {
       jobRecord.completedContainers += 1;
-      if (jobRecord.completedContainers === jobRecord.numContainers) {
+      if (
+        !jobRecord.failed &&
+        jobRecord.completedContainers === jobRecord.numContainers
+      ) {
         notify(`✅ ${jobRecord.name} completed!`, 'success');
       }
     }
@@ -375,15 +378,18 @@ function renderMapReduceJobs() {
   html += sim.state.yarnJobs
     .map((job) => {
       const progress = (job.completedContainers / job.numContainers) * 100;
-      const status =
-        job.completedContainers === job.numContainers ? 'completed' : 'running';
+      const status = job.failed
+        ? 'failed'
+        : job.completedContainers === job.numContainers
+          ? 'completed'
+          : 'running';
 
       return `
         <div class="mapreduce-job">
           <div class="job-header">
             <div class="job-name">🎯 ${job.name}</div>
             <div class="job-status status-${status}">
-              ${status === 'running' ? 'Running' : 'Completed'}
+              ${status === 'failed' ? 'Failed' : status === 'running' ? 'Running' : 'Completed'}
             </div>
           </div>
           <div style="font-size: 0.85em; color: #4a5568; margin-top: 4px;">
@@ -558,6 +564,8 @@ function submitBigYarnJob() {
 }
 
 sim.on('yarn:rejected', ({ request }) => {
+  const job = yarnJobsByContainer.get(request.name);
+  if (job) job.failed = true;
   notify(
     `❌ ${request.name} rejected: no active node can fit its CPU and memory request.`,
     'error'

@@ -1,103 +1,71 @@
-# Domain Model: Hadoop / MapReduce Simulator
+# Domain model and teaching boundaries
 
-This document formalizes the didactic domain model for a deterministic, step-based MapReduce simulator. It focuses on conceptual correctness and observability over performance or Hadoop internals.
+The site contains distinct educational models. It is not a Hadoop performance
+simulator, and a guided step is not a scheduler tick.
 
-## Core Domain Entities
+## Aggregate cluster: HDFS, YARN and mapper progress
 
-- Job: A MapReduce workload with inputs, configuration, and lifecycle state.
-- InputDataset: Logical input split into InputSplits for mapping.
-- InputSplit: A chunk of input assigned to a MapTask; contains Records.
-- Record: Atomic input unit (key/value) consumed by map.
-- MapTask: Processes one InputSplit; emits intermediate key/value pairs.
-- ReduceTask: Consumes partitions of intermediate data; emits output records.
-- Partition: A deterministic mapping of keys to reducer indices.
-- Shuffle: Logical transfer of map outputs to reducers; includes sort/merge.
-- TaskAttempt: A specific execution attempt of a task.
-- TaskRuntime: Simulation-time state machine for map/reduce execution.
-- OutputDataset: Final reduce outputs, grouped by key.
+`assets/js/hadoop-sim/` stores sizes in MB. Nodes contain storage blocks and CPU /
+memory allocations. Files identify logical blocks; physical replicas live on
+nodes. YARN containers reserve CPU and memory on one active node.
 
-## Value Objects
+Each MapReduce job creates one required mapper per logical block. The private
+XState job actor governs `queued → running → completed|failed`; actor references
+are not exposed in job records. Empty files complete without allocations.
 
-- JobId, TaskId, AttemptId: Stable identifiers; deterministic ordering.
-- SplitId, PartitionId, RecordId: Identify data slices and routing targets.
-- DataSize: Bytes/MB for records, splits, and intermediate outputs.
-- Time: Simulation ticks or steps; monotonic and deterministic.
-- Progress: Percentage or fraction for task/job completion.
-- ResourceSpec: Optional CPU/memory requirement per task (abstract units).
-- Key, Value: Logical types; keys are comparable for sort/partitioning.
+Admission is FIFO among MapReduce jobs. A job receives its ApplicationMaster only
+when at least one mapper can also fit. Mappers run in waves as capacity permits.
+A mapper prefers a node holding its block but can read a remote replica. Losing
+the last accessible input replica fails unfinished work, including remote reads.
+A failed mapper can retry if its data remains available. ApplicationMaster
+failure terminates the job; ApplicationMaster restart is not simulated.
 
-## Domain Events
+YARN retains its simple allocation policy. Temporarily unavailable resources
+cause queueing; requests that cannot fit any active node are rejected explicitly.
+There is no fairness guarantee between standalone YARN and MapReduce workloads.
 
-- JobSubmitted: Job enters the system with configuration and inputs.
-- JobInitialized: Splits created; tasks planned; initial state set.
-- MapTaskStarted / MapTaskCompleted: Map task state transitions.
-- MapOutputEmitted: Intermediate key/value produced for a partition.
-- ShuffleStarted / ShuffleCompleted: Reducer begins/finishes fetching map output.
-- ShuffleFetchProgress: Incremental transfer/merge progress.
-- SortStarted / SortCompleted: Reducer sorts/merges intermediate data.
-- ReduceTaskStarted / ReduceTaskCompleted: Reduce task transitions.
-- JobSucceeded / JobFailed: Terminal job state.
-- TaskAttemptFailed / TaskAttemptRetried: Simple retry behavior.
-- MetricsUpdated: Snapshot for observability (counters, progress, timing).
+This model does not execute shuffle/reduce, produce a Gantt timeline, or measure
+real throughput. Progress represents completed mapper work and simulated ticks.
 
-## Key Invariants and Rules
+## Automatic record pipeline
 
-- Each InputSplit is mapped by exactly one MapTask at a time.
-- A MapTask reads all records in its InputSplit exactly once per attempt.
-- A MapTask emits zero or more intermediate pairs per input record.
-- Each intermediate pair is assigned to exactly one PartitionId.
-- Each PartitionId maps to exactly one ReduceTask for the job.
-- A ReduceTask sees all intermediate pairs for its partition.
-- Shuffle is a logical transfer; ordering is not guaranteed until sort.
-- Sort orders intermediate pairs by key using a deterministic comparator.
-- Reduce receives grouped values per key in sorted key order.
-- Job progress is derived from task state and completion percentages.
-- Deterministic execution: same inputs + seed ⇒ same events and outputs.
+Two mapper nodes process input splits concurrently; a node can process several
+splits in sequence. Each input record emits `(key, 1)`. Buffers spill at their
+configured threshold and at split boundaries. Spill contents are sorted by
+partition/key and combined locally, then merged using a multi-way merge.
+Shuffle transfers each partition from both mappers to its reducer. Reducers merge,
+group and sum counts, then show a final output file per partition.
 
-## Optional Extensions
+Animations expose concurrency but their timings and network jitter are illustrative.
+Changing animation speed or omitting DOM elements does not change the output.
+The automatic run has its own XState promise actor and cancellation signal.
 
-- Faults: Fail a task attempt; retry up to N times.
-- Skew: Uneven key distribution causing hot partitions.
-- Speculative Execution: Duplicate slow tasks; first completion wins.
-- Stragglers: Inject variable task durations.
-- Compression: Reduce intermediate size before shuffle.
-- Counters: User/system counters (records read, bytes shuffled).
+## Guided record pipeline
 
-## Domain Vocabulary (Glossary)
+`buildTeachingSteps(state)` constructs explanatory steps and
+`applyTeachingStep(state, step)` returns a fresh domain state without using the
+DOM. The existing step controller owns the cursor. A step can aggregate records
+from both mappers; it need not equal an automatic-pipeline event.
 
-- Job: A configured MapReduce execution unit.
-- Task: A unit of work; MapTask or ReduceTask.
-- Attempt: One execution try for a task.
-- InputSplit: A fixed subset of input assigned to a mapper.
-- Record: A key/value input pair.
-- Intermediate: Mapper output prior to shuffle/sort.
-- Partition: Routing of intermediate data to a reducer.
-- Shuffle: Transfer of intermediate data to reducers.
-- Sort: Ordering and merging intermediate data by key.
-- Reduce: Aggregation step that produces final output.
-- Output: Final key/value pairs written by reducers.
-- Progress: Fractional completion of task/job lifecycles.
+Next advances one step. Play repeats steps, Pause finishes the current step,
+and Reset cancels it immediately and starts a fresh session. Waits, flights and
+sweeps receive the execution signal so old work cannot affect the new session.
 
-## Execution State Model (Mermaid)
+## Shared invariants and reproducibility
 
-```mermaid
-stateDiagram-v2
-  [*] --> JobSubmitted
-  JobSubmitted --> JobInitialized
-  JobInitialized --> Mapping
-  Mapping --> ShuffleSort
-  ShuffleSort --> Reducing
-  Reducing --> JobSucceeded
-  Mapping --> JobFailed
-  ShuffleSort --> JobFailed
-  Reducing --> JobFailed
-```
+- CPU, memory and storage stay between zero and node capacity.
+- Replicas occupy distinct nodes; failed nodes receive no new allocations.
+- Word counts are conserved through spill, combine, shuffle and reduce.
+- Split boundaries are preserved even when a split is smaller than a buffer.
+- A job succeeds only after all required mappers complete.
+- Reset cancels old jobs, recovery work and notifications in the page adapters.
+- The core supports injected clocks and RNG. A managed seed, including zero,
+  restarts on reset; a caller-injected RNG must be reset by the caller.
+- Seeded core outcomes are repeatable for the same input and interventions at
+  the same logical instants. Animation traces across the two pipelines are not
+  expected to be identical.
 
-## Scope of the provided views
-
-The aggregate cluster simulator represents resource allocation and mapper progress;
-it does not simulate shuffle or reduce execution. The automatic pipeline represents
-parallel record movement. The guided pipeline groups record operations into teaching
-steps, and a step is not a cluster scheduler tick. Mapper nodes may display work
-from several input splits in sequence; split boundaries still trigger a spill.
-The guided model uses pure step transitions independently of its animation layer.
+Speculative execution, compression, real network contention, task-attempt
+history and Hadoop scheduler fairness are not implemented. The two standalone
+root pipeline pages remain separate narrated demonstrations; see
+[the page contracts](teaching-contracts.md).

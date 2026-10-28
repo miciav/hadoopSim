@@ -15,6 +15,7 @@
 
 ## Build, Test, and Development Commands
 
+- Use the Node version in `.node-version` (also used in CI).
 - `npm run build` — build the static site into `dist/`.
 - `npm run preview` — serve the built site at `http://localhost:5173/`.
 - `npm run lint` and `npm run format:check` — run configured static checks.

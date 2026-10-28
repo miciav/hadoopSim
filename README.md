@@ -6,20 +6,20 @@ An interactive, browser-based playground that visualizes how Hadoop HDFS, YARN, 
 
 - **Cluster dashboard** – See CPU, memory, and storage consumption across nodes, plus container allocations and per-block replica placement.
 - **MapReduce orchestration** – Submit jobs per file and inspect mapper progress and data locality. The separate pipeline pages illustrate shuffle and reduce.
-- **Failure & recovery drills** – Simulate node loss, trigger re-replication, rebalance storage, or add/remove nodes to watch how the system adapts.
+- **Failure & recovery drills** – Simulate node loss, observe re-replication, and inspect explicit job failure or mapper recovery.
 - **Notifications + stats** – Inline toasts highlight successes and warnings, while summary cards show cluster usage.
 
 ## Quick Start
 
 1. Clone or download the repo.
-2. Start a static server:
+2. Use Node 24.22.1 (recorded in `.node-version`), then build and start a static server:
    ```bash
    npm ci
    npm run build
    npm run preview
    # then visit http://localhost:5173/index.html
    ```
-3. Open any page in the root (examples):
+3. Open a page through the preview server (examples):
    - `index.html` (landing page)
    - `hadoop-ecosystem-simulator.html`
    - `hadoop_full.html`
@@ -34,7 +34,7 @@ An interactive, browser-based playground that visualizes how Hadoop HDFS, YARN, 
 - HTML entry points live in the repo root and load logic from `assets/js/` (shared library in `assets/js/hadoop-sim/`).
 - The React simulator uses `assets/js/hadoop-ecosystem-simulator.js`; esbuild bundles JSX and dependencies into `dist/`.
 - Formatting: two-space indentation, `const`/`let`, `camelCase` for functions/state, `PascalCase` for components, and `UPPER_SNAKE_CASE` for shared constants.
-- Run `npx prettier --write hadoop-ecosystem-simulator.html` after large JSX edits.
+- Run `npm run format` to format maintained sources, tests, HTML and configuration.
 
 ## GitHub Pages
 
@@ -47,7 +47,7 @@ An interactive, browser-based playground that visualizes how Hadoop HDFS, YARN, 
 - State runs in the browser and resets when the page is reloaded.
 - Each page uses its own didactic level; see `docs/teaching-contracts.md`.
 
-Formatting checks currently cover the build script and configuration files; existing simulator source formatting is unchanged.
+Formatting checks cover maintained source files. Generated output, dependencies and the npm-generated lockfile are excluded.
 
 ## Testing & Validation
 
@@ -70,7 +70,7 @@ npm run test:unit
 After changes, manually verify:
 
 1. Cluster initialization, file uploads across sizes, and proper replica distribution.
-2. Node addition/removal, failure simulation, and re-replication status messages.
+2. Node failure simulation, re-replication status messages and reset during execution.
 3. MapReduce mapper allocation and progress, and the separate pipeline shuffle/reduce visualizations.
 4. Console should remain free of React warnings/errors.
 
@@ -82,3 +82,5 @@ After changes, manually verify:
 4. Open a PR referencing related issues; reviewers focus on scheduler fairness, data locality, and state mutation safety.
 
 See `AGENTS.md` for deeper contributor guidelines, coding conventions, and security notes.
+
+The final implementation and verification record is in [docs/verification.md](docs/verification.md).

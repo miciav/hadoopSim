@@ -1,6 +1,13 @@
 # Didactic Hadoop Simulators Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+**Stato di consegna — 28 ottobre 2026:** task 1–9 completati rispetto alla spec,
+con verifica indipendente e regressioni corrette. Evidenze, alternative alle API
+proposte e deviazioni dalla sequenza originaria sono in
+[verifica finale](../../verification.md). Le caselle indicano la consegna risolta,
+non attestano retroattivamente l'ordine storico dei commit o una baseline manuale
+pre-modifica. La pubblicazione reale rimane successiva all'integrazione autorizzata.
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Rendere affidabili le dimostrazioni Hadoop, preservando obiettivi e granularità di ogni vista e il deploy su GitHub Pages.
 
@@ -67,11 +74,11 @@ non deve essere sostituita da una migrazione incompleta.
 
 **Interfaces:** preservare URL, controlli e API `window.simulation`, `window.pipelineSimulation`, `window.teachingSimulation` finché i loro chiamanti non vengono aggiornati insieme. Nessuna nuova API di prodotto.
 
-- [ ] Per ogni vista annotare obiettivo, unità osservata, significato di avanzamento/completamento, semplificazioni, scenari e controlli esistenti. Separare comportamento desiderato dai bug osservati.
-- [ ] Per le due pagine root non in homepage (`hadoop-map-side-pipeline.html`, `hadoop-map-side-pipeline-dual.html`) registrare le differenze didattiche. Conservarle per default; non dedurre inutilità dall'assenza di link.
-- [ ] Rilevare per ciascuna pipeline dataset, partizioni e conteggi finali attesi con conteggio indipendente delle chiavi. Aggiungere test con assertion `assert.deepEqual(actualCounts, expectedCounts)` e verificare parallelismo e passo guidato separatamente.
-- [ ] Eseguire `npm run test:unit` e `npm test`; registrare errori e screenshot iniziali. Non aggiornare snapshot per accettare comportamenti errati.
-- [ ] Verificare manualmente le sei viste; salvare contratto e test di caratterizzazione in un commit dedicato. I test che espongono difetti restano documentati per i task successivi.
+- [x] Per ogni vista annotare obiettivo, unità osservata, significato di avanzamento/completamento, semplificazioni, scenari e controlli esistenti. Separare comportamento desiderato dai bug osservati.
+- [x] Per le due pagine root non in homepage (`hadoop-map-side-pipeline.html`, `hadoop-map-side-pipeline-dual.html`) registrare le differenze didattiche. Conservarle per default; non dedurre inutilità dall'assenza di link.
+- [x] Rilevare per ciascuna pipeline dataset, partizioni e conteggi finali attesi con conteggio indipendente delle chiavi. Aggiungere test con assertion `assert.deepEqual(actualCounts, expectedCounts)` e verificare parallelismo e passo guidato separatamente.
+- [x] Eseguire `npm run test:unit` e `npm test`; registrare errori e screenshot iniziali. Non aggiornare snapshot per accettare comportamenti errati.
+- [x] Verificare manualmente le sei viste; salvare contratto e test di caratterizzazione in un commit dedicato. I test che espongono difetti restano documentati per i task successivi.
 
 ## Task 2: rendere affidabile la base di test e analisi statica
 
@@ -79,7 +86,7 @@ non deve essere sostituita da una migrazione incompleta.
 
 **Interfaces:** mantenere `createManualClock(startMs)`, `setTimeout`, `clearTimeout`, `setInterval`, `clearInterval`, `advance(ms)`. Helper browser `seedPage(page, seed): Promise<void>` passa il seed esplicitamente a `page.addInitScript`.
 
-- [ ] Aggiungere regressioni per auto-cancellazione e cancellazione di un secondo callback con la stessa scadenza. Esempio centrale:
+- [x] Aggiungere regressioni per auto-cancellazione e cancellazione di un secondo callback con la stessa scadenza. Esempio centrale:
 
 ```js
 let calls = 0;
@@ -91,12 +98,12 @@ clock.advance(40);
 assert.equal(calls, 1);
 ```
 
-- [ ] Eseguire `node --test tests/unit/core/clock.test.js`; confermare che il caso nuovo fallisce prima della correzione.
-- [ ] Correggere il riaccodamento dei timer cancellati, importare `CONFIG`, correggere il seed serializzato. Riparare fixture obsolete usando il contratto del task 1; nessun indebolimento delle assertion per ottenere verde.
-- [ ] Limitare Playwright a `**/*.spec.js`; installare ascoltatori di `pageerror` prima della navigazione e far fallire il test se vi sono errori. Diagnosticare le globali mancanti prima di aggiungere attese: niente sleep arbitrari.
-- [ ] Configurare ESLint per browser, Node e JSX senza falsi positivi sui componenti. Script `lint`, `format:check`, `format`; Prettier a due spazi, stile coerente con i sorgenti, esclusi output e archivi in rimozione. Formattazione in commit distinto dalla logica.
-- [ ] Eseguire `npm run test:unit`, `npm test`, `npm run lint`, `npm run format:check`. Se un test espone un bug di dominio, collegarlo al task 8 senza nasconderlo; non dichiarare la suite risolta finché non lo è.
-- [ ] Verificare il reset in browser e registrare i risultati nel commit.
+- [x] Eseguire `node --test tests/unit/core/clock.test.js`; confermare che il caso nuovo fallisce prima della correzione.
+- [x] Correggere il riaccodamento dei timer cancellati, importare `CONFIG`, correggere il seed serializzato. Riparare fixture obsolete usando il contratto del task 1; nessun indebolimento delle assertion per ottenere verde.
+- [x] Limitare Playwright a `**/*.spec.js`; installare ascoltatori di `pageerror` prima della navigazione e far fallire il test se vi sono errori. Diagnosticare le globali mancanti prima di aggiungere attese: niente sleep arbitrari.
+- [x] Configurare ESLint per browser, Node e JSX senza falsi positivi sui componenti. Script `lint`, `format:check`, `format`; Prettier a due spazi, stile coerente con i sorgenti, esclusi output e archivi in rimozione. Formattazione in commit distinto dalla logica.
+- [x] Eseguire `npm run test:unit`, `npm test`, `npm run lint`, `npm run format:check`. Se un test espone un bug di dominio, collegarlo al task 8 senza nasconderlo; non dichiarare la suite risolta finché non lo è.
+- [x] Verificare il reset in browser e registrare i risultati nel commit.
 
 ## Task 3: eliminare le versioni morte e le promesse obsolete
 
@@ -104,10 +111,10 @@ assert.equal(calls, 1);
 
 **Interfaces:** conservare gli URL attivi del task 1. Non cancellare le due pagine root standalone senza dimostrarne l'equivalenza semantica.
 
-- [ ] Cercare con `rg` riferimenti testuali, import, script e collegamenti a ciascun candidato. Confrontare gli archivi per contenuti didattici unici prima della rimozione; annotare eventuali eccezioni nel contratto.
-- [ ] Eliminare cartella e script sostituito; rimuovere `vis-timeline` JS/CSS e selettori esclusivamente inutilizzati. Non rimuovere CSS condiviso sulla sola base del prefisso.
-- [ ] Correggere homepage, README e titolo: niente promessa di Gantt o localStorage assenti; esplicitare il livello semplificato della vista cluster senza aggiungere shuffle/reduce fittizi.
-- [ ] Eseguire smoke test delle pagine conservate, controllare tutti i link della homepage e `git diff --check`. Commit della pulizia, senza refactoring funzionale.
+- [x] Cercare con `rg` riferimenti testuali, import, script e collegamenti a ciascun candidato. Confrontare gli archivi per contenuti didattici unici prima della rimozione; annotare eventuali eccezioni nel contratto.
+- [x] Eliminare cartella e script sostituito; rimuovere `vis-timeline` JS/CSS e selettori esclusivamente inutilizzati. Non rimuovere CSS condiviso sulla sola base del prefisso.
+- [x] Correggere homepage, README e titolo: niente promessa di Gantt o localStorage assenti; esplicitare il livello semplificato della vista cluster senza aggiungere shuffle/reduce fittizi.
+- [x] Eseguire smoke test delle pagine conservate, controllare tutti i link della homepage e `git diff --check`. Commit della pulizia, senza refactoring funzionale.
 
 ## Task 4: build statica riproducibile prima di introdurre XState
 
@@ -115,12 +122,12 @@ assert.equal(calls, 1);
 
 **Interfaces:** `npm run build` produce `dist/` completo; `npm run preview` serve `dist/` via HTTP; `npm test` usa build/preview. `node scripts/build.mjs` usa esbuild e `node:fs`, senza plugin o framework di build aggiuntivi.
 
-- [ ] Aggiungere test browser di apertura diretta per gli URL preservati, con richieste esterne bloccate, e un'esecuzione sotto `/hadoopSim/`. Verificare assenza di pageerror e di asset mancanti. Fallimento atteso iniziale: CDN e output non presenti.
-- [ ] Installare versioni stabili esatte di esbuild, React/ReactDOM compatibili con la major già usata e XState v5 stabile per i task successivi. Registrare versioni e licenze; non adottare una major alpha.
-- [ ] Il build copia gli HTML root conservati e gli asset necessari, compila entry point ESM e JSX con bundle locali sotto `dist/assets/js/`. Usare URL relativi. Pulire esclusivamente `dist/`; preservare pagine standalone con script inline.
-- [ ] Sostituire caricamento React/Babel via CDN con import locali compilati; importare `createSimulation` direttamente. Eliminare bridge globale, polling di disponibilità e Babel runtime con i rispettivi chiamanti.
-- [ ] Documentare che i sorgenti ora richiedono build per l'uso browser; la distribuzione resta una cartella statica servibile con Python. Non modificare ancora il deploy Pages della root senza aver pronto il task 9.
-- [ ] Eseguire `npm run build`, `npm test`, `npm run test:unit`; aprire l'output nel browser e ripetere la verifica con rete esterna bloccata. Commit.
+- [x] Aggiungere test browser di apertura diretta per gli URL preservati, con richieste esterne bloccate, e un'esecuzione sotto `/hadoopSim/`. Verificare assenza di pageerror e di asset mancanti. Fallimento atteso iniziale: CDN e output non presenti.
+- [x] Installare versioni stabili esatte di esbuild, React/ReactDOM compatibili con la major già usata e XState v5 stabile per i task successivi. Registrare versioni e licenze; non adottare una major alpha.
+- [x] Il build copia gli HTML root conservati e gli asset necessari, compila entry point ESM e JSX con bundle locali sotto `dist/assets/js/`. Usare URL relativi. Pulire esclusivamente `dist/`; preservare pagine standalone con script inline.
+- [x] Sostituire caricamento React/Babel via CDN con import locali compilati; importare `createSimulation` direttamente. Eliminare bridge globale, polling di disponibilità e Babel runtime con i rispettivi chiamanti.
+- [x] Documentare che i sorgenti ora richiedono build per l'uso browser; la distribuzione resta una cartella statica servibile con Python. Non modificare ancora il deploy Pages della root senza aver pronto il task 9.
+- [x] Eseguire `npm run build`, `npm test`, `npm run test:unit`; aprire l'output nel browser e ripetere la verifica con rete esterna bloccata. Commit.
 
 ## Task 5: animazioni cancellabili e lifecycle della vista guidata
 
@@ -128,12 +135,12 @@ assert.equal(calls, 1);
 
 **Interfaces:** nuova factory `createPlayback({ next, reset, clock })` con `send(event)`, `subscribe(listener)`, `stop()`. Eventi `NEXT`, `PLAY`, `PAUSE`, `RESET`. `next({ signal }): Promise<{ done: boolean }>` esegue un solo passo guidato; `reset(): void` ripristina modello e UI. Stati `ready`, `executing`, `completed`, `error`; intenzione play/pausa nel contesto. `wait(ms, signal?)` e `flyRecord(sourceId, targetId, record, duration, signal?)` interrompibili con cleanup.
 
-- [ ] Scrivere test con promessa controllata: NEXT, RESET, risoluzione della vecchia promessa. Assertion: indice 0, nessun callback di completamento vecchio, nessun avanzamento della nuova sessione.
-- [ ] Aggiungere casi doppio NEXT (un passo), PAUSE durante un passo (termina quel passo e non il successivo), RESET seguito da PLAY, errore del renderer (errore visibile, controlli recuperabili).
-- [ ] Eseguire `node --test tests/unit/pipeline-teaching/playback.test.js` e confermare le regressioni prima della modifica.
-- [ ] Implementare macchina XState e attività invocata con AbortSignal. Propagare cancellazione a ogni attesa e side effect; non presumere che fermare l'attore annulli automaticamente una Promise JavaScript.
-- [ ] Collegare la API UI esistente alla macchina; rimuovere flag e avanzamenti concorrenti sostituiti. Aggiungere play/pausa solo alla vista che li utilizza. Cleanup di record volanti, sweep e timeout di rendering.
-- [ ] Eseguire test unitari, `npm test -- tests/teaching_pipeline.spec.js`, verifica manuale reset in ogni fase e console. Commit. Questa è la prima verifica concreta dell'utilità di XState, prima di migrare il cluster.
+- [x] Scrivere test con promessa controllata: NEXT, RESET, risoluzione della vecchia promessa. Assertion: indice 0, nessun callback di completamento vecchio, nessun avanzamento della nuova sessione.
+- [x] Aggiungere casi doppio NEXT (un passo), PAUSE durante un passo (termina quel passo e non il successivo), RESET seguito da PLAY, errore del renderer (errore visibile, controlli recuperabili).
+- [x] Eseguire `node --test tests/unit/pipeline-teaching/playback.test.js` e confermare le regressioni prima della modifica.
+- [x] Implementare macchina XState e attività invocata con AbortSignal. Propagare cancellazione a ogni attesa e side effect; non presumere che fermare l'attore annulli automaticamente una Promise JavaScript.
+- [x] Collegare la API UI esistente alla macchina; rimuovere flag e avanzamenti concorrenti sostituiti. Aggiungere play/pausa solo alla vista che li utilizza. Cleanup di record volanti, sweep e timeout di rendering.
+- [x] Eseguire test unitari, `npm test -- tests/teaching_pipeline.spec.js`, verifica manuale reset in ogni fase e console. Commit. Questa è la prima verifica concreta dell'utilità di XState, prima di migrare il cluster.
 
 ## Task 6: separare il modello dei passi guidati dal DOM
 
@@ -141,11 +148,11 @@ assert.equal(calls, 1);
 
 **Interfaces:** `createTeachingModel({ dataA, dataB, splitSize })` restituisce `getState()`, `getStepInfo()`, `advance()`, `reset()`. `advance()` restituisce `{ step, before, after, done }`, con snapshot stabili senza riferimenti mutabili condivisi col rendering. I tipi di passo rimangono quelli didattici di `STEP_TYPES`; non definirli come eventi universali per tutte le viste.
 
-- [ ] Aggiungere test senza `document` per dati vuoti, chiavi ripetute, split più piccolo e più grande del buffer, spill di fine split. Contare indipendentemente le chiavi di input e confrontarle con output per partizione.
-- [ ] Verificare che la somma dei record rappresentati sia conservata e che il numero di spill derivi dai confini degli split, non soltanto dal totale dei record. Attese e animazioni non entrano nei test del modello.
-- [ ] Estrarre calcoli e costruzione dei passi dall'engine esistente. Riutilizzare `combine`, `sortByPartitionThenKey`, `aggregateByKey`; non creare copie né cambiare l'unità di spiegazione della vista.
-- [ ] Adattare `next({signal})` del task 5: avanzare il modello una volta, animare il risultato, notificare soltanto se la sessione è ancora attiva. DOM opzionale per il calcolo; non silenziare elementi mancanti obbligatori per la UI.
-- [ ] Eseguire `node --test tests/unit/pipeline-teaching/*.test.js` e test browser guidato; confronto visivo con il contratto del task 1. Commit.
+- [x] Aggiungere test senza `document` per dati vuoti, chiavi ripetute, split più piccolo e più grande del buffer, spill di fine split. Contare indipendentemente le chiavi di input e confrontarle con output per partizione.
+- [x] Verificare che la somma dei record rappresentati sia conservata e che il numero di spill derivi dai confini degli split, non soltanto dal totale dei record. Attese e animazioni non entrano nei test del modello.
+- [x] Estrarre calcoli e costruzione dei passi dall'engine esistente. Riutilizzare `combine`, `sortByPartitionThenKey`, `aggregateByKey`; non creare copie né cambiare l'unità di spiegazione della vista.
+- [x] Adattare `next({signal})` del task 5: avanzare il modello una volta, animare il risultato, notificare soltanto se la sessione è ancora attiva. DOM opzionale per il calcolo; non silenziare elementi mancanti obbligatori per la UI.
+- [x] Eseguire `node --test tests/unit/pipeline-teaching/*.test.js` e test browser guidato; confronto visivo con il contratto del task 1. Commit.
 
 ## Task 7: lifecycle della pipeline automatica preservandone la concorrenza
 
@@ -153,11 +160,11 @@ assert.equal(calls, 1);
 
 **Interfaces:** conservare `createSimulation()` con `run`, `stop`, `reset`, `getState`, `updateSplitSize`; aggiungere `pause`/`resume` solo se collegati a controlli. Ogni fase riceve il segnale della propria esecuzione. La macchina governa le fasi proprie della vista, non chiama il modello dei passi guidati.
 
-- [ ] Testare run-reset-run con attese controllate e verificare un solo conteggio per record. Verificare mapper simultaneamente in attività e shuffle con contributi da entrambi.
-- [ ] Testare l'elaborazione senza fill element: i risultati del modello restano corretti, anche se il rendering viene saltato. Confrontare le due pipeline solo su risultati e invarianti comuni a parità di regole, non su tracce o numero di passi.
-- [ ] Migrare il lifecycle a XState, preservare i gruppi concorrenti e separare trasformazioni da aggiornamenti DOM nelle fasi. Eliminare il vecchio controllo `running` dove sostituito; nessun doppio orchestratore.
-- [ ] Propagare cancellazione alle attività del task 5. Pausa al confine di fase/operazione definito nel contratto della vista, senza interrompere arbitrariamente metà aggregazione.
-- [ ] Eseguire unit test pipeline e smoke test; verifica manuale automatica/guidata affiancata per accertare che mantengano il loro diverso valore didattico. Commit.
+- [x] Testare run-reset-run con attese controllate e verificare un solo conteggio per record. Verificare mapper simultaneamente in attività e shuffle con contributi da entrambi.
+- [x] Testare l'elaborazione senza fill element: i risultati del modello restano corretti, anche se il rendering viene saltato. Confrontare le due pipeline solo su risultati e invarianti comuni a parità di regole, non su tracce o numero di passi.
+- [x] Migrare il lifecycle a XState, preservare i gruppi concorrenti e separare trasformazioni da aggiornamenti DOM nelle fasi. Eliminare il vecchio controllo `running` dove sostituito; nessun doppio orchestratore.
+- [x] Propagare cancellazione alle attività del task 5. Pausa al confine di fase/operazione definito nel contratto della vista, senza interrompere arbitrariamente metà aggregazione.
+- [x] Eseguire unit test pipeline e smoke test; verifica manuale automatica/guidata affiancata per accertare che mantengano il loro diverso valore didattico. Commit.
 
 ## Task 8: correggere il dominio del cluster e il lifecycle dei job
 
@@ -172,15 +179,15 @@ adattatori. Le regressioni sotto sono assegnate alla consegna proprietaria e
 devono fallire prima della sua modifica e passare prima del relativo commit.
 Non attendere la fine dell'intero blocco per verificare il lavoro.
 
-- [ ] Scrivere regressioni dell'audit: job nuovo al 93.75% dopo reset conserva i suoi container; blocco perso non viene elaborato; mapper fallito non è escluso dal successo; guasto solo AM termina il job; coda riparte quando si libera capacità.
-- [ ] Testare un cluster con CPU totale 3 e mapper da 2 CPU, AM da 1, file di tre blocchi: tutti i mapper devono completare in sequenza. Richieste singolarmente impossibili devono fallire senza trattenere AM o occupare la coda.
-- [ ] Definire validazione atomica: size finita >=0; file vuoto ammesso con zero blocchi e job completato senza allocazioni. CPU richieste intere >0, memoria >0, capacità positive finite, replica/block size/split size interi >0 dove applicabile; id nodo univoci. Input non valido: `RangeError` prima di contatori/allocazioni; UI mostra errore comprensibile.
-- [ ] Testare richieste invalide, file inesistente esplicitamente richiesto (nessun fallback al primo), seed 0 e reset ripetibile. Se `deps.rng` è iniettato dal chiamante, documentare che il reset del suo stato compete al chiamante; il seed gestito dalla simulazione riparte al reset.
-- [ ] Implementare controlli HDFS e invarianti di risorse. Implementare job-machine per lifecycle e tentativi, mantenendo record serializzabili nello stato; conservare actor reference privatamente nel motore, senza classi/actor dentro `state`.
-- [ ] Implementare FIFO di ammissione MapReduce e avvio progressivo dei mapper. La richiesta AM parte solo quando esiste capacità per almeno un mapper dopo la sua allocazione; evitare AM che bloccano tutta la capacità. Rivalutare su rilascio e guasto senza ricorsione di drain. YARN semplice conserva la propria semantica: non dichiarare fairness globale tra i due scheduler.
-- [ ] Retry mapper: soltanto con replica attiva; attesa se manca temporaneamente capacità, fallimento se manca il dato. Guasto AM: fail esplicito, rilascio atomico e stop attività. Job completo solo quando tutti i task richiesti sono completi. Nessun nuovo modello di shuffle/reduce nel cluster aggregato.
-- [ ] Reset/dispose cancellano timer di progressione e side effect degli adattatori, inclusi completamenti YARN, re-replication ritardata e notifiche. Cleanup React allo smontaggio. Gli adattatori derivano progress e stato dal core e gestiscono anche l'evento failed.
-- [ ] Eseguire `npm run test:unit` e tutti gli smoke test cluster; riprodurre manualmente guasto recuperabile, perdita dati, guasto AM e reset. Commit separabili per validazione, dominio e integrazione, ciascuno con la propria verifica.
+- [x] Scrivere regressioni dell'audit: job nuovo al 93.75% dopo reset conserva i suoi container; blocco perso non viene elaborato; mapper fallito non è escluso dal successo; guasto solo AM termina il job; coda riparte quando si libera capacità.
+- [x] Testare un cluster con CPU totale 3 e mapper da 2 CPU, AM da 1, file di tre blocchi: tutti i mapper devono completare in sequenza. Richieste singolarmente impossibili devono fallire senza trattenere AM o occupare la coda.
+- [x] Definire validazione atomica: size finita >=0; file vuoto ammesso con zero blocchi e job completato senza allocazioni. CPU richieste intere >0, memoria >0, capacità positive finite, replica/block size/split size interi >0 dove applicabile; id nodo univoci. Input non valido: `RangeError` prima di contatori/allocazioni; UI mostra errore comprensibile.
+- [x] Testare richieste invalide, file inesistente esplicitamente richiesto (nessun fallback al primo), seed 0 e reset ripetibile. Se `deps.rng` è iniettato dal chiamante, documentare che il reset del suo stato compete al chiamante; il seed gestito dalla simulazione riparte al reset.
+- [x] Implementare controlli HDFS e invarianti di risorse. Implementare job-machine per lifecycle e tentativi, mantenendo record serializzabili nello stato; conservare actor reference privatamente nel motore, senza classi/actor dentro `state`.
+- [x] Implementare FIFO di ammissione MapReduce e avvio progressivo dei mapper. La richiesta AM parte solo quando esiste capacità per almeno un mapper dopo la sua allocazione; evitare AM che bloccano tutta la capacità. Rivalutare su rilascio e guasto senza ricorsione di drain. YARN semplice conserva la propria semantica: non dichiarare fairness globale tra i due scheduler.
+- [x] Retry mapper: soltanto con replica attiva; attesa se manca temporaneamente capacità, fallimento se manca il dato. Guasto AM: fail esplicito, rilascio atomico e stop attività. Job completo solo quando tutti i task richiesti sono completi. Nessun nuovo modello di shuffle/reduce nel cluster aggregato.
+- [x] Reset/dispose cancellano timer di progressione e side effect degli adattatori, inclusi completamenti YARN, re-replication ritardata e notifiche. Cleanup React allo smontaggio. Gli adattatori derivano progress e stato dal core e gestiscono anche l'evento failed.
+- [x] Eseguire `npm run test:unit` e tutti gli smoke test cluster; riprodurre manualmente guasto recuperabile, perdita dati, guasto AM e reset. Commit separabili per validazione, dominio e integrazione, ciascuno con la propria verifica.
 
 ## Task 9: verifica della lezione e pubblicazione protetta su Pages
 
@@ -188,13 +195,13 @@ Non attendere la fine dell'intero blocco per verificare il lavoro.
 
 **Interfaces:** workflow `npm ci` → lint/format/unit → build → browser test di `dist/` → upload `dist/` → deploy. Pull request eseguono i controlli; deploy soltanto su main o dispatch autorizzato. Permessi Pages soltanto al job deploy.
 
-- [ ] Test browser della lezione: upload, avanzamento, pausa dove prevista, reset durante animazione, nuova esecuzione, guasto recuperabile, perdita dati e job accodato che riparte. Registrare separatamente scenari per ogni granularità.
-- [ ] Testare tutti gli URL conservati sotto un prefisso di progetto con rete esterna bloccata. Garantire avvio diretto delle pagine e assenza di pageerror, React warning e richieste asset fallite.
-- [ ] Aggiornare workflow a una versione Node supportata fissata e allineata con ambiente locale; installare browser Playwright in CI. Configurare preview del task 4 senza riusare server estranei in CI. Pubblicare solo se tutti i controlli precedenti passano.
-- [ ] Aggiornare README e istruzioni di sviluppo ai comandi build/preview, documentare semplificazioni AM/FIFO/mapper e differenze delle viste. Non descrivere come simulate le funzionalità soltanto illustrate.
-- [ ] Verifica manuale Chromium e Safari se disponibile; viewport da proiezione e portatile, tastiera, notifiche accessibili e reduced-motion per controlli/animazioni toccati. Annotare espressamente browser non disponibili.
-- [ ] Eseguire `npm run lint`, `npm run format:check`, `npm run test:unit`, `npm run build`, `npm test`, `git diff --check`. Tutti devono riuscire; conservare screenshot e trace dei casi significativi.
-- [ ] Preparare commit/PR con comportamento, accounting risorse, verifiche e rischi. Il deploy reale si verifica dopo l'integrazione autorizzata, non si dichiara riuscito sulla sola build locale.
+- [x] Test browser della lezione: upload, avanzamento, pausa dove prevista, reset durante animazione, nuova esecuzione, guasto recuperabile, perdita dati e job accodato che riparte. Registrare separatamente scenari per ogni granularità.
+- [x] Testare tutti gli URL conservati sotto un prefisso di progetto con rete esterna bloccata. Garantire avvio diretto delle pagine e assenza di pageerror, React warning e richieste asset fallite.
+- [x] Aggiornare workflow a una versione Node supportata fissata e allineata con ambiente locale; installare browser Playwright in CI. Configurare preview del task 4 senza riusare server estranei in CI. Pubblicare solo se tutti i controlli precedenti passano.
+- [x] Aggiornare README e istruzioni di sviluppo ai comandi build/preview, documentare semplificazioni AM/FIFO/mapper e differenze delle viste. Non descrivere come simulate le funzionalità soltanto illustrate.
+- [x] Verifica manuale Chromium e Safari se disponibile; viewport da proiezione e portatile, tastiera, notifiche accessibili e reduced-motion per controlli/animazioni toccati. Annotare espressamente browser non disponibili.
+- [x] Eseguire `npm run lint`, `npm run format:check`, `npm run test:unit`, `npm run build`, `npm test`, `git diff --check`. Tutti devono riuscire; conservare screenshot e trace dei casi significativi.
+- [x] Preparare commit/PR con comportamento, accounting risorse, verifiche e rischi. Il deploy reale si verifica dopo l'integrazione autorizzata, non si dichiara riuscito sulla sola build locale.
 
 ## Copertura dei findings e consegna
 

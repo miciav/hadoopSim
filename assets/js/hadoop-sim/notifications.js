@@ -1,13 +1,16 @@
 export function createNotifier(delay) {
   const notices = new Set();
+  const region = document.createElement('div');
+  region.setAttribute('role', 'status');
+  region.setAttribute('aria-live', 'polite');
+  region.setAttribute('aria-relevant', 'additions text');
+  document.body.appendChild(region);
 
   function notify(message, type) {
     const element = document.createElement('div');
     element.className = `notification ${type}`;
     element.textContent = message;
-    element.setAttribute('role', 'status');
-    element.setAttribute('aria-live', 'polite');
-    document.body.appendChild(element);
+    region.appendChild(element);
     const notice = { element, timer: null };
     notices.add(notice);
     notice.timer = setTimeout(() => {

@@ -1,5 +1,7 @@
 import { test, expect } from './fixtures.js';
 
+test.use({ trace: 'on' });
+
 test('cluster lesson: upload, execute, fail a node and reset', async ({
   page
 }) => {
@@ -109,4 +111,18 @@ test('pipeline controls have accessible labels at laptop width', async ({
       () => window.teachingSimulation.getCurrentStepInfo().index
     )
   ).toBe(1);
+});
+
+test('a distributed YARN job rejected after node loss is visibly failed', async ({
+  page
+}) => {
+  await page.goto('/hadoop_full.html');
+  await page.evaluate(() => {
+    const sim = window.simulation;
+    [...sim.state.nodes].forEach((node) => sim.actions.failNode(node.id));
+  });
+  await page.getByRole('button', { name: /Submit Distributed Job/i }).click();
+  await expect(page.locator('#mapReduceJobs')).toContainText('Failed');
+  await expect(page.getByRole('status')).toContainText('no active node');
+  expect(await page.evaluate(() => window.cluster.yarnQueue.length)).toBe(0);
 });

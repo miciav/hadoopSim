@@ -3,6 +3,7 @@ import { test, expect } from './fixtures.js';
 test('published pages load under a project prefix without external requests', async ({
   page
 }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
   const failed = [];
   page.on('response', (response) => {
     if (response.status() >= 400)
@@ -37,10 +38,25 @@ test('published pages load under a project prefix without external requests', as
       await expect(
         page.getByRole('button', { name: /Upload 256 MB/i })
       ).toBeVisible();
+    await page.screenshot({
+      path: testInfo.outputPath(`${file}.png`),
+      fullPage: true
+    });
   }
-  await page.screenshot({
-    path: testInfo.outputPath('standalone-preview.png'),
-    fullPage: true
-  });
   expect(failed).toEqual([]);
+});
+
+test('distribution includes runtime licenses', async ({ request }) => {
+  for (const name of [
+    'react',
+    'react-dom',
+    'scheduler',
+    'xstate',
+    'loose-envify',
+    'js-tokens'
+  ]) {
+    const response = await request.get(`/licenses/${name}.txt`);
+    expect(response.status()).toBe(200);
+    expect(await response.text()).toContain('Permission');
+  }
 });
