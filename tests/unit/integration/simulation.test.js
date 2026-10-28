@@ -212,3 +212,38 @@ test('a running job fails if its remaining node can never run a mapper beside it
   assert.equal(job.failureReason, 'insufficient-capacity');
   assert.equal(sim.state.nodes.filter(node => !node.failed).flatMap(node => node.containers).length, 0);
 });
+
+test('reset from a progress listener cannot release a newly created job', () => {
+  const clock = createManualClock();
+  const sim = createSimulation({ mapReduce: { mapperIntervalMs: 10, mapperProgressStep: 100 } }, { clock });
+  sim.actions.uploadFile(10);
+  let replacement;
+  sim.on('mapreduce:progress', () => {
+    if (replacement) return;
+    sim.actions.reset();
+    sim.actions.uploadFile(10);
+    replacement = sim.actions.submitMapReduce({});
+  });
+  sim.actions.submitMapReduce({});
+  clock.advance(10);
+  assert.equal(replacement.status, 'running');
+  assert.equal(sim.state.nodes.flatMap(node => node.containers).length, 2);
+});
+
+test('reset from a started listener schedules the replacement job', () => {
+  const clock = createManualClock();
+  const sim = createSimulation({}, { clock });
+  sim.actions.uploadFile(10);
+  let replacement;
+  let reset = false;
+  sim.on('mapreduce:started', () => {
+    if (reset) return;
+    reset = true;
+    sim.actions.reset();
+    sim.actions.uploadFile(10);
+    replacement = sim.actions.submitMapReduce({});
+  });
+  sim.actions.submitMapReduce({});
+  assert.equal(replacement.status, 'running');
+  assert.equal(sim.state.nodes.flatMap(node => node.containers).length, 2);
+});

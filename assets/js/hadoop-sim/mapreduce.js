@@ -53,9 +53,9 @@ export function createMapReduceEngine({
 
   function releaseJobResources(job) {
     job.mappers.forEach((mapper) => {
-      releaseContainer(mapper.name);
+      if (state.mapReduceJobs.includes(job)) releaseContainer(mapper.name);
     });
-    releaseContainer(`AM-${job.name}`);
+    if (state.mapReduceJobs.includes(job)) releaseContainer(`AM-${job.name}`);
   }
 
   function transitionJob(job, type) {
@@ -79,7 +79,7 @@ export function createMapReduceEngine({
     state.mapReduceQueue = state.mapReduceQueue.filter((id) => id !== job.id);
     stopJobTimers(job);
     releaseJobResources(job);
-    emit('mapreduce:failed', { job, reason });
+    if (state.mapReduceJobs.includes(job)) emit('mapreduce:failed', { job, reason });
   }
 
   function stopAll() {
@@ -100,6 +100,7 @@ export function createMapReduceEngine({
   }
 
   let draining = false;
+  let needsDrain = false;
 
   function scheduleProgress(job, mapper) {
     mapper.intervalId = clock.setInterval(() => {
@@ -107,15 +108,17 @@ export function createMapReduceEngine({
       mapper.progress = Math.min(100, mapper.progress + config.mapReduce.mapperProgressStep);
       job.progress = job.mappers.reduce((sum, entry) => sum + entry.progress, 0) / job.mappers.length;
       emit('mapreduce:progress', { job });
+      if (!state.mapReduceJobs.includes(job) || job.status !== 'running') return;
       if (mapper.progress === 100) {
         clock.clearInterval(mapper.intervalId);
         mapper.intervalId = null;
         mapper.completed = true;
         releaseContainer(mapper.name);
+        if (!state.mapReduceJobs.includes(job) || job.status !== 'running') return;
         if (job.mappers.every((entry) => entry.completed)) {
           transitionJob(job, 'COMPLETE');
           releaseContainer(`AM-${job.name}`);
-          emit('mapreduce:completed', { job });
+          if (state.mapReduceJobs.includes(job)) emit('mapreduce:completed', { job });
         }
         drain();
       }
@@ -123,39 +126,43 @@ export function createMapReduceEngine({
   }
 
   function drain() {
-    if (draining) return;
+    if (draining) { needsDrain = true; return; }
     draining = true;
     try {
-      for (const job of state.mapReduceJobs) {
-        if (job.status !== 'queued' && job.status !== 'running') continue;
-        if (job.status === 'queued') {
-          const masters = possibleMasterNodes();
-          if (!masters.length || !allocateApplicationMaster(job, masters.map((node) => node.id))) break;
-          transitionJob(job, 'START');
-          state.mapReduceQueue = state.mapReduceQueue.filter((id) => id !== job.id);
-          emit('mapreduce:started', { job });
-        }
-        const locations = buildBlockLocations(state.nodes, job.fileName);
-        for (const mapper of job.mappers) {
-          if (mapper.completed || mapper.intervalId != null) continue;
-          const preferred = locations.get(mapper.blockId) || [];
-          if (!preferred.length) {
-            failJob(job, 'lost-block');
-            break;
+      do {
+        needsDrain = false;
+        for (const job of state.mapReduceJobs) {
+          if (job.status !== 'queued' && job.status !== 'running') continue;
+          if (job.status === 'queued') {
+            const masters = possibleMasterNodes();
+            if (!masters.length || !allocateApplicationMaster(job, masters.map((node) => node.id))) break;
+            transitionJob(job, 'START');
+            state.mapReduceQueue = state.mapReduceQueue.filter((id) => id !== job.id);
+            emit('mapreduce:started', { job });
+            if (!state.mapReduceJobs.includes(job) || job.status !== 'running') continue;
           }
-          const allocation = allocateContainer({
-            name: mapper.name,
-            cpu: config.mapReduce.mapperCpu,
-            memoryMb: config.mapReduce.mapperMemoryMb,
-            jobId: job.id,
-            isMapReduce: true,
-            blockIds: [mapper.blockId]
-          }, preferred);
-          if (!allocation) break;
-          mapper.nodeId = allocation.node.id;
-          scheduleProgress(job, mapper);
+          const locations = buildBlockLocations(state.nodes, job.fileName);
+          for (const mapper of job.mappers) {
+            if (mapper.completed || mapper.intervalId != null) continue;
+            const preferred = locations.get(mapper.blockId) || [];
+            if (!preferred.length) {
+              failJob(job, 'lost-block');
+              break;
+            }
+            const allocation = allocateContainer({
+              name: mapper.name,
+              cpu: config.mapReduce.mapperCpu,
+              memoryMb: config.mapReduce.mapperMemoryMb,
+              jobId: job.id,
+              isMapReduce: true,
+              blockIds: [mapper.blockId]
+            }, preferred);
+            if (!allocation) break;
+            mapper.nodeId = allocation.node.id;
+            scheduleProgress(job, mapper);
+          }
         }
-      }
+      } while (needsDrain);
     } finally {
       draining = false;
     }
