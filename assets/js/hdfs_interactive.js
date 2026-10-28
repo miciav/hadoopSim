@@ -1,3 +1,4 @@
+import { createNotifier } from './hadoop-sim/notifications.js';
 import { createSimulation } from './hadoop-sim/simulation.js';
 import { randomInt } from './hadoop-sim/random.js';
 
@@ -32,19 +33,7 @@ function nextColor() {
   return color;
 }
 
-function notify(message, type) {
-  const notification = document.createElement('div');
-  notification.className = `notification ${type}`;
-  notification.textContent = message;
-  notification.setAttribute('role', 'status');
-  notification.setAttribute('aria-live', 'polite');
-  document.body.appendChild(notification);
-
-  setTimeout(() => {
-    notification.style.opacity = '0';
-    setTimeout(() => notification.remove(), 300);
-  }, 3500);
-}
+const { notify, clear: clearNotifications } = createNotifier(3500);
 
 function renderCluster() {
   const datanodesEl = document.getElementById('datanodes');
@@ -222,6 +211,7 @@ function simulateNodeFailure() {
 }
 
 function resetCluster() {
+  clearNotifications();
   recoveryTimers.forEach((timerId) => clearTimeout(timerId));
   recoveryTimers.clear();
   sim.actions.reset();

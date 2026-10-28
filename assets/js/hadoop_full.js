@@ -1,3 +1,4 @@
+import { createNotifier } from './hadoop-sim/notifications.js';
 import { createSimulation } from './hadoop-sim/simulation.js';
 import { describeMapReduceFailure } from './hadoop-sim/mapreduce.js';
 import { randomInt } from './hadoop-sim/random.js';
@@ -33,19 +34,7 @@ function ensureFileColor(fileName) {
   }
 }
 
-function notify(message, type) {
-  const notification = document.createElement('div');
-  notification.className = `notification ${type}`;
-  notification.textContent = message;
-  notification.setAttribute('role', 'status');
-  notification.setAttribute('aria-live', 'polite');
-  document.body.appendChild(notification);
-
-  setTimeout(() => {
-    notification.style.opacity = '0';
-    setTimeout(() => notification.remove(), 300);
-  }, 4000);
-}
+const { notify, clear: clearNotifications } = createNotifier(4000);
 
 function scheduleYarnCompletion(containerName, jobRecord = null) {
   if (yarnCompletionTimers.has(containerName)) {
@@ -593,6 +582,7 @@ function simulateFailure() {
 }
 
 function resetCluster() {
+  clearNotifications();
   recoveryTimers.forEach((timerId) => clearTimeout(timerId));
   recoveryTimers.clear();
   yarnCompletionTimers.forEach((timerId) => clearTimeout(timerId));

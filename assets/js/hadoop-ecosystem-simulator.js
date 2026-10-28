@@ -802,6 +802,7 @@ const bootstrap = () => {
   const fileColorsRef = useRef(new Map());
   const colorIndexRef = useRef(0);
   const recoveryTimersRef = useRef(new Set());
+  const notificationTimersRef = useRef(new Set());
 
   if (!simRef.current) {
     simRef.current = createSimulation({
@@ -825,6 +826,8 @@ const bootstrap = () => {
       off();
       recoveryTimersRef.current.forEach(clearTimeout);
       recoveryTimersRef.current.clear();
+      notificationTimersRef.current.forEach(clearTimeout);
+      notificationTimersRef.current.clear();
       sim.dispose();
     };
   }, [sim]);
@@ -832,9 +835,11 @@ const bootstrap = () => {
   const pushNotification = (message, type) => {
     const id = Date.now() + Math.random();
     setNotifications((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
+    const timerId = setTimeout(() => {
+      notificationTimersRef.current.delete(timerId);
       setNotifications((prev) => prev.filter((notice) => notice.id !== id));
     }, 4000);
+    notificationTimersRef.current.add(timerId);
   };
 
   const ensureFileColor = (fileName) => {
@@ -899,6 +904,9 @@ const bootstrap = () => {
   };
 
   const resetCluster = () => {
+    notificationTimersRef.current.forEach(clearTimeout);
+    notificationTimersRef.current.clear();
+    setNotifications([]);
     recoveryTimersRef.current.forEach(clearTimeout);
     recoveryTimersRef.current.clear();
     sim.actions.reset();

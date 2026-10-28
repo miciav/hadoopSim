@@ -1,3 +1,4 @@
+import { createNotifier } from './hadoop-sim/notifications.js';
 import { createSimulation } from './hadoop-sim/simulation.js';
 import { randomInt } from './hadoop-sim/random.js';
 
@@ -13,19 +14,7 @@ const nodes = [
 const sim = createSimulation({ nodes });
 const completionTimers = new Map();
 
-function notify(message, type) {
-  const notification = document.createElement('div');
-  notification.className = `notification ${type}`;
-  notification.textContent = message;
-  notification.setAttribute('role', 'status');
-  notification.setAttribute('aria-live', 'polite');
-  document.body.appendChild(notification);
-
-  setTimeout(() => {
-    notification.style.opacity = '0';
-    setTimeout(() => notification.remove(), 300);
-  }, 3000);
-}
+const { notify, clear: clearNotifications } = createNotifier(3000);
 
 function scheduleCompletion(container) {
   if (completionTimers.has(container.name)) {
@@ -191,6 +180,7 @@ function submitBigJob() {
 }
 
 function resetCluster() {
+  clearNotifications();
   completionTimers.forEach((timeoutId) => clearTimeout(timeoutId));
   completionTimers.clear();
   sim.actions.reset();
