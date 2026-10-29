@@ -54,6 +54,8 @@ test('published pages load under a project prefix without external requests', as
         path: testInfo.outputPath(`${skin}-${file}.png`),
         fullPage: true
       });
+      // Leaving mid-download would report Lecture's lazy font fetches as failed.
+      await page.evaluate(() => document.fonts.ready);
     }
   }
   expect(failed).toEqual([]);

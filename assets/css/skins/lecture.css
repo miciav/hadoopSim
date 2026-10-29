@@ -242,6 +242,10 @@ html[data-skin^='lecture'] .callout-description {
   html[data-skin^='lecture'][data-page='teaching'] .app {
     padding-right: calc(var(--lecture-rail) + 40px);
   }
+  /* The callout lives in the rail, so the diagram takes the whole layout. */
+  html[data-skin^='lecture'][data-page='teaching'] .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
   html[data-skin^='lecture'] .step-console {
     top: 16px;
     right: 16px;
@@ -290,4 +294,28 @@ html[data-skin^='lecture'] :is(.btn-danger, .btn-danger:hover) {
 html[data-skin^='lecture'] :is(.btn-mapreduce, .btn-mapreduce:hover) {
   background: var(--sim-success);
   color: var(--sim-on-accent);
+}
+
+/* Pipeline boxes overlay an absolute label sized for 12px text; at 15px it
+   covers the records, so the label takes its own row in the flex box. */
+html[data-skin^='lecture'] .mini-label {
+  position: static;
+  flex: 0 0 100%;
+  width: 100%;
+  margin-bottom: 6px;
+  line-height: 1.3;
+  text-align: left;
+}
+html[data-skin^='lecture'] :has(> .mini-label) {
+  padding-top: 8px;
+}
+
+/* Consumed records read as dashed outlines, not as faded colour. */
+html[data-skin^='lecture'] .kv-record.ghost {
+  opacity: 1;
+  filter: none;
+  background: transparent;
+  color: var(--sim-muted);
+  border: 1px dashed var(--sim-muted);
+  box-shadow: none;
 }
