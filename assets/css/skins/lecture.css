@@ -319,3 +319,80 @@ html[data-skin^='lecture'] .kv-record.ghost {
   border: 1px dashed var(--sim-muted);
   box-shadow: none;
 }
+
+/* 4:3 projectors (1024x768): too narrow for the rail, so controller and
+   explanation share a bar along the bottom instead of disappearing. */
+@media (min-width: 761px) and (max-width: 1100px) {
+  :root[data-skin^='lecture'] {
+    --lecture-bar: 220px;
+    --lecture-console: 380px;
+  }
+  html[data-skin^='lecture'][data-page='teaching'] .app {
+    padding-bottom: calc(var(--lecture-bar) + 32px);
+  }
+  html[data-skin^='lecture'] .step-console {
+    top: auto;
+    bottom: 12px;
+    left: 12px;
+    right: auto;
+    transform: none;
+    width: var(--lecture-console);
+    height: var(--lecture-bar);
+    border: 2px solid var(--sim-text);
+    border-radius: var(--sim-radius);
+    box-shadow: none;
+  }
+  html[data-skin^='lecture'] .step-console-header {
+    display: none;
+  }
+  html[data-skin^='lecture'] .step-console-buttons .step-btn-next {
+    flex: 1.6;
+  }
+  html[data-skin^='lecture'] .step-console-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px;
+  }
+  html[data-skin^='lecture'] .step-info {
+    padding: 4px;
+  }
+  html[data-skin^='lecture'] :is(.step-console-buttons, .step-stats) {
+    grid-column: 1 / -1;
+    flex-direction: row;
+  }
+  html[data-skin^='lecture'] :is(.step-console-buttons button, .step-stat) {
+    flex: 1;
+    min-width: 0;
+  }
+  /* Overrides the page's hide rule and the script's inline placement. */
+  html[data-skin^='lecture'] .phase-callout-wrapper {
+    display: block;
+    top: auto !important;
+    bottom: 12px;
+    left: calc(var(--lecture-console) + 24px) !important;
+    right: 12px !important;
+    transform: none !important;
+    width: auto;
+    height: var(--lecture-bar);
+    max-height: none;
+  }
+  html[data-skin^='lecture'] .phase-callout {
+    position: static;
+    box-sizing: border-box;
+    height: 100%;
+    min-height: 0;
+    overflow: auto;
+    border: 2px solid var(--sim-text);
+    border-radius: var(--sim-radius);
+    box-shadow: none;
+    padding: 14px 18px;
+  }
+  html[data-skin^='lecture'] .callout-arrow,
+  html[data-skin^='lecture'] .phase-callout::before {
+    display: none;
+  }
+  html[data-skin^='lecture'] .callout-title {
+    font-size: 21px;
+  }
+}

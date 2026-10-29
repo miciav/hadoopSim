@@ -373,3 +373,27 @@ test('teaching mode advances with a presentation clicker key', async ({
   await page.keyboard.press('ArrowRight');
   await expect(counter).toHaveText(/^1 \//);
 });
+
+test('lecture keeps the teaching explanation on a 4:3 projector', async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.addInitScript(() =>
+    localStorage.setItem('hadoopSim.skin', 'lecture')
+  );
+  await page.goto('/hadoopsim-teaching.html');
+  await page.keyboard.press('PageDown');
+  const callout = page.locator('.phase-callout-wrapper');
+  await expect(callout).toBeVisible();
+  const [panel, controls] = await Promise.all([
+    callout.boundingBox(),
+    page.locator('.step-console').boundingBox()
+  ]);
+  expect(panel.y + panel.height).toBeLessThanOrEqual(768);
+  expect(controls.x + controls.width).toBeLessThanOrEqual(panel.x);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth + 1
+    )
+  ).toBe(true);
+});
