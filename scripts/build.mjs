@@ -25,14 +25,7 @@ await build({
 });
 
 await mkdir('dist/licenses', { recursive: true });
-for (const name of [
-  'react',
-  'react-dom',
-  'scheduler',
-  'xstate',
-  'loose-envify',
-  'js-tokens'
-]) {
+for (const name of ['react', 'react-dom', 'scheduler', 'xstate']) {
   await cp(`node_modules/${name}/LICENSE`, `dist/licenses/${name}.txt`);
 }
 await cp('THIRD_PARTY_NOTICES.md', 'dist/THIRD_PARTY_NOTICES.md');

@@ -47,14 +47,7 @@ test('published pages load under a project prefix without external requests', as
 });
 
 test('distribution includes runtime licenses', async ({ request }) => {
-  for (const name of [
-    'react',
-    'react-dom',
-    'scheduler',
-    'xstate',
-    'loose-envify',
-    'js-tokens'
-  ]) {
+  for (const name of ['react', 'react-dom', 'scheduler', 'xstate']) {
     const response = await request.get(`/licenses/${name}.txt`);
     expect(response.status()).toBe(200);
     expect(await response.text()).toContain('Permission');
