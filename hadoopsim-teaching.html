@@ -38,6 +38,63 @@
         <div class="progress-fill" id="progressFill"></div>
       </div>
 
+      <!-- Step-by-Step Mini Console -->
+      <div class="step-console">
+        <div class="step-console-header">Step Controller</div>
+        <div class="step-console-body">
+          <!-- Split Size -->
+          <div class="step-config">
+            <label class="step-config-label" for="splitSizeInput"
+              >Split Size</label
+            >
+            <input
+              type="number"
+              id="splitSizeInput"
+              min="1"
+              max="20"
+              value="10"
+              class="step-config-input"
+            />
+          </div>
+
+          <!-- Step Info -->
+          <div class="step-info" id="stepInfo">
+            <div class="step-phase" id="stepPhase">READY</div>
+            <div class="step-counter" id="stepCounter">0 / 0</div>
+          </div>
+
+          <!-- Buttons -->
+          <div id="stepError" role="status" aria-live="polite" hidden></div>
+          <div class="step-console-buttons">
+            <button class="step-btn step-btn-next" id="stepBtn">
+              Next Step
+            </button>
+            <button class="step-btn step-btn-reset" id="playStepBtn">
+              Play
+            </button>
+            <button class="step-btn step-btn-reset" id="resetStepBtn">
+              Reset
+            </button>
+          </div>
+
+          <!-- Statistics -->
+          <div class="step-stats">
+            <div class="step-stat">
+              <span class="step-stat-label">Records</span>
+              <span class="step-stat-value" id="mRecords">0</span>
+            </div>
+            <div class="step-stat">
+              <span class="step-stat-label">Spills</span>
+              <span class="step-stat-value" id="mSpills">0</span>
+            </div>
+            <div class="step-stat">
+              <span class="step-stat-label">Packets</span>
+              <span class="step-stat-value" id="mNet">0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="layout">
         <div
           class="pipeline-col diagram-scroll"
@@ -570,59 +627,6 @@
                 pipeline, from input splits to final output files.
               </div>
             </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Step-by-Step Mini Console -->
-    <div class="step-console">
-      <div class="step-console-header">Step Controller</div>
-      <div class="step-console-body">
-        <!-- Split Size -->
-        <div class="step-config">
-          <label class="step-config-label" for="splitSizeInput"
-            >Split Size</label
-          >
-          <input
-            type="number"
-            id="splitSizeInput"
-            min="1"
-            max="20"
-            value="10"
-            class="step-config-input"
-          />
-        </div>
-
-        <!-- Step Info -->
-        <div class="step-info" id="stepInfo">
-          <div class="step-phase" id="stepPhase">READY</div>
-          <div class="step-counter" id="stepCounter">0 / 0</div>
-        </div>
-
-        <!-- Buttons -->
-        <div id="stepError" role="status" aria-live="polite" hidden></div>
-        <div class="step-console-buttons">
-          <button class="step-btn step-btn-next" id="stepBtn">Next Step</button>
-          <button class="step-btn step-btn-reset" id="playStepBtn">Play</button>
-          <button class="step-btn step-btn-reset" id="resetStepBtn">
-            Reset
-          </button>
-        </div>
-
-        <!-- Statistics -->
-        <div class="step-stats">
-          <div class="step-stat">
-            <span class="step-stat-label">Records</span>
-            <span class="step-stat-value" id="mRecords">0</span>
-          </div>
-          <div class="step-stat">
-            <span class="step-stat-label">Spills</span>
-            <span class="step-stat-value" id="mSpills">0</span>
-          </div>
-          <div class="step-stat">
-            <span class="step-stat-label">Packets</span>
-            <span class="step-stat-value" id="mNet">0</span>
           </div>
         </div>
       </div>

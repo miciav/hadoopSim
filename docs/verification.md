@@ -159,3 +159,35 @@ Risultato finale con Node 24.22.1: lint e Prettier verdi, 147/147 unit test,
 79/79 test Chromium e 79/79 test WebKit. I controlli comprendono le 36 combinazioni
 pagina/skin. Implementazione verificata sul branch locale `codex/built-in-skins`;
 nessun merge, push o deploy eseguito per questo intervento.
+
+## Coerenza interna delle skin
+
+Il controllo successivo ha misurato differenze residue fra pagine nella stessa
+skin. Sono state uniformate scala dei titoli, font/interlinea/padding/altezza minima
+dei controlli, raggi dei campi, ombre decorative e geometria dei pannelli cluster.
+La densità dei diagrammi e gli spazi per le etichette rimangono specifici della
+lezione. Focus non usa ombre decorative sui controlli; quelli disabilitati non
+ricevono ombre attive. Rimossa l'animazione verde sul pulsante Next Step che
+prevaleva sulle regole della skin anche in Focus.
+
+`tests/skin_consistency.spec.js` aggiunge 24 scenari: quattro skin a due larghezze
+(1440 e 390 px), confronto dei pannelli equivalenti, stato disabilitato e movimento
+normale, colori CPU/memoria/storage su barre popolate e colore di warning esatto.
+I test confrontano gli stili effettivamente applicati dal browser, inclusi hover
+e focus. I primi 12 test sono stati osservati rossi prima della modifica; ulteriori
+regressioni di pannelli e stati sono state riprodotte prima delle correzioni.
+
+Sugli schermi piccoli il controller guidato è nel flusso prima del diagramma,
+con pulsanti disposti in riga e testo a capo quando necessario. I test verificano
+che non copra titolo o scena e che l’etichetta Next Step non venga tagliata.
+
+Per il menu Skin viene mantenuto il `select` HTML con popup e tastiera nativi;
+`appearance: none` permette di applicare la geometria della skin anche in WebKit,
+con una freccia CSS locale. Poiché WebKit espone via CSSOM alcuni valori interni
+del menulist, il test del select verifica l'altezza realmente renderizzata; per gli
+altri campi confronta anche padding, raggio e dimensione del carattere.
+
+Verifica finale di questo intervento: 147/147 unit test, 103/103 test Chromium e
+103/103 test WebKit, lint e Prettier verdi con Node 24.22.1. La suite comprende
+24 nuovi scenari di coerenza. Nessuna modifica ai modelli puri o alle dipendenze;
+nessun merge, push o deploy eseguito.

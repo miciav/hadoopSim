@@ -212,14 +212,10 @@ body {
 }
 
 .datanode {
-  background: linear-gradient(
-    135deg,
-    var(--sim-surface) 0%,
-    var(--sim-soft) 100%
-  );
+  background: var(--sim-surface);
   border: 3px solid var(--sim-border);
-  border-radius: 12px;
-  padding: 20px;
+  border-radius: var(--sim-radius);
+  padding: var(--sim-panel-padding);
   transition: all 0.3s;
   position: relative;
 }
@@ -232,11 +228,7 @@ body {
 
 .datanode.active {
   border-color: var(--sim-success);
-  background: linear-gradient(
-    135deg,
-    var(--sim-soft) 0%,
-    var(--sim-success) 100%
-  );
+  background: var(--sim-surface);
 }
 
 .datanode.busy {

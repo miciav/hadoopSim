@@ -10,6 +10,7 @@
   --sim-size: 17px;
   --sim-gap: 24px;
   --sim-width: 1500px;
+  --sim-control-shadow: none;
 }
 html[data-skin='focus'] .main-container {
   grid-template-columns: 220px minmax(0, 1fr);

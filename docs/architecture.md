@@ -71,3 +71,11 @@ import the selector into a simulation, branch algorithms on the active skin, or
 copy simulation code into a theme. Pipeline height synchronization and visual
 constants live under `pipeline-dual-nodes/dom/`, separate from domain config.
 Complex diagrams provide keyboard-accessible local scrolling on small screens.
+
+Equivalent controls use a shared per-skin scale: `--sim-control-size`,
+`--sim-control-line`, `--sim-control-padding`, `--sim-control-height` and
+`--sim-control-shadow`. The title scale uses `--sim-title-size`; ordinary panels
+use `--sim-panel-padding`. Focus has no decorative control shadow, and disabled
+controls never inherit an active shadow. Diagram-node label insets stay separate.
+Resource bars use `cpu-fill`, `memory-fill` and `storage-fill` in every cluster
+renderer. Warning/error classes take precedence over the normal resource color.

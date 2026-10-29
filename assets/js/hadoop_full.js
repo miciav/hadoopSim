@@ -177,7 +177,7 @@ function renderUnifiedNodes() {
                 <span>${(node.storageUsedMb / 1024).toFixed(1)}/${(node.storageTotalMb / 1024).toFixed(0)} GB</span>
               </div>
               <div class="progress-bar">
-                <div class="progress-fill ${storagePercent > 80 ? 'danger' : ''}" style="width: ${storagePercent}%"></div>
+                <div class="progress-fill storage-fill ${storagePercent > 80 ? 'danger' : ''}" style="width: ${storagePercent}%"></div>
               </div>
             </div>
 
@@ -187,7 +187,7 @@ function renderUnifiedNodes() {
                 <span>${node.cpuUsed.toFixed(1)}/${node.cpuTotal} cores</span>
               </div>
               <div class="progress-bar">
-                <div class="progress-fill yarn ${cpuPercent > 70 ? 'warning' : ''}" style="width: ${cpuPercent}%"></div>
+                <div class="progress-fill cpu-fill ${cpuPercent > 70 ? 'warning' : ''}" style="width: ${cpuPercent}%"></div>
               </div>
             </div>
 
@@ -197,7 +197,7 @@ function renderUnifiedNodes() {
                 <span>${(node.memoryUsedMb / 1024).toFixed(1)}/${(node.memoryTotalMb / 1024).toFixed(0)} GB</span>
               </div>
               <div class="progress-bar">
-                <div class="progress-fill yarn ${memPercent > 70 ? 'warning' : ''}" style="width: ${memPercent}%"></div>
+                <div class="progress-fill memory-fill ${memPercent > 70 ? 'warning' : ''}" style="width: ${memPercent}%"></div>
               </div>
             </div>
           </div>

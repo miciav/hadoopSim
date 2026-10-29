@@ -10,9 +10,7 @@
   --sim-size: 18px;
   --sim-gap: 28px;
   --sim-width: 1800px;
-}
-html[data-skin='classroom'] :is(.header h1, h1) {
-  font-size: 2.2rem;
+  --sim-panel-padding: 24px;
 }
 html[data-skin='classroom'] :is(.sidebar, .card, .log-section) {
   padding: 24px;

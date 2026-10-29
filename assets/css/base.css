@@ -218,3 +218,102 @@ html[data-skin] .memory-fill {
 html[data-skin] .storage-fill {
   background: var(--sim-storage);
 }
+
+/* One control scale per skin; diagram density remains page-specific. */
+:root {
+  --sim-title-size: clamp(
+    calc(var(--sim-size) * 1.5),
+    2.4vw,
+    calc(var(--sim-size) * 2)
+  );
+  --sim-control-size: var(--sim-size);
+  --sim-control-line: 1.3;
+  --sim-control-padding: 0.65em 1em;
+  --sim-control-height: 2.75em;
+  --sim-control-shadow: 0 2px 4px
+    color-mix(in srgb, var(--sim-text) 12%, transparent);
+  --sim-panel-padding: 20px;
+}
+html[data-page][data-skin] h1 {
+  font-family: var(--sim-font);
+  font-size: var(--sim-title-size);
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+html[data-page][data-skin] :is(button, .btn, .card a),
+html[data-page][data-skin] :is(button, .btn, .card a):hover {
+  box-sizing: border-box;
+  font-family: var(--sim-font);
+  font-size: var(--sim-control-size);
+  line-height: var(--sim-control-line);
+  font-weight: 600;
+  padding: var(--sim-control-padding);
+  min-height: var(--sim-control-height);
+  border-radius: var(--sim-radius);
+  box-shadow: var(--sim-control-shadow);
+}
+html[data-page][data-skin]
+  :is(
+    select,
+    input:not([type='range']):not([type='checkbox']):not([type='radio'])
+  ) {
+  box-sizing: border-box;
+  font-family: var(--sim-font);
+  font-size: var(--sim-control-size);
+  line-height: var(--sim-control-line);
+  padding: var(--sim-control-padding);
+  min-height: var(--sim-control-height);
+  min-width: 7ch;
+  border: 1px solid var(--sim-border);
+  border-radius: var(--sim-radius);
+  color: var(--sim-text);
+  background: var(--sim-surface);
+}
+html[data-page][data-skin]
+  :is(.card, .sidebar, .cluster-panel, .cluster-view, .log, .log-content) {
+  padding: var(--sim-panel-padding);
+}
+html[data-skin] .node-container {
+  padding: calc(var(--sim-panel-padding) + 18px) var(--sim-panel-padding)
+    var(--sim-panel-padding);
+}
+html[data-skin] .progress-fill.warning {
+  background: var(--sim-warning);
+}
+html[data-skin] .progress-fill.danger {
+  background: var(--sim-error);
+}
+html[data-page][data-skin] :is(button, .btn):disabled,
+html[data-page][data-skin] :is(button, .btn):disabled:hover {
+  box-shadow: none;
+}
+html[data-page][data-skin]
+  :is(
+    select,
+    input:not([type='range']):not([type='checkbox']):not([type='radio'])
+  ) {
+  box-shadow: none;
+}
+html[data-page][data-skin] :is(.cluster-panel, .cluster-view) {
+  border-radius: var(--sim-radius);
+  box-shadow: none;
+}
+/* Keep native select behavior while allowing the skin geometry in WebKit. */
+html[data-page][data-skin] select {
+  appearance: none;
+}
+.skin-picker {
+  position: relative;
+}
+.skin-picker::after {
+  content: '';
+  position: absolute;
+  right: 0.4em;
+  top: 50%;
+  transform: translateY(-50%);
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 6px solid var(--sim-muted);
+  pointer-events: none;
+}
