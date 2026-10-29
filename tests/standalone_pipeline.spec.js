@@ -1,6 +1,13 @@
 import { test, expect } from './fixtures.js';
 
-for (const skin of ['hadoop', 'classroom', 'focus', 'topology']) {
+for (const skin of [
+  'hadoop',
+  'classroom',
+  'focus',
+  'topology',
+  'lecture',
+  'lecture-dark'
+]) {
   for (const file of [
     'hadoop-map-side-pipeline.html',
     'hadoop-map-side-pipeline-dual.html'

@@ -10,6 +10,11 @@ are built locally; no CDN is required to use the published site.
 | Scheduler       | 0.28.0  | MIT     |
 | XState          | 5.33.3  | MIT     |
 
+| Font (Lecture skin)                             | Version | License |
+| ----------------------------------------------- | ------- | ------- |
+| Atkinson Hyperlegible Next (@fontsource, latin) | 5.3.0   | OFL-1.1 |
+| Atkinson Hyperlegible Mono (@fontsource, latin) | 5.3.0   | OFL-1.1 |
+
 The distribution includes the original license texts in `licenses/<package>.txt`,
 including notices for the installed runtime dependency chain.
 

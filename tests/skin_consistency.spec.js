@@ -11,7 +11,14 @@ const pages = [
   'hadoop-map-side-pipeline.html',
   'hadoop-map-side-pipeline-dual.html'
 ];
-const skins = ['hadoop', 'classroom', 'focus', 'topology'];
+const skins = [
+  'hadoop',
+  'classroom',
+  'focus',
+  'topology',
+  'lecture',
+  'lecture-dark'
+];
 
 for (const skin of skins) {
   for (const width of [1440, 390]) {

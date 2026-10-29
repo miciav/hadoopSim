@@ -59,10 +59,19 @@ a document from its back-forward cache. Storage failures leave the homepage
 selection usable, but persistence across navigation cannot be guaranteed.
 
 CSS is loaded in this order: `assets/css/base.css`, a structural stylesheet under
-`assets/css/pages/`, then the four independent stylesheets under
+`assets/css/pages/`, then the five independent stylesheets under
 `assets/css/skins/`. The common base supplies semantic tokens and accessibility
 rules; each skin supplies its palette, spacing, typography and layout hierarchy.
 The original mockups remain development references and are not published.
+
+Lecture (`lecture.css`) is the projector skin and also serves `lecture-dark`.
+Its colours name the owning layer: HDFS blue (blocks, storage), YARN orange
+(containers, CPU, memory), MapReduce teal (tasks, locality); red is reserved for
+failures. Text never drops below 15px, and the Teaching controller and phase
+explanation share a docked right rail instead of covering the diagram. Its
+Atkinson Hyperlegible fonts are copied from `@fontsource` into `dist/assets/fonts/`
+by the build. Teaching Mode also advances on PageDown/ArrowRight in every skin,
+for presentation clickers.
 
 To adjust a skin, edit its CSS and use the common `--sim-*` tokens. Page-specific
 structure belongs in the page stylesheet; values derived from simulation data

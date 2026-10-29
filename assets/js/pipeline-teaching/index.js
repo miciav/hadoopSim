@@ -335,6 +335,15 @@ export function initTeachingPipeline() {
       });
     }
 
+    // Presentation clickers send PageDown or ArrowRight.
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'PageDown' && event.key !== 'ArrowRight') return;
+      if (event.target.closest?.('input, select, textarea, .diagram-scroll'))
+        return;
+      event.preventDefault();
+      stepBtn?.click();
+    });
+
     if (playStepBtn) {
       playStepBtn.addEventListener('click', async () => {
         if (playback.getSnapshot().matches('playing')) {

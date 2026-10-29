@@ -1,5 +1,12 @@
 (() => {
-  const skins = ['hadoop', 'classroom', 'focus', 'topology'];
+  const skins = [
+    'hadoop',
+    'classroom',
+    'focus',
+    'topology',
+    'lecture',
+    'lecture-dark'
+  ];
   let selected = 'hadoop';
   try {
     const saved = localStorage.getItem('hadoopSim.skin');
@@ -13,7 +20,8 @@
     const select = document.querySelector('[data-skin-select]');
     if (!select) return;
     for (const skin of skins) {
-      select.add(new Option(skin[0].toUpperCase() + skin.slice(1), skin));
+      const label = skin[0].toUpperCase() + skin.slice(1).replace('-', ' ');
+      select.add(new Option(label, skin));
     }
     select.value = selected;
     select.addEventListener('change', () => {

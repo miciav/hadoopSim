@@ -1,0 +1,293 @@
+/* Lecture: projector-first skin. Colour names the Hadoop layer that owns a
+   thing (HDFS blue, YARN orange, MapReduce teal); red is reserved for
+   failures. lecture-dark reuses every rule with darker-room tokens. */
+@font-face {
+  font-family: 'Atkinson Hyperlegible Next';
+  font-weight: 400;
+  font-display: swap;
+  src: url('../../fonts/atkinson-hyperlegible-next-latin-400-normal.woff2')
+    format('woff2');
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible Next';
+  font-weight: 600;
+  font-display: swap;
+  src: url('../../fonts/atkinson-hyperlegible-next-latin-600-normal.woff2')
+    format('woff2');
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible Next';
+  font-weight: 700;
+  font-display: swap;
+  src: url('../../fonts/atkinson-hyperlegible-next-latin-700-normal.woff2')
+    format('woff2');
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible Mono';
+  font-weight: 400;
+  font-display: swap;
+  src: url('../../fonts/atkinson-hyperlegible-mono-latin-400-normal.woff2')
+    format('woff2');
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible Mono';
+  font-weight: 600 700;
+  font-display: swap;
+  src: url('../../fonts/atkinson-hyperlegible-mono-latin-600-normal.woff2')
+    format('woff2');
+}
+
+:root:is([data-skin='lecture'], [data-skin='lecture-dark']) {
+  --sim-background: #f6f7f9;
+  --sim-surface: #ffffff;
+  --sim-soft: #eef0f4;
+  --sim-text: #10141b;
+  --sim-muted: #4a5361;
+  --sim-border: #c9cfd8;
+  --sim-accent: #10141b;
+  --sim-on-accent: #ffffff;
+  --sim-cpu: #a84b00;
+  /* Both YARN resources: memory is the lighter orange so bars stay distinct. */
+  --sim-memory: #d9822b;
+  --sim-storage: #1f5fbf;
+  --sim-success: #07524e;
+  --sim-warning: #a84b00;
+  --sim-error: #c21f3a;
+  --sim-partition-0: #4a2a91;
+  --sim-partition-1: #e3b23c;
+  --sim-partition-2: #b8418c;
+  /* HDFS files stay in the blue/indigo/slate family: blocks belong to HDFS. */
+  --sim-file-0: #1f5fbf;
+  --sim-file-1: #4a2a91;
+  --sim-file-2: #0e6e8c;
+  --sim-file-3: #5b6b82;
+  --sim-file-4: #2d4a8a;
+  --sim-file-5: #7a4fb5;
+  --sim-file-6: #14507a;
+  --sim-file-7: #3b3f58;
+  --sim-radius: 8px;
+  --sim-font: 'Atkinson Hyperlegible Next', system-ui, sans-serif;
+  --sim-mono: 'Atkinson Hyperlegible Mono', ui-monospace, monospace;
+  --sim-size: 18px;
+  --sim-gap: 24px;
+  --sim-width: 1800px;
+  --sim-panel-padding: 22px;
+  --sim-control-shadow: none;
+  --font-mono: var(--sim-mono);
+  --text-xs: 15px;
+  --text-sm: 16px;
+  --text-base: 18px;
+  --text-lg: 20px;
+  /* Gold partition fills carry dark text; text in that partition uses ochre. */
+  --lecture-on-p1: #10141b;
+  --lecture-p1-text: #7a5500;
+  --lecture-failed-tint: #fbe3e7;
+  --lecture-rail: 380px;
+}
+:root[data-skin='lecture-dark'] {
+  color-scheme: dark;
+  --sim-background: #0e1218;
+  --sim-surface: #171c24;
+  --sim-soft: #1f2630;
+  --sim-text: #eef1f5;
+  --sim-muted: #a9b2bf;
+  --sim-border: #343d4a;
+  --sim-accent: #eef1f5;
+  --sim-on-accent: #0e1218;
+  --sim-cpu: #ff9f4a;
+  --sim-memory: #ffc48a;
+  --sim-storage: #6fa8ff;
+  --sim-success: #3fc1b5;
+  --sim-warning: #ff9f4a;
+  --sim-error: #ff6b7f;
+  --sim-partition-0: #a58bea;
+  --sim-partition-2: #e07ab8;
+  --sim-file-0: #6fa8ff;
+  --sim-file-1: #a58bea;
+  --sim-file-2: #5cc8e6;
+  --sim-file-3: #a9b6c9;
+  --sim-file-4: #8fa6e8;
+  --sim-file-5: #c9a6f0;
+  --sim-file-6: #7cc0e8;
+  --sim-file-7: #c3c7dc;
+  --lecture-on-p1: #0e1218;
+  --lecture-p1-text: #e3b23c;
+  --lecture-failed-tint: #3a1820;
+}
+
+/* Sentence case everywhere: uppercase micro-labels do not survive a projector. */
+html[data-skin^='lecture'] * {
+  text-transform: none !important;
+  letter-spacing: normal;
+}
+html[data-skin^='lecture']
+  :is(
+    code,
+    kbd,
+    .kv-record,
+    .block-item,
+    .block,
+    .block-chip,
+    .file-block-chip,
+    .container-item,
+    .container-chip
+  ) {
+  font-family: var(--sim-mono);
+}
+
+/* Partition 1 is a light fill. */
+html[data-skin^='lecture'] .bg-p1,
+html[data-skin^='lecture'] .kv-record.bg-p1 {
+  color: var(--lecture-on-p1);
+}
+html[data-skin^='lecture'] .color-p1,
+html[data-skin^='lecture'] :is(.callout-phase, .step-phase).phase-reduce,
+html[data-skin^='lecture'][data-page='teaching'] .page-detail-22,
+html[data-skin^='lecture'][data-page='pipeline'] .page-detail-26,
+html[data-skin^='lecture']:is([data-page='single'], [data-page='dual'])
+  .page-detail-7 {
+  color: var(--lecture-p1-text) !important;
+}
+html[data-skin^='lecture']:is([data-page='single'], [data-page='dual'])
+  .page-detail-2 {
+  color: var(--lecture-on-p1);
+}
+
+/* Node states: solid surfaces, a coloured border, and a pattern for failure. */
+html[data-skin^='lecture']
+  :is(.node, .datanode):is(.busy, .full, .data-locality, .rebalancing) {
+  background: var(--sim-surface);
+  box-shadow: none;
+}
+html[data-skin^='lecture'] :is(.node, .datanode).busy {
+  border: 2px solid var(--sim-warning);
+}
+html[data-skin^='lecture'] :is(.node, .datanode).data-locality {
+  border: 2px solid var(--sim-success);
+}
+html[data-skin^='lecture'] .node.data-locality::after {
+  content: 'Local read';
+  font-size: 15px;
+}
+html[data-skin^='lecture'] :is(.node, .datanode).failed {
+  opacity: 1;
+  border: 2px solid var(--sim-error);
+  background: repeating-linear-gradient(
+    135deg,
+    var(--lecture-failed-tint) 0 8px,
+    var(--sim-surface) 8px 16px
+  );
+}
+
+/* Replicas differ by pattern, not by fading. */
+html[data-skin^='lecture'] :is(.block-item, .block).replica {
+  opacity: 1;
+  border: 2px solid var(--sim-surface);
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgb(255 255 255 / 0.32) 0 4px,
+    transparent 4px 8px
+  );
+}
+html[data-skin^='lecture'] .block-item.replica::after {
+  content: none;
+}
+
+/* Projector floor: nothing below 15px. */
+html[data-skin^='lecture']
+  :is(
+    .node-status,
+    .node-status-badge,
+    .node-resources,
+    .section-title,
+    .block-item,
+    .block,
+    .block-chip,
+    .file-block-chip,
+    .container-item,
+    .container-chip,
+    .job-toggle,
+    .job-status,
+    .empty-note,
+    .legend-item,
+    .file-details,
+    .file-blocks,
+    .replica-badge,
+    .progress-fill,
+    .storage-fill,
+    .callout-phase,
+    .callout-description code,
+    .step-console-header,
+    .step-config-label,
+    .step-phase,
+    .step-stat-label
+  ) {
+  font-size: 15px;
+}
+html[data-skin^='lecture'] .step-console-header {
+  background: var(--sim-text);
+  color: var(--sim-background);
+}
+html[data-skin^='lecture'] .callout-title {
+  font-size: 24px;
+  line-height: 1.25;
+}
+html[data-skin^='lecture'] .callout-description {
+  font-size: 18px;
+  line-height: 1.5;
+}
+
+/* Teaching: controller and explanation share a docked rail, never the diagram. */
+@media (min-width: 1101px) {
+  html[data-skin^='lecture'][data-page='teaching'] .app {
+    padding-right: calc(var(--lecture-rail) + 40px);
+  }
+  html[data-skin^='lecture'] .step-console {
+    top: 16px;
+    right: 16px;
+    transform: none;
+    width: var(--lecture-rail);
+    border: 2px solid var(--sim-text);
+    border-radius: var(--sim-radius);
+    box-shadow: none;
+  }
+  html[data-skin^='lecture'] :is(.step-console-buttons, .step-stats) {
+    flex-direction: row;
+  }
+  html[data-skin^='lecture'] :is(.step-console-buttons button, .step-stat) {
+    flex: 1;
+    min-width: 0;
+  }
+  /* The script places the callout beside its target; the rail overrides it. */
+  html[data-skin^='lecture'] .phase-callout-wrapper {
+    left: auto !important;
+    right: 16px !important;
+    top: calc(var(--lecture-console-height, 390px) + 32px) !important;
+    transform: none !important;
+    width: var(--lecture-rail);
+    max-height: calc(100vh - var(--lecture-console-height, 390px) - 48px);
+    overflow: auto;
+  }
+  html[data-skin^='lecture'] .phase-callout {
+    position: static;
+    min-height: 0;
+    border: 1px solid var(--sim-border);
+    border-radius: var(--sim-radius);
+    box-shadow: none;
+  }
+  html[data-skin^='lecture'] .callout-arrow,
+  html[data-skin^='lecture'] .phase-callout::before {
+    display: none;
+  }
+}
+
+/* Reset is not a failure; MapReduce actions use the MapReduce colour. */
+html[data-skin^='lecture'] :is(.btn-danger, .btn-danger:hover) {
+  background: var(--sim-surface);
+  color: var(--sim-text);
+  border: 2px solid var(--sim-border);
+}
+html[data-skin^='lecture'] :is(.btn-mapreduce, .btn-mapreduce:hover) {
+  background: var(--sim-success);
+  color: var(--sim-on-accent);
+}

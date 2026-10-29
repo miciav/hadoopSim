@@ -1,6 +1,13 @@
 import { test, expect } from './fixtures.js';
 
-const skins = ['hadoop', 'classroom', 'focus', 'topology'];
+const skins = [
+  'hadoop',
+  'classroom',
+  'focus',
+  'topology',
+  'lecture',
+  'lecture-dark'
+];
 const pages = [
   'index.html',
   'hadoop-ecosystem-simulator.html',
@@ -198,7 +205,9 @@ for (const skin of skins) {
     await page.goto('/index.html');
     await page.locator('link[href*="/skins/"]').evaluateAll((links, chosen) => {
       links.forEach((link) => {
-        if (!link.href.endsWith(`/${chosen}.css`)) link.remove();
+        // lecture-dark shares lecture.css.
+        const file = chosen.replace('-dark', '');
+        if (!link.href.endsWith(`/${file}.css`)) link.remove();
       });
     }, skin);
     expect(
@@ -312,4 +321,55 @@ test('pipeline history text contrasts with its entry surface', async ({
       return { text: css.color, background: css.backgroundColor };
     });
   expect(colors.text).not.toBe(colors.background);
+});
+
+test('lecture skin serves its fonts locally and keeps failure red exclusive', async ({
+  page
+}) => {
+  await page.addInitScript(() =>
+    localStorage.setItem('hadoopSim.skin', 'lecture')
+  );
+  const failed = [];
+  page.on('response', (r) => {
+    if (r.status() >= 400) failed.push(r.url());
+  });
+  await page.goto('/hadoopsim-teaching.html');
+  await page.evaluate(() => document.fonts.ready);
+  expect(
+    await page.evaluate(() =>
+      document.fonts.check('16px "Atkinson Hyperlegible Next"')
+    )
+  ).toBe(true);
+  const tokens = await page.evaluate(() => {
+    const css = getComputedStyle(document.documentElement);
+    const get = (name) => css.getPropertyValue(name).trim().toLowerCase();
+    return {
+      error: get('--sim-error'),
+      others: [0, 1, 2, 3, 4, 5, 6, 7]
+        .map((i) => get(`--sim-file-${i}`))
+        .concat(
+          [
+            '--sim-warning',
+            '--sim-success',
+            '--sim-partition-0',
+            '--sim-partition-1',
+            '--sim-partition-2'
+          ].map(get)
+        )
+    };
+  });
+  expect(tokens.others).not.toContain(tokens.error);
+  expect(failed).toEqual([]);
+});
+
+test('teaching mode advances with a presentation clicker key', async ({
+  page
+}) => {
+  await page.goto('/hadoopsim-teaching.html');
+  const counter = page.locator('#stepCounter');
+  await page.keyboard.press('PageDown');
+  await expect(counter).toHaveText(/^1 \//);
+  await page.locator('#splitSizeInput').focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(counter).toHaveText(/^1 \//);
 });

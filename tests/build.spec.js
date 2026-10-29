@@ -22,7 +22,14 @@ test('published pages load under a project prefix without external requests', as
     failed.push(`Request outside project prefix: ${url.pathname}`);
     return route.abort();
   });
-  for (const skin of ['hadoop', 'classroom', 'focus', 'topology']) {
+  for (const skin of [
+    'hadoop',
+    'classroom',
+    'focus',
+    'topology',
+    'lecture',
+    'lecture-dark'
+  ]) {
     await page.goto('/hadoopSim/index.html');
     await page.getByLabel('Skin', { exact: true }).selectOption(skin);
     for (const file of [
