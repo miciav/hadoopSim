@@ -1,0 +1,49 @@
+:root[data-skin='focus'] {
+  --sim-background: #f5f5f4;
+  --sim-surface: #ffffff;
+  --sim-soft: #eeedeb;
+  --sim-text: #242421;
+  --sim-muted: #595952;
+  --sim-border: #cccac4;
+  --sim-accent: #444a38;
+  --sim-radius: 4px;
+  --sim-size: 17px;
+  --sim-gap: 24px;
+  --sim-width: 1500px;
+}
+html[data-skin='focus'] .main-container {
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+html[data-skin='focus'] .card {
+  border-top: 3px solid var(--sim-accent);
+}
+html[data-skin='focus'] .metrics-bar {
+  box-shadow: none;
+}
+html[data-skin='focus'] .log {
+  border-left: 4px solid var(--sim-accent);
+}
+html[data-skin='focus'][data-page='home'] main {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 900px;
+}
+@media (max-width: 760px) {
+  html[data-skin='focus'] .main-container {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+html[data-skin='focus'] .layout {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+}
+html[data-skin='focus'] .log-panel {
+  max-height: 280px;
+}
+html[data-skin='focus'] .log {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+}
+html[data-skin='focus'] .step-console {
+  border-top: 4px solid var(--sim-accent);
+}

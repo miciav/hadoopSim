@@ -1,0 +1,47 @@
+:root[data-skin='topology'] {
+  --sim-background: #eef4f7;
+  --sim-surface: #ffffff;
+  --sim-soft: #e3edf2;
+  --sim-text: #18313e;
+  --sim-muted: #496270;
+  --sim-border: #afc6d1;
+  --sim-accent: #176280;
+  --sim-radius: 6px;
+  --sim-size: 16px;
+  --sim-gap: 24px;
+  --sim-width: 1900px;
+}
+html[data-skin='topology'] :is(.node-container, .node-card, .card) {
+  border-top: 4px solid var(--sim-accent);
+}
+html[data-skin='topology'] .nodes-container {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+html[data-skin='topology'] :is(.node-header, .node-title) {
+  font-family: var(--sim-mono);
+}
+html[data-skin='topology'] .cluster-rack {
+  border: 1px dashed var(--sim-border);
+  padding: 16px;
+}
+@media (max-width: 760px) {
+  html[data-skin='topology'] .main-container {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+html[data-skin='topology'] .layout {
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 24px;
+}
+html[data-skin='topology'] .node-tag {
+  font-family: var(--sim-mono);
+  letter-spacing: 0.04em;
+}
+html[data-skin='topology'] .reducer-rack {
+  border-top: 3px solid var(--sim-accent);
+}
+@media (max-width: 900px) {
+  html[data-skin='topology'] .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

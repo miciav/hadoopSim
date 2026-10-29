@@ -1,0 +1,129 @@
+:root {
+  color-scheme: light;
+  --bg: var(--sim-background);
+  --panel: var(--sim-surface);
+  --ink: var(--sim-text);
+  --muted: var(--sim-muted);
+  --accent: var(--sim-accent);
+  --accent-2: var(--sim-accent);
+  --shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  color: var(--ink);
+  background: radial-gradient(
+    circle at top,
+    var(--sim-soft) 0%,
+    var(--sim-surface) 55%,
+    var(--sim-surface) 100%
+  );
+  min-height: 100vh;
+}
+
+header {
+  padding: 48px 20px 24px;
+  text-align: center;
+}
+
+h1 {
+  margin: 0 0 10px;
+  font-size: clamp(2rem, 3vw, 3rem);
+  letter-spacing: -0.02em;
+}
+
+p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 1.05rem;
+}
+
+main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 20px 60px;
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.card {
+  background: var(--panel);
+  border-radius: 18px;
+  padding: 22px;
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 210px;
+}
+
+.card h2 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.card p {
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.card a {
+  margin-top: auto;
+  text-decoration: none;
+  color: var(--sim-on-accent);
+  background: var(--accent);
+  padding: 10px 14px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+  box-shadow: 0 6px 16px rgba(15, 118, 110, 0.3);
+}
+
+.card a.secondary {
+  background: var(--accent-2);
+  box-shadow: 0 6px 16px rgba(3, 105, 161, 0.3);
+}
+
+.card a.teaching {
+  background: linear-gradient(
+    135deg,
+    var(--sim-partition-0) 0%,
+    var(--sim-partition-0) 100%
+  );
+  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.35);
+}
+
+.card a.teaching:hover {
+  box-shadow: 0 10px 24px rgba(124, 58, 237, 0.4);
+}
+
+.card a:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(15, 118, 110, 0.3);
+}
+
+footer {
+  text-align: center;
+  padding: 12px 20px 32px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

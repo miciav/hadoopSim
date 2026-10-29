@@ -1,138 +1,26 @@
 <!doctype html>
-<html lang="en">
+<html data-page="home" lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Hadoop Simulators</title>
-    <style>
-      :root {
-        color-scheme: light;
-        --bg: #f7fafc;
-        --panel: #ffffff;
-        --ink: #1a202c;
-        --muted: #4a5568;
-        --accent: #0f766e;
-        --accent-2: #0369a1;
-        --shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
-      }
 
-      * {
-        box-sizing: border-box;
-      }
-
-      body {
-        margin: 0;
-        font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
-        color: var(--ink);
-        background: radial-gradient(
-          circle at top,
-          #e6fffa 0%,
-          #f7fafc 55%,
-          #ffffff 100%
-        );
-        min-height: 100vh;
-      }
-
-      header {
-        padding: 48px 20px 24px;
-        text-align: center;
-      }
-
-      h1 {
-        margin: 0 0 10px;
-        font-size: clamp(2rem, 3vw, 3rem);
-        letter-spacing: -0.02em;
-      }
-
-      p {
-        margin: 0;
-        color: var(--muted);
-        font-size: 1.05rem;
-      }
-
-      main {
-        max-width: 1100px;
-        margin: 0 auto;
-        padding: 0 20px 60px;
-        display: grid;
-        gap: 24px;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      }
-
-      .card {
-        background: var(--panel);
-        border-radius: 18px;
-        padding: 22px;
-        box-shadow: var(--shadow);
-        border: 1px solid rgba(15, 23, 42, 0.06);
-        display: flex;
-        flex-direction: column;
-        gap: 14px;
-        min-height: 210px;
-      }
-
-      .card h2 {
-        margin: 0;
-        font-size: 1.3rem;
-      }
-
-      .card p {
-        font-size: 0.95rem;
-        line-height: 1.5;
-      }
-
-      .card a {
-        margin-top: auto;
-        text-decoration: none;
-        color: white;
-        background: var(--accent);
-        padding: 10px 14px;
-        border-radius: 999px;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        font-weight: 600;
-        transition:
-          transform 0.2s ease,
-          box-shadow 0.2s ease;
-        box-shadow: 0 6px 16px rgba(15, 118, 110, 0.3);
-      }
-
-      .card a.secondary {
-        background: var(--accent-2);
-        box-shadow: 0 6px 16px rgba(3, 105, 161, 0.3);
-      }
-
-      .card a.teaching {
-        background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
-        box-shadow: 0 6px 16px rgba(124, 58, 237, 0.35);
-      }
-
-      .card a.teaching:hover {
-        box-shadow: 0 10px 24px rgba(124, 58, 237, 0.4);
-      }
-
-      .card a:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 20px rgba(15, 118, 110, 0.3);
-      }
-
-      footer {
-        text-align: center;
-        padding: 12px 20px 32px;
-        color: var(--muted);
-        font-size: 0.9rem;
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        * {
-          animation: none !important;
-          transition: none !important;
-        }
-      }
-    </style>
+    <script src="./assets/js/skin.js"></script>
+    <link rel="stylesheet" href="./assets/css/base.css" />
+    <link rel="stylesheet" href="./assets/css/pages/home.css" />
+    <link rel="stylesheet" href="./assets/css/skins/hadoop.css" />
+    <link rel="stylesheet" href="./assets/css/skins/classroom.css" />
+    <link rel="stylesheet" href="./assets/css/skins/focus.css" />
+    <link rel="stylesheet" href="./assets/css/skins/topology.css" />
   </head>
   <body>
+    <nav class="site-nav" aria-label="Site">
+      <a href="./index.html">Hadoop simulators</a>
+      <div class="skin-picker">
+        <label for="skin-select">Skin</label
+        ><select id="skin-select" data-skin-select></select>
+      </div>
+    </nav>
     <header>
       <h1>Hadoop Simulators</h1>
       <p>Choose a visual walkthrough of Hadoop HDFS, YARN, and MapReduce.</p>

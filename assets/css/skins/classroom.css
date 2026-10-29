@@ -1,0 +1,53 @@
+:root[data-skin='classroom'] {
+  --sim-background: #faf8f1;
+  --sim-surface: #fffef9;
+  --sim-soft: #f0eddf;
+  --sim-text: #29281f;
+  --sim-muted: #5b5848;
+  --sim-border: #c8c1aa;
+  --sim-accent: #72531a;
+  --sim-radius: 8px;
+  --sim-size: 18px;
+  --sim-gap: 28px;
+  --sim-width: 1800px;
+}
+html[data-skin='classroom'] :is(.header h1, h1) {
+  font-size: 2.2rem;
+}
+html[data-skin='classroom'] :is(.sidebar, .card, .log-section) {
+  padding: 24px;
+  line-height: 1.65;
+}
+html[data-skin='classroom'] .main-container {
+  grid-template-columns: 300px minmax(0, 1fr);
+}
+html[data-skin='classroom'] .controls {
+  padding: 20px;
+  gap: 16px;
+}
+@media (max-width: 760px) {
+  html[data-skin='classroom'] .main-container {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+html[data-skin='classroom'] .layout {
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 28px;
+}
+html[data-skin='classroom'] .cluster-rack {
+  grid-template-columns: minmax(0, 1fr);
+}
+html[data-skin='classroom'] .app {
+  --text-xs: 14px;
+  --text-sm: 16px;
+  --text-base: 18px;
+  --text-lg: 20px;
+}
+html[data-skin='classroom'] :is(.log, .step-description) {
+  line-height: 1.7;
+}
+@media (max-width: 900px) {
+  html[data-skin='classroom'] .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -113,3 +113,49 @@ in `.node-version`, esegue i controlli, costruisce e pubblica `dist/`. Non sono
 stati eseguiti merge, push, creazione PR o deploy. La verifica sul dominio reale
 GitHub Pages avviene dopo l'integrazione autorizzata; una build locale non ne
 costituisce prova.
+
+## Verifica delle skin built-in (29 ottobre 2026)
+
+La selezione è disponibile esclusivamente sulla homepage: Hadoop (default),
+Classroom, Focus e Topology. Le altre otto pagine leggono la preferenza al
+caricamento e non reagiscono a modifiche effettuate in altre schede. Gli stili
+sono separati dai motori; i mockup originali restano esclusi da `dist/`.
+
+La copertura browser include tutte le 36 combinazioni pagina/skin, caricamento
+sotto `/hadoopSim/` senza richieste esterne, persistenza/fallback dello storage,
+uso del selettore da tastiera, isolamento fra schede, completamento e reset delle
+standalone, output per chiave delle due pipeline modulari in ogni skin e resize
+durante trasferimento. Screenshot a 390×844 controllano l'adattamento delle nove
+pagine; i diagrammi hanno regioni di scorrimento raggiungibili da tastiera.
+
+La revisione indipendente ha individuato e fatto correggere tre problemi:
+precedenza CSS sugli stati attivi, scorrimento dell'intera applicazione sui display
+stretti e differenze insufficienti fra i layout delle pipeline. I test mirati
+riproducono tali problemi e ne verificano le correzioni. Un controllo separato
+copre il contrasto dei badge di stato.
+
+Il collaudo manuale in Chrome ha verificato homepage, scelta Classroom, navigazione
+alla pipeline, caricamento dei record ed evidenziazione del nodo attivo.
+La lettura dei token nei test usa il root che li dichiara: WebKit non restituiva
+lo stesso valore interrogando la proprietà personalizzata ereditata sul body.
+La verifica visiva non equivale a una certificazione completa di accessibilità.
+
+Il server di anteprima usa ora `scripts/preview.py` (sola libreria standard Python)
+con coda di 128 connessioni per le richieste simultanee di CSS e moduli. La coda
+predefinita del precedente server causava reset delle connessioni nella suite
+completa; la diagnosi con il solo aumento della coda ha prodotto 79/79 test verdi.
+Questo riguarda l'anteprima locale, non l'hosting GitHub Pages.
+
+Scelte di implementazione: i fogli strutturali delle pagine restano distinti per
+preservare selettori e granularità, mentre componenti e colori semantici condivisi
+stanno nella base. Le skin non dipendono l'una dall'altra. Questo conserva qualche
+regola strutturale simile fra viste e riduce i rischi di una riscrittura generale.
+Le verifiche degli asset sono concentrate sul caricamento reale nel browser,
+anziché duplicarle come confronti del sorgente. Nelle narrazioni standalone il
+completamento è verificato tramite la spiegazione finale esistente; il contatore
+di fase può mantenere il valore precedente, un limite preesistente di quelle viste.
+
+Risultato finale con Node 24.22.1: lint e Prettier verdi, 147/147 unit test,
+79/79 test Chromium e 79/79 test WebKit. I controlli comprendono le 36 combinazioni
+pagina/skin. Implementazione verificata sul branch locale `codex/built-in-skins`;
+nessun merge, push o deploy eseguito per questo intervento.

@@ -46,3 +46,28 @@ reset. See `docs/teaching-contracts.md` for page-specific scope and limitations.
 The build bundles browser entry points into `dist/`; GitHub Pages publishes that
 static directory after checks pass. Run `npm run build` and `npm run preview` to
 serve the same artifacts locally.
+
+## Presentation and built-in skins
+
+Each public document loads `assets/js/skin.js` before its body. It reads the
+allowlisted `hadoopSim.skin` preference once and sets `data-skin` on the root;
+Hadoop is the default when storage is absent, invalid or inaccessible.
+Only `index.html` exposes the native Skin selector. Changes affect the homepage
+and subsequent page loads. Existing simulator documents keep their original
+skin, including when another tab changes the preference or the browser restores
+a document from its back-forward cache. Storage failures leave the homepage
+selection usable, but persistence across navigation cannot be guaranteed.
+
+CSS is loaded in this order: `assets/css/base.css`, a structural stylesheet under
+`assets/css/pages/`, then the four independent stylesheets under
+`assets/css/skins/`. The common base supplies semantic tokens and accessibility
+rules; each skin supplies its palette, spacing, typography and layout hierarchy.
+The original mockups remain development references and are not published.
+
+To adjust a skin, edit its CSS and use the common `--sim-*` tokens. Page-specific
+structure belongs in the page stylesheet; values derived from simulation data
+(such as progress widths and file series identities) stay in renderers. Do not
+import the selector into a simulation, branch algorithms on the active skin, or
+copy simulation code into a theme. Pipeline height synchronization and visual
+constants live under `pipeline-dual-nodes/dom/`, separate from domain config.
+Complex diagrams provide keyboard-accessible local scrolling on small screens.

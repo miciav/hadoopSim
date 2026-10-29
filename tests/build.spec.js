@@ -3,6 +3,7 @@ import { test, expect } from './fixtures.js';
 test('published pages load under a project prefix without external requests', async ({
   page
 }, testInfo) => {
+  test.setTimeout(90000);
   await page.setViewportSize({ width: 1440, height: 1000 });
   const failed = [];
   page.on('response', (response) => {
@@ -21,27 +22,32 @@ test('published pages load under a project prefix without external requests', as
     failed.push(`Request outside project prefix: ${url.pathname}`);
     return route.abort();
   });
-  for (const file of [
-    'index.html',
-    'hadoop-ecosystem-simulator.html',
-    'hadoop_full.html',
-    'hdfs_interactive.html',
-    'yarn_interactive.html',
-    'hadoop-map-side-pipeline-dual_nodes.html',
-    'hadoopsim-teaching.html',
-    'hadoop-map-side-pipeline.html',
-    'hadoop-map-side-pipeline-dual.html'
-  ]) {
-    const response = await page.goto(`/hadoopSim/${file}`);
-    expect(response.status(), file).toBe(200);
-    if (file === 'hadoop-ecosystem-simulator.html')
-      await expect(
-        page.getByRole('button', { name: /Upload 256 MB/i })
-      ).toBeVisible();
-    await page.screenshot({
-      path: testInfo.outputPath(`${file}.png`),
-      fullPage: true
-    });
+  for (const skin of ['hadoop', 'classroom', 'focus', 'topology']) {
+    await page.goto('/hadoopSim/index.html');
+    await page.getByLabel('Skin', { exact: true }).selectOption(skin);
+    for (const file of [
+      'index.html',
+      'hadoop-ecosystem-simulator.html',
+      'hadoop_full.html',
+      'hdfs_interactive.html',
+      'yarn_interactive.html',
+      'hadoop-map-side-pipeline-dual_nodes.html',
+      'hadoopsim-teaching.html',
+      'hadoop-map-side-pipeline.html',
+      'hadoop-map-side-pipeline-dual.html'
+    ]) {
+      const response = await page.goto(`/hadoopSim/${file}`);
+      expect(response.status(), file).toBe(200);
+      await expect(page.locator('html')).toHaveAttribute('data-skin', skin);
+      if (file === 'hadoop-ecosystem-simulator.html')
+        await expect(
+          page.getByRole('button', { name: /Upload 256 MB/i })
+        ).toBeVisible();
+      await page.screenshot({
+        path: testInfo.outputPath(`${skin}-${file}.png`),
+        fullPage: true
+      });
+    }
   }
   expect(failed).toEqual([]);
 });

@@ -1,0 +1,18 @@
+:root[data-skin='hadoop'] {
+  --sim-background: #f4f6f8;
+  --sim-surface: #ffffff;
+  --sim-soft: #edf1f5;
+  --sim-text: #182433;
+  --sim-muted: #526172;
+  --sim-border: #c6cfd9;
+  --sim-accent: #175d9c;
+  --sim-radius: 12px;
+  --sim-size: 16px;
+  --sim-gap: 20px;
+  --sim-width: 1800px;
+}
+@media (max-width: 760px) {
+  html[data-skin='hadoop'] .main-container {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

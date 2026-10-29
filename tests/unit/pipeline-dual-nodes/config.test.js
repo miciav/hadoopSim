@@ -1,10 +1,12 @@
 import test from 'node:test';
+import {
+  LOG_TYPES,
+  SWEEP_COLORS
+} from '../../../assets/js/pipeline-dual-nodes/dom/presentation.js';
 import assert from 'node:assert/strict';
 import {
   CONFIG,
-  PARTITIONS,
-  LOG_TYPES,
-  SWEEP_COLORS
+  PARTITIONS
 } from '../../../assets/js/pipeline-dual-nodes/config.js';
 
 test('CONFIG is frozen', () => {

@@ -5,7 +5,7 @@ import { createActor, createMachine } from 'xstate';
 
 import { createStepSimulation } from './engine-step.js';
 import { el, ELEMENT_IDS } from '../pipeline-dual-nodes/dom/selectors.js';
-import { initHeightSync } from '../pipeline-dual-nodes/engine.js';
+import { initHeightSync } from '../pipeline-dual-nodes/dom/layout.js';
 import { unfoldIntermediateRows } from '../pipeline-dual-nodes/dom/fold.js';
 
 /**

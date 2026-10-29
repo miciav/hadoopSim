@@ -1,726 +1,22 @@
 <!doctype html>
-<html lang="en">
+<html data-page="single" lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Hadoop Map Task Internal Pipeline Simulator</title>
-    <style>
-      * {
-        box-sizing: border-box;
-        font-family:
-          system-ui,
-          -apple-system,
-          BlinkMacSystemFont,
-          'Segoe UI',
-          sans-serif;
-      }
 
-      body {
-        margin: 0;
-        padding: 20px;
-        background: #f8fafc;
-        color: #1e293b;
-        display: flex;
-        justify-content: center;
-        min-height: 100vh;
-      }
-
-      .app {
-        max-width: 1200px;
-        width: 100%;
-        background: #ffffff;
-        border-radius: 16px;
-        padding: 20px 24px 28px;
-        box-shadow:
-          0 4px 24px rgba(0, 0, 0, 0.08),
-          0 0 1px rgba(0, 0, 0, 0.1);
-        border: 1px solid #e2e8f0;
-      }
-
-      h1 {
-        font-size: 24px;
-        margin: 0 0 6px;
-        color: #0f172a;
-        font-weight: 700;
-      }
-
-      .subtitle {
-        font-size: 14px;
-        color: #475569;
-        margin-bottom: 16px;
-        line-height: 1.5;
-      }
-
-      .controls {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 14px;
-        flex-wrap: wrap;
-      }
-
-      button {
-        border-radius: 8px;
-        padding: 8px 18px;
-        font-size: 14px;
-        border: none;
-        cursor: pointer;
-        background: #16a34a;
-        color: #ffffff;
-        font-weight: 600;
-        box-shadow: 0 2px 8px rgba(22, 163, 74, 0.3);
-        transition: all 0.15s ease;
-      }
-
-      button:hover:not(:disabled) {
-        background: #15803d;
-        box-shadow: 0 4px 12px rgba(22, 163, 74, 0.4);
-        transform: translateY(-1px);
-      }
-
-      button.secondary {
-        background: #f1f5f9;
-        color: #334155;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        border: 1px solid #cbd5e1;
-      }
-
-      button.secondary:hover:not(:disabled) {
-        background: #e2e8f0;
-        border-color: #94a3b8;
-      }
-
-      button.pause {
-        background: #ea580c;
-        color: #ffffff;
-      }
-
-      button.pause:hover:not(:disabled) {
-        background: #c2410c;
-      }
-
-      button:active:not(:disabled) {
-        transform: translateY(0);
-      }
-
-      button:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-        box-shadow: none;
-        transform: none;
-      }
-
-      .speed-control {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 13px;
-        color: #475569;
-        margin-left: auto;
-      }
-
-      .speed-control input[type='range'] {
-        width: 140px;
-        cursor: pointer;
-      }
-
-      /* Metrics Panel */
-      .metrics {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-        gap: 12px;
-        margin: 16px 0;
-        padding: 16px;
-        background: #f8fafc;
-        border-radius: 12px;
-        border: 1px solid #e2e8f0;
-      }
-
-      .metric {
-        text-align: center;
-      }
-
-      .metric-value {
-        font-size: 24px;
-        font-weight: 700;
-        color: #16a34a;
-        display: block;
-        margin-bottom: 4px;
-      }
-
-      .metric-label {
-        font-size: 11px;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: #64748b;
-      }
-
-      .layout {
-        display: grid;
-        grid-template-columns: 1.6fr 1.2fr;
-        gap: 18px;
-        margin-top: 16px;
-      }
-
-      @media (max-width: 968px) {
-        .layout {
-          grid-template-columns: 1fr;
-        }
-      }
-
-      .timeline {
-        display: flex;
-        gap: 6px;
-        margin-bottom: 12px;
-        font-size: 11px;
-        overflow-x: auto;
-        padding-bottom: 4px;
-      }
-
-      .timeline-step {
-        flex: 1;
-        min-width: 80px;
-        padding: 6px 8px;
-        border-radius: 8px;
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        text-align: center;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        transition: all 0.2s ease;
-        cursor: help;
-        color: #475569;
-      }
-
-      .timeline-step:hover {
-        background: #f1f5f9;
-        border-color: #cbd5e1;
-      }
-
-      .timeline-step.active {
-        background: linear-gradient(135deg, #16a34a, #15803d);
-        border-color: #16a34a;
-        color: #ffffff;
-        font-weight: 600;
-        box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3);
-      }
-
-      .timeline-step.completed {
-        background: #e2e8f0;
-        border-color: #cbd5e1;
-        color: #64748b;
-        opacity: 0.8;
-      }
-
-      .pipeline {
-        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-        border-radius: 12px;
-        padding: 12px;
-        border: 1px solid #e2e8f0;
-        min-height: 580px;
-        position: relative;
-        overflow: hidden;
-      }
-
-      .row {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 16px;
-      }
-
-      .row-label {
-        width: 100px;
-        font-size: 11px;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: #475569;
-        font-weight: 600;
-      }
-
-      .row-box {
-        flex: 1;
-        border-radius: 10px;
-        border: 1px dashed #cbd5e1;
-        background: rgba(255, 255, 255, 0.8);
-        padding: 4px 6px;
-        min-height: 110px;
-        position: relative;
-        overflow: hidden;
-        transition: border-color 0.3s ease;
-      }
-
-      /* Give the circular buffer extra headroom for more rows of records */
-      #bufferBox {
-        min-height: 160px;
-      }
-
-      .row-box.active {
-        border-color: #16a34a;
-        border-style: solid;
-        box-shadow: 0 0 20px rgba(22, 163, 74, 0.15);
-        background: rgba(240, 253, 244, 0.9);
-      }
-
-      /* InputFormat / Splits / RecordReaders */
-      .input-flow {
-        position: absolute;
-        inset: 22px 10px 10px 10px;
-        display: grid;
-        grid-template-columns: auto 24px 1fr 24px 1fr;
-        align-items: center;
-        gap: 8px;
-      }
-
-      .input-format,
-      .split-box,
-      .reader-box {
-        border-radius: 8px;
-        padding: 10px 12px;
-        background: linear-gradient(135deg, #e0f2fe, #f8fafc);
-        border: 1px solid #bfdbfe;
-        color: #0f172a;
-        font-weight: 700;
-        font-size: 12px;
-        text-align: center;
-        box-shadow: 0 2px 10px rgba(59, 130, 246, 0.2);
-      }
-
-      .split-group,
-      .reader-group {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
-        gap: 8px;
-      }
-
-      .reader-box {
-        background: linear-gradient(135deg, #dcfce7, #f0fdf4);
-        border-color: #bbf7d0;
-        box-shadow: 0 2px 10px rgba(34, 197, 94, 0.2);
-        font-size: 11px;
-      }
-
-      .split-box.active,
-      .reader-box.active,
-      .input-format.active {
-        border-color: #16a34a;
-        box-shadow: 0 0 14px rgba(22, 163, 74, 0.35);
-        transform: translateY(-1px);
-      }
-
-      .split-box.inactive,
-      .reader-box.inactive {
-        opacity: 0.35;
-      }
-
-      .flow-arrow {
-        text-align: center;
-        color: #475569;
-        font-weight: 800;
-        font-size: 16px;
-      }
-
-      .input-note {
-        margin-top: 8px;
-        font-size: 12px;
-        color: #475569;
-      }
-
-      .input-layout {
-        display: grid;
-        grid-template-columns: 140px 24px 1fr;
-        gap: 10px;
-        align-items: center;
-        margin-top: 10px;
-      }
-
-      .reader-layout {
-        margin-top: 10px;
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 10px;
-      }
-
-      .row-title {
-        position: absolute;
-        top: 4px;
-        left: 8px;
-        font-size: 10px;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: #64748b;
-        font-weight: 600;
-      }
-
-      .buffer-inner {
-        position: absolute;
-        inset: 20px 6px 6px 6px;
-        border-radius: 8px;
-        border: 1px solid #cbd5e1;
-        background: rgba(255, 255, 255, 0.95);
-        overflow: hidden;
-
-        display: flex;
-        flex-wrap: wrap;
-        align-items: flex-start;
-        align-content: flex-start;
-      }
-
-      .buffer-capacity {
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(
-          135deg,
-          rgba(22, 163, 74, 0.08),
-          transparent 50%
-        );
-        opacity: 0.5;
-        pointer-events: none;
-      }
-
-      .buffer-fill {
-        position: absolute;
-        inset: auto 0 0 0;
-        height: 0;
-        background: linear-gradient(
-          to top,
-          rgba(22, 163, 74, 0.25),
-          rgba(22, 163, 74, 0.05)
-        );
-        transition: height 0.25s ease-out;
-        pointer-events: none;
-        border-top: 1px solid rgba(22, 163, 74, 0.5);
-      }
-
-      .buffer-percentage {
-        margin-top: 4px;
-        font-size: 11px;
-        font-weight: 600;
-        color: #16a34a;
-        text-shadow: 0 0 6px rgba(22, 163, 74, 0.3);
-        pointer-events: none;
-        display: block;
-      }
-
-      .kv-record {
-        position: relative;
-        min-width: 60px;
-        height: 20px;
-        padding: 0 6px;
-        border-radius: 5px;
-        background: #16a34a;
-        box-shadow: 0 2px 8px rgba(22, 163, 74, 0.4);
-        opacity: 0;
-        font-size: 10px;
-        color: #ffffff;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        pointer-events: none;
-        font-weight: 700;
-        margin: 2px;
-        transition: all 0.2s ease;
-      }
-
-      .kv-record.buffer {
-        background: #22c55e;
-        box-shadow: 0 2px 8px rgba(34, 197, 94, 0.4);
-      }
-
-      .kv-record.spill {
-        background: #0ea5e9;
-        box-shadow: 0 2px 8px rgba(14, 165, 233, 0.4);
-      }
-
-      .kv-record.final {
-        background: #ea580c;
-        box-shadow: 0 2px 8px rgba(234, 88, 12, 0.4);
-      }
-
-      .kv-record.reducer {
-        background: #9333ea;
-        box-shadow: 0 2px 10px rgba(147, 51, 234, 0.5);
-        color: #ffffff;
-        font-weight: 700;
-      }
-
-      .spill-files {
-        position: absolute;
-        inset: 20px 6px 6px 6px;
-        display: flex;
-        gap: 8px;
-        align-items: flex-end;
-        justify-content: center;
-      }
-
-      .spill-slot {
-        flex: 1;
-        min-height: 82px;
-        border-radius: 8px;
-        border: 1px solid #cbd5e1;
-        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-        position: relative;
-        overflow: hidden;
-        transition: all 0.3s ease;
-
-        display: flex;
-        flex-wrap: wrap;
-        align-items: flex-start;
-        align-content: flex-start;
-      }
-
-      .spill-label {
-        position: absolute;
-        top: 4px;
-        left: 8px;
-        font-size: 9px;
-        text-transform: uppercase;
-        color: #64748b;
-        letter-spacing: 0.1em;
-        font-weight: 600;
-      }
-
-      .spill-highlight {
-        position: absolute;
-        inset: 0;
-        border-radius: inherit;
-        border: 2px solid rgba(14, 165, 233, 0.6);
-        box-shadow:
-          0 0 20px rgba(14, 165, 233, 0.3),
-          inset 0 0 20px rgba(14, 165, 233, 0.1);
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.3s ease;
-      }
-
-      .final-output {
-        position: absolute;
-        inset: 26px 10px 8px 10px;
-        border-radius: 8px;
-        border: 1px dashed #cbd5e1;
-        background: linear-gradient(
-          135deg,
-          rgba(234, 88, 12, 0.08) 0%,
-          rgba(255, 255, 255, 0.9) 60%
-        );
-        overflow: hidden;
-        transition: all 0.3s ease;
-
-        display: flex;
-        flex-wrap: wrap;
-        align-items: flex-start;
-        align-content: flex-start;
-      }
-
-      .final-label {
-        position: absolute;
-        top: 5px;
-        left: 10px;
-        font-size: 10px;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: #ea580c;
-        font-weight: 600;
-      }
-
-      .reducers-inner {
-        position: absolute;
-        inset: 20px 6px 6px 6px;
-        display: flex;
-        gap: 8px;
-      }
-
-      .reducer-box {
-        flex: 1;
-        border-radius: 8px;
-        border: 1px solid #cbd5e1;
-        background: linear-gradient(135deg, #faf5ff 0%, #ffffff 60%);
-        position: relative;
-        overflow: hidden;
-        transition: all 0.3s ease;
-
-        display: flex;
-        flex-wrap: wrap;
-        align-items: flex-start;
-        align-content: flex-start;
-      }
-
-      .reducer-box.active {
-        border-color: #9333ea;
-        box-shadow: 0 0 20px rgba(147, 51, 234, 0.25);
-      }
-
-      .reducer-label {
-        position: absolute;
-        top: 4px;
-        left: 8px;
-        font-size: 9px;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: #9333ea;
-        font-weight: 600;
-      }
-
-      .hdfs-inner {
-        position: absolute;
-        inset: 20px 6px 6px 6px;
-        display: flex;
-        gap: 8px;
-      }
-
-      .hdfs-box {
-        flex: 1;
-        border-radius: 8px;
-        border: 1px dashed #cbd5e1;
-        background: linear-gradient(
-          135deg,
-          rgba(16, 185, 129, 0.1) 0%,
-          #ffffff 70%
-        );
-        position: relative;
-        overflow: hidden;
-        transition: all 0.3s ease;
-
-        display: flex;
-        flex-wrap: wrap;
-        align-items: flex-start;
-        align-content: flex-start;
-      }
-
-      .hdfs-box.active {
-        border-color: #16a34a;
-        box-shadow: 0 0 20px rgba(22, 163, 74, 0.2);
-      }
-
-      /* Log Panel */
-      .log {
-        background: #f8fafc;
-        border-radius: 12px;
-        padding: 16px;
-        border: 1px solid #e2e8f0;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-      }
-
-      .log-section {
-        padding: 12px;
-        border-radius: 8px;
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-      }
-
-      .log-section.current {
-        border-color: #16a34a;
-        background: rgba(240, 253, 244, 0.6);
-      }
-
-      .log-section h3 {
-        margin: 0 0 8px;
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: #64748b;
-        font-weight: 600;
-      }
-
-      .log-section.current h3 {
-        color: #16a34a;
-      }
-
-      .log-section p {
-        margin: 0;
-        font-size: 13px;
-        line-height: 1.6;
-        color: #334155;
-      }
-
-      .log-section strong {
-        color: #0f172a;
-        font-weight: 600;
-      }
-
-      .legend {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        margin-top: 12px;
-        padding: 12px;
-        background: #ffffff;
-        border-radius: 8px;
-        border: 1px solid #e2e8f0;
-      }
-
-      .legend-item {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 12px;
-        color: #475569;
-      }
-
-      .legend-box {
-        width: 12px;
-        height: 12px;
-        border-radius: 3px;
-        box-shadow: 0 0 8px currentColor;
-      }
-
-      .legend-box.buffer {
-        background: #22c55e;
-        color: rgba(34, 197, 94, 0.5);
-      }
-      .legend-box.spill {
-        background: #0ea5e9;
-        color: rgba(14, 165, 233, 0.5);
-      }
-      .legend-box.final {
-        background: #ea580c;
-        color: rgba(234, 88, 12, 0.5);
-      }
-      .legend-box.reducer {
-        background: #9333ea;
-        color: rgba(147, 51, 234, 0.5);
-      }
-
-      /* Tooltip */
-      .tooltip {
-        position: absolute;
-        background: #1e293b;
-        color: #f8fafc;
-        padding: 8px 12px;
-        border-radius: 6px;
-        font-size: 12px;
-        pointer-events: none;
-        opacity: 0;
-        transition: opacity 0.2s ease;
-        z-index: 1000;
-        border: 1px solid #334155;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        max-width: 250px;
-        line-height: 1.4;
-      }
-
-      /* Progress indicator */
-      .progress-bar {
-        height: 4px;
-        background: #e2e8f0;
-        border-radius: 2px;
-        overflow: hidden;
-        margin: 16px 0 8px;
-      }
-
-      .progress-fill {
-        height: 100%;
-        background: linear-gradient(90deg, #16a34a, #15803d);
-        width: 0%;
-        transition: width 0.3s ease;
-        box-shadow: 0 0 10px rgba(22, 163, 74, 0.4);
-      }
-    </style>
+    <script src="./assets/js/skin.js"></script>
+    <link rel="stylesheet" href="./assets/css/base.css" />
+    <link rel="stylesheet" href="./assets/css/pages/standalone-single.css" />
+    <link rel="stylesheet" href="./assets/css/skins/hadoop.css" />
+    <link rel="stylesheet" href="./assets/css/skins/classroom.css" />
+    <link rel="stylesheet" href="./assets/css/skins/focus.css" />
+    <link rel="stylesheet" href="./assets/css/skins/topology.css" />
   </head>
   <body>
+    <nav class="site-nav" aria-label="Site">
+      <a href="./index.html">Hadoop simulators</a>
+    </nav>
     <div class="app">
       <h1>Hadoop Map Task Internal Pipeline Simulator</h1>
       <p class="subtitle">
@@ -784,7 +80,12 @@
 
       <div class="layout">
         <!-- Left: Pipeline Visualization -->
-        <div>
+        <div
+          class="diagram-scroll"
+          role="region"
+          aria-label="Simulation diagram"
+          tabindex="0"
+        >
           <!-- Timeline -->
           <div class="timeline" id="timeline">
             <div
@@ -972,35 +273,28 @@
           <!-- Legend -->
           <div class="legend">
             <div class="legend-item">
-              <div class="legend-box" style="background: #8b5cf6"></div>
+              <div class="page-detail-1 legend-box"></div>
               <span>Partition 0 (R0): cat, car, cup</span>
             </div>
             <div class="legend-item">
-              <div class="legend-box" style="background: #ec4899"></div>
+              <div class="page-detail-2 legend-box"></div>
               <span>Partition 1 (R1): dog, day, data, door</span>
             </div>
             <div class="legend-item">
-              <div class="legend-box" style="background: #f59e0b"></div>
+              <div class="page-detail-3 legend-box"></div>
               <span>Partition 2 (R2): ant, arm, art, ask</span>
             </div>
           </div>
 
-          <p
-            style="
-              font-size: 12px;
-              color: #475569;
-              margin-top: 12px;
-              line-height: 1.5;
-            "
-          >
-            <strong style="color: #0f172a">How it works:</strong> Each block
+          <p class="page-detail-4">
+            <strong class="page-detail-5">How it works:</strong> Each block
             shows a specific key like 'cat', 'dog', or 'ant'. Keys are colored
             by their target reducer partition:
-            <strong style="color: #8b5cf6">purple</strong> for partition 0
+            <strong class="page-detail-6">partition 0</strong> for partition 0
             (keys: cat, car, cup),
-            <strong style="color: #ec4899">pink</strong> for partition 1 (keys:
-            dog, day, data, door), and
-            <strong style="color: #f59e0b">orange</strong> for partition 2
+            <strong class="page-detail-7">partition 1</strong> for partition 1
+            (keys: dog, day, data, door), and
+            <strong class="page-detail-8">partition 2</strong> for partition 2
             (keys: ant, arm, art, ask). Watch how keys get sorted alphabetically
             within each partition during spills, then merged and distributed to
             the correct reducer.
@@ -1214,16 +508,16 @@
        */
       const WORD_KEYS = [
         // Keys that hash to reducer 0 (partition 0)
-        { key: 'cat', partition: 0, color: '#8b5cf6' },
-        { key: 'car', partition: 0, color: '#8b5cf6' },
+        { key: 'cat', partition: 0, color: 'var(--sim-partition-0)' },
+        { key: 'car', partition: 0, color: 'var(--sim-partition-0)' },
 
         // Keys that hash to reducer 1 (partition 1)
-        { key: 'dog', partition: 1, color: '#ec4899' },
-        { key: 'data', partition: 1, color: '#ec4899' },
+        { key: 'dog', partition: 1, color: 'var(--sim-partition-1)' },
+        { key: 'data', partition: 1, color: 'var(--sim-partition-1)' },
 
         // Keys that hash to reducer 2 (partition 2)
-        { key: 'ant', partition: 2, color: '#f59e0b' },
-        { key: 'art', partition: 2, color: '#f59e0b' }
+        { key: 'ant', partition: 2, color: 'var(--sim-partition-2)' },
+        { key: 'art', partition: 2, color: 'var(--sim-partition-2)' }
       ];
 
       /**

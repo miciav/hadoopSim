@@ -3,14 +3,10 @@ import { createSimulation } from './hadoop-sim/simulation.js';
 import { describeMapReduceFailure } from './hadoop-sim/mapreduce.js';
 import { randomInt } from './hadoop-sim/random.js';
 
-const COLORS = [
-  '#3182ce',
-  '#38a169',
-  '#d69e2e',
-  '#e53e3e',
-  '#805ad5',
-  '#dd6b20'
-];
+const COLORS = Array.from(
+  { length: 8 },
+  (_, index) => `var(--sim-file-${index})`
+);
 let colorIndex = 0;
 const fileColors = new Map();
 
@@ -104,7 +100,8 @@ function renderUnifiedNodes() {
         node.blocks.length > 0
           ? node.blocks
               .map((block) => {
-                const color = fileColors.get(block.fileName) || '#a0aec0';
+                const color =
+                  fileColors.get(block.fileName) || 'var(--sim-muted)';
                 return `
                   <div class="block-chip" style="background-color: ${color};">
                     ${block.id}${block.isReplica ? '★' : ''}
@@ -112,7 +109,7 @@ function renderUnifiedNodes() {
                 `;
               })
               .join('')
-          : '<span style="font-size: 0.8em; color: #a0aec0;">No blocks</span>';
+          : '<span class="render-detail-0">No blocks</span>';
 
       const containersHTML =
         node.containers.length > 0
@@ -139,15 +136,15 @@ function renderUnifiedNodes() {
                 }
 
                 return `
-                  <div class="container-chip ${container.isMapReduce ? 'mapreduce' : ''} ${
+                  <div class="render-detail-1 container-chip ${container.isMapReduce ? 'mapreduce' : ''} ${
                     isAM ? 'appmaster' : ''
-                  } ${mapperFailed ? 'failed' : ''}" style="position: relative; overflow: hidden;">
+                  } ${mapperFailed ? 'failed' : ''}">
                     ${
                       mapperProgress !== null && !mapperFailed
                         ? `
                           <div style="position: absolute; bottom: 0; left: 0; height: 3px; width: ${
                             mapperProgress
-                          }%; background: #22543d; transition: width 0.3s;"></div>
+                          }%; background: var(--sim-success); transition: width 0.3s;"></div>
                         `
                         : ''
                     }
@@ -162,7 +159,7 @@ function renderUnifiedNodes() {
                 `;
               })
               .join('')
-          : '<span style="font-size: 0.8em; color: #a0aec0;">No containers</span>';
+          : '<span class="render-detail-2">No containers</span>';
 
       return `
         <div class="node ${status} ${hasDataLocality ? 'data-locality' : ''}">
@@ -273,7 +270,7 @@ function renderFilesList() {
 
   if (sim.state.files.length === 0) {
     container.innerHTML =
-      '<p style="color: #718096; font-style: italic;">No files uploaded yet. Upload a file to start!</p>';
+      '<p class="render-detail-3">No files uploaded yet. Upload a file to start!</p>';
     document.getElementById('mapReduceBtn').disabled = true;
     return;
   }
@@ -298,7 +295,7 @@ function renderFilesList() {
               )
               .join('')}
           </div>
-          <div style="margin-top: 8px; font-size: 0.85em; color: #718096;">
+          <div class="render-detail-4">
             ${file.blocks.length} blocks × ${sim.state.config.replicationFactor} replicas = ${
               file.blocks.length * sim.state.config.replicationFactor
             } total blocks
@@ -358,16 +355,16 @@ function renderMapReduceJobs() {
               ${statusLabel}
             </div>
           </div>
-          <div style="font-size: 0.85em; color: #4a5568; margin-top: 4px;">
+          <div class="render-detail-5">
             File: ${job.fileName}
           </div>
-          <div style="font-size: 0.85em; color: #4a5568;">
+          <div class="render-detail-6">
             ${job.mappers.length} mappers (${localityPercent}% data locality)
           </div>
           ${job.status === 'failed' ? `<div>${describeMapReduceFailure(job.failureReason)}</div>` : ''}
           <div class="job-progress">
             <div class="progress-bar">
-              <div class="progress-fill" style="width: ${job.progress}%; background: #f6ad55;"></div>
+              <div class="progress-fill" style="width: ${job.progress}%; background: var(--sim-warning);"></div>
             </div>
           </div>
         </div>
@@ -392,10 +389,10 @@ function renderMapReduceJobs() {
               ${status === 'failed' ? 'Failed' : status === 'running' ? 'Running' : 'Completed'}
             </div>
           </div>
-          <div style="font-size: 0.85em; color: #4a5568; margin-top: 4px;">
+          <div class="render-detail-7">
             Distributed YARN Job
           </div>
-          <div style="font-size: 0.85em; color: #4a5568;">
+          <div class="render-detail-8">
             ${job.completedContainers}/${job.numContainers} containers completed
           </div>
           <div class="job-progress">

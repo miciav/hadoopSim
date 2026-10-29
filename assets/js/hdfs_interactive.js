@@ -14,16 +14,10 @@ const sim = createSimulation({
   }
 });
 
-const FILE_COLORS = [
-  '#4299e1',
-  '#48bb78',
-  '#ed8936',
-  '#9f7aea',
-  '#f56565',
-  '#38b2ac',
-  '#d69e2e',
-  '#667eea'
-];
+const FILE_COLORS = Array.from(
+  { length: 8 },
+  (_, index) => `var(--sim-file-${index})`
+);
 let colorIndex = 0;
 const fileColors = new Map();
 
@@ -74,7 +68,8 @@ function renderCluster() {
             <div class="blocks-container">
               ${node.blocks
                 .map((block) => {
-                  const color = fileColors.get(block.fileName) || '#a0aec0';
+                  const color =
+                    fileColors.get(block.fileName) || 'var(--sim-muted)';
                   return `
                     <div class="block ${block.isReplica ? 'replica' : ''}"
                       style="background-color: ${color};"
@@ -112,7 +107,7 @@ function updateFilesList() {
 
   if (sim.state.files.length === 0) {
     filesContent.innerHTML =
-      '<p style="color: #718096; font-style: italic;">No files uploaded yet. Click "Upload File" to start!</p>';
+      '<p class="render-detail-0">No files uploaded yet. Click "Upload File" to start!</p>';
     return;
   }
 
@@ -127,14 +122,14 @@ function updateFilesList() {
               ${file.blocks
                 .map(
                   (block) => `
-                    <div class="file-block-chip" style="background-color: ${fileColors.get(file.name) || '#a0aec0'};">
+                    <div class="file-block-chip" style="background-color: ${fileColors.get(file.name) || 'var(--sim-muted)'};">
                       📦 ${block.id}
                     </div>
                   `
                 )
                 .join('')}
             </div>
-            <div class="file-blocks" style="margin-top: 6px;">
+            <div class="render-detail-1 file-blocks">
               ${file.blocks.length} block${file.blocks.length > 1 ? 's' : ''}
               (${file.blocks.length * sim.state.config.replicationFactor} total with replicas)
             </div>

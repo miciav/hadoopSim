@@ -73,11 +73,11 @@ test('setNetworkActive toggles network visuals', () => {
   const pulse = createElement(document, { id: ELEMENT_IDS.NET_PULSE });
 
   setNetworkActive(true);
-  assert.equal(layer.style.borderColor, '#3b82f6');
+  assert.ok(layer.classList.contains('network-active'));
   assert.ok(pulse.classList.contains('active'));
 
   setNetworkActive(false);
-  assert.equal(layer.style.borderColor, '#475569');
+  assert.ok(!layer.classList.contains('network-active'));
   assert.ok(!pulse.classList.contains('active'));
 
   restore();

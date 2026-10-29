@@ -2,7 +2,8 @@
  * Main entry point for the dual-node MapReduce pipeline simulation.
  */
 
-import { createSimulation, initHeightSync } from './engine.js';
+import { createSimulation } from './engine.js';
+import { initHeightSync } from './dom/layout.js';
 import { el, ELEMENT_IDS } from './dom/selectors.js';
 import { foldIntermediateRows, unfoldIntermediateRows } from './dom/fold.js';
 
@@ -15,7 +16,7 @@ export {
   mergeSpills,
   aggregateByKey
 } from './combiner.js';
-export { CONFIG, PARTITIONS, LOG_TYPES } from './config.js';
+export { CONFIG, PARTITIONS } from './config.js';
 
 /**
  * Initializes the pipeline simulation and attaches event handlers.

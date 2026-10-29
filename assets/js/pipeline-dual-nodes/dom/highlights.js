@@ -60,7 +60,7 @@ export function setNetworkActive(active) {
   const pulse = el(ELEMENT_IDS.NET_PULSE);
 
   if (layer) {
-    layer.style.borderColor = active ? '#3b82f6' : '#475569';
+    layer.classList.toggle('network-active', active);
   }
   if (pulse) {
     pulse.classList.toggle('active', active);

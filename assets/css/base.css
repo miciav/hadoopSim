@@ -1,0 +1,220 @@
+:root {
+  color-scheme: light;
+  --sim-background: #f4f6f8;
+  --sim-surface: #fff;
+  --sim-soft: #edf1f5;
+  --sim-text: #182433;
+  --sim-muted: #526172;
+  --sim-border: #c6cfd9;
+  --sim-accent: #175d9c;
+  --sim-on-accent: #fff;
+  --sim-cpu: var(--sim-accent);
+  --sim-memory: var(--sim-partition-0);
+  --sim-storage: var(--sim-success);
+  --sim-success: #167044;
+  --sim-warning: #975300;
+  --sim-error: #b42332;
+  --sim-partition-0: #6d36b0;
+  --sim-partition-1: #a12568;
+  --sim-partition-2: #965000;
+  --sim-radius: 12px;
+  --sim-font: system-ui, -apple-system, sans-serif;
+  --sim-mono: ui-monospace, monospace;
+  --sim-size: 16px;
+  --sim-gap: 20px;
+  --sim-width: 1800px;
+  --sim-file-0: #b42332;
+  --sim-file-1: #167044;
+  --sim-file-2: #175d9c;
+  --sim-file-3: #965000;
+  --sim-file-4: #6d36b0;
+  --sim-file-5: #a12568;
+  --sim-file-6: #23686e;
+  --sim-file-7: #4d526e;
+}
+.site-nav {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+  margin: 0 auto 24px;
+  border-bottom: 1px solid var(--sim-border);
+  max-width: var(--sim-width);
+  color: var(--sim-text);
+  font: 600 15px var(--sim-font);
+  flex-wrap: wrap;
+}
+.site-nav a {
+  color: var(--sim-accent);
+  text-decoration: none;
+}
+.skin-picker {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.site-nav select {
+  color: var(--sim-text);
+  background: var(--sim-surface);
+  border: 1px solid var(--sim-border);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font: inherit;
+}
+:focus-visible {
+  outline: 3px solid var(--sim-accent);
+  outline-offset: 4px;
+}
+.section-spaced {
+  margin-top: 15px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+html[data-skin] body {
+  display: block;
+  margin: 0;
+  padding: 16px;
+  background: var(--sim-background);
+  color: var(--sim-text);
+  font-family: var(--sim-font);
+  font-size: var(--sim-size);
+}
+html[data-skin] :is(.app, .hadoop-container) {
+  width: 100%;
+  max-width: var(--sim-width);
+  margin: auto;
+  background: var(--sim-background);
+  color: var(--sim-text);
+  padding: 20px;
+  box-shadow: none;
+}
+html[data-skin] :is(.header, .header h1, .header p, h1, h2, h3) {
+  color: var(--sim-text);
+  text-shadow: none;
+}
+html[data-skin]
+  :is(
+    .card,
+    .sidebar,
+    .cluster-panel,
+    .node-container,
+    .node-card,
+    .log,
+    .panel,
+    .metrics-bar
+  ) {
+  background: var(--sim-surface);
+  color: var(--sim-text);
+  border: 1px solid var(--sim-border);
+  border-radius: var(--sim-radius);
+  box-shadow: none;
+}
+html[data-skin]
+  :is(.main-container, .content-area, .nodes-container, .hs-grid) {
+  gap: var(--sim-gap);
+  min-width: 0;
+}
+html[data-skin] :is(button, .btn, .card a) {
+  border-radius: var(--sim-radius);
+  font-family: var(--sim-font);
+}
+html[data-skin] .header {
+  text-align: left;
+  max-width: var(--sim-width);
+  margin: 0 auto 24px;
+}
+html[data-skin] :is(input, select) {
+  max-width: 100%;
+}
+html[data-skin] :is(.content-area, .main-container > *, .card, .sidebar) {
+  min-width: 0;
+}
+html[data-skin] .bg-p0 {
+  background: var(--sim-partition-0);
+  color: var(--sim-on-accent);
+}
+html[data-skin] .bg-p1 {
+  background: var(--sim-partition-1);
+  color: var(--sim-on-accent);
+}
+html[data-skin] .bg-p2 {
+  background: var(--sim-partition-2);
+  color: var(--sim-on-accent);
+}
+@media (max-width: 760px) {
+  html[data-skin] body {
+    padding: 8px;
+  }
+  html[data-skin] :is(.app, .hadoop-container) {
+    padding: 12px;
+  }
+  html[data-skin] :is(.main-container, .content-area, .nodes-container) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  html[data-skin] .diagram-scroll {
+    overflow-x: auto;
+  }
+  html[data-skin] .header h1 {
+    font-size: 1.7rem;
+  }
+}
+
+/* State highlights outrank the shared resting appearance. */
+html[data-skin] .node-container.active-node {
+  border-color: var(--sim-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sim-accent) 25%, transparent);
+}
+html[data-skin] .diagram-scroll {
+  min-width: 0;
+}
+@media (max-width: 760px) {
+  html[data-skin] .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  html[data-skin] .layout > * {
+    min-width: 0;
+  }
+  html[data-skin] .diagram-scroll {
+    overflow-x: auto;
+    padding-bottom: 12px;
+  }
+  html[data-skin] .diagram-scroll > * {
+    min-width: 850px;
+  }
+  html[data-skin] :is(.log-panel, .log-content, .log) {
+    width: 100%;
+    min-width: 0;
+  }
+  html[data-skin] .options {
+    margin-left: 0;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  html[data-skin] .metrics.compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  html[data-skin] .step-console {
+    max-width: calc(100vw - 16px);
+  }
+}
+
+html[data-skin] .cpu-fill {
+  background: var(--sim-cpu);
+}
+html[data-skin] .memory-fill {
+  background: var(--sim-memory);
+}
+html[data-skin] .storage-fill {
+  background: var(--sim-storage);
+}

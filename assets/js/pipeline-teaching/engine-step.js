@@ -31,7 +31,7 @@ import {
   foldIntermediateRows,
   unfoldIntermediateRows
 } from '../pipeline-dual-nodes/dom/fold.js';
-import { SWEEP_COLORS } from '../pipeline-dual-nodes/config.js';
+import { SWEEP_COLORS } from '../pipeline-dual-nodes/dom/presentation.js';
 import {
   sortByPartitionThenKey,
   combine,

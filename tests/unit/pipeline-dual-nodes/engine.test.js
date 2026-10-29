@@ -1,9 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  createSimulation,
-  initHeightSync
-} from '../../../assets/js/pipeline-dual-nodes/engine.js';
+import { createSimulation } from '../../../assets/js/pipeline-dual-nodes/engine.js';
+import { initHeightSync } from '../../../assets/js/pipeline-dual-nodes/dom/layout.js';
 import {
   CLEARABLE_CONTAINERS,
   ELEMENT_IDS

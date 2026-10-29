@@ -6,7 +6,7 @@
     "test": "npm run build && playwright test",
     "test:unit": "node --test tests/unit/**/*.test.js",
     "build": "node scripts/build.mjs",
-    "preview": "python3 -m http.server 5173 --directory dist",
+    "preview": "python3 scripts/preview.py",
     "lint": "eslint assets/js tests scripts *.js",
     "format:check": "prettier --check .",
     "format": "prettier --write ."

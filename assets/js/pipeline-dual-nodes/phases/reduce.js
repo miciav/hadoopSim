@@ -18,7 +18,8 @@ import {
 } from '../dom/records.js';
 import { flyRecord, wait, triggerCombineSweep } from '../dom/animations.js';
 import { aggregateByKey } from '../combiner.js';
-import { PARTITIONS, SWEEP_COLORS } from '../config.js';
+import { PARTITIONS } from '../config.js';
+import { SWEEP_COLORS } from '../dom/presentation.js';
 
 function sortReducerRecords(records) {
   return [...records].sort((a, b) => String(a.k).localeCompare(String(b.k)));

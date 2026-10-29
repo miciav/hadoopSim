@@ -3,7 +3,8 @@
  */
 
 import { el, ELEMENT_IDS } from './selectors.js';
-import { LOG_TYPES, CONFIG } from '../config.js';
+import { CONFIG } from '../config.js';
+import { LOG_TYPES } from './presentation.js';
 
 /**
  * Logs a message to the simulation console.
@@ -20,7 +21,7 @@ export function log(message, type = 'SYS') {
 
   const now = new Date();
   const time = now.toTimeString().split(' ')[0];
-  div.innerHTML = `<span style="opacity:0.5; font-size:9px; margin-right:6px;">[${time}]</span> ${message}`;
+  div.innerHTML = `<span class="render-detail-0">[${time}]</span> ${message}`;
 
   consoleEl.prepend(div);
   while (consoleEl.children.length > CONFIG.MAX_LOG_ENTRIES) {

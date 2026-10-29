@@ -17,7 +17,7 @@ import {
 } from '../dom/records.js';
 import { flyRecord, wait, triggerCombineSweep } from '../dom/animations.js';
 import { sortAndCombineBuffer, sortByPartitionThenKey } from '../combiner.js';
-import { SWEEP_COLORS } from '../config.js';
+import { SWEEP_COLORS } from '../dom/presentation.js';
 
 /**
  * Executes a spill operation for a mapper.

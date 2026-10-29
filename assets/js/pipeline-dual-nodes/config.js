@@ -15,17 +15,3 @@ export const PARTITIONS = Object.freeze({
   1: { id: 1, cssClass: 'bg-p1' },
   2: { id: 2, cssClass: 'bg-p2' }
 });
-
-export const LOG_TYPES = Object.freeze({
-  SYS: 'log-sys',
-  MAP: 'log-map',
-  DISK: 'log-disk',
-  NET: 'log-net',
-  RED: 'log-red'
-});
-
-export const SWEEP_COLORS = Object.freeze({
-  AMBER: 'sweep-amber',
-  GREEN: 'sweep-green',
-  PURPLE: 'sweep-purple'
-});
