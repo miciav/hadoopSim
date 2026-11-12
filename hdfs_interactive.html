@@ -13,19 +13,21 @@
     <link rel="stylesheet" href="./assets/css/skins/focus.css" />
     <link rel="stylesheet" href="./assets/css/skins/topology.css" />
     <link rel="stylesheet" href="./assets/css/skins/lecture.css" />
+    <link rel="stylesheet" href="./assets/css/lecture-lab.css" />
+    <script defer src="./assets/js/lecture-ui.js"></script>
   </head>
   <body>
     <nav class="site-nav" aria-label="Site">
       <a href="./index.html">Hadoop simulators</a>
     </nav>
     <div class="header">
-      <h1>🗄️ HDFS - Hadoop Distributed File System</h1>
+      <h1>HDFS - Hadoop Distributed File System</h1>
       <p>Distributed, Fault-Tolerant File Storage</p>
     </div>
 
     <div class="main-container">
       <div class="sidebar">
-        <h2>📊 Cluster Stats</h2>
+        <h2>Cluster Stats</h2>
         <div class="stats">
           <div class="stat-item">
             <div class="stat-label">Total DataNodes</div>
@@ -54,18 +56,18 @@
         </div>
 
         <div class="control-panel">
-          <h2>🎮 Actions</h2>
+          <h2>Actions</h2>
           <button class="btn btn-primary" onclick="uploadFile()">
-            📤 Upload Small File
+            Upload Small File
           </button>
           <button class="btn btn-secondary" onclick="uploadLargeFile()">
-            📦 Upload Large File
+            Upload Large File
           </button>
           <button class="btn btn-warning" onclick="simulateNodeFailure()">
-            ⚠️ Simulate Node Failure
+            Simulate Node Failure
           </button>
           <button class="btn btn-danger" onclick="resetCluster()">
-            🔄 Reset Cluster
+            Reset Cluster
           </button>
         </div>
 
@@ -78,7 +80,7 @@
             <div class="page-detail-1 legend-box replica"></div>
             <span>Replica (faded)</span>
           </div>
-          <div class="page-detail-2">Each file has a unique color 🎨</div>
+          <div class="page-detail-2">Each file has a unique colour</div>
         </div>
       </div>
 
@@ -96,7 +98,7 @@
         </div>
 
         <div class="files-list" id="filesList">
-          <h3>📁 Stored Files</h3>
+          <h3>Stored Files</h3>
           <div id="filesContent">
             <p class="page-detail-3">
               No files uploaded yet. Click "Upload File" to start!
@@ -104,7 +106,7 @@
           </div>
         </div>
 
-        <h2 class="page-detail-4">💾 DataNodes</h2>
+        <h2 class="page-detail-4">DataNodes</h2>
         <div class="datanodes-grid" id="datanodes"></div>
       </div>
     </div>

@@ -40,7 +40,7 @@ test('flyRecord removes flying element after animation', async () => {
   restore();
 });
 
-test('triggerCombineSweep adds and removes sweep element', () => {
+test('triggerCombineSweep adds and removes sweep element', async () => {
   const { document, restore } = setupMockDom();
   const container = createElement(document, { id: 'target' });
   let pendingTimeout = null;
@@ -54,6 +54,7 @@ test('triggerCombineSweep adds and removes sweep element', () => {
   assert.equal(container.querySelectorAll('.combine-sweep').length, 1);
 
   pendingTimeout();
+  await Promise.resolve(); // The pause-aware animation delay resolves as a promise.
   assert.equal(container.querySelectorAll('.combine-sweep').length, 0);
 
   global.setTimeout = originalSetTimeout;

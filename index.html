@@ -1,90 +1,169 @@
 <!doctype html>
-<html data-page="home" lang="en">
+<html lang="en" data-page="home">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Hadoop Simulators</title>
-
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      name="description"
+      content="A lecture workspace for exploring HDFS, YARN and MapReduce through live simulations."
+    />
+    <title>HadoopSim · Lecture lab</title>
     <script src="./assets/js/skin.js"></script>
     <link rel="stylesheet" href="./assets/css/base.css" />
-    <link rel="stylesheet" href="./assets/css/pages/home.css" />
-    <link rel="stylesheet" href="./assets/css/skins/hadoop.css" />
-    <link rel="stylesheet" href="./assets/css/skins/classroom.css" />
-    <link rel="stylesheet" href="./assets/css/skins/focus.css" />
-    <link rel="stylesheet" href="./assets/css/skins/topology.css" />
     <link rel="stylesheet" href="./assets/css/skins/lecture.css" />
+    <link rel="stylesheet" href="./assets/css/lecture-lab.css" />
+    <script defer src="./assets/js/lecture-ui.js"></script>
   </head>
   <body>
     <nav class="site-nav" aria-label="Site">
-      <a href="./index.html">Hadoop simulators</a>
-      <div class="skin-picker">
-        <label for="skin-select">Skin</label
-        ><select id="skin-select" data-skin-select></select>
-      </div>
+      <a href="./index.html">HadoopSim</a>
     </nav>
-    <header>
-      <h1>Hadoop Simulators</h1>
-      <p>Choose a visual walkthrough of Hadoop HDFS, YARN, and MapReduce.</p>
-    </header>
-
-    <main>
-      <section class="card">
-        <h2>Hadoop Ecosystem Simulator</h2>
-        <p>
-          Explore HDFS blocks, resource allocation, mapper progress, and node
-          failures.
-        </p>
-        <a href="./hadoop-ecosystem-simulator.html">Launch simulator →</a>
-      </section>
-
-      <section class="card">
-        <h2>Unified Hadoop (HDFS + YARN + MapReduce)</h2>
-        <p>
-          Single-page dashboard for storage, compute, and MapReduce workloads in
-          one view.
-        </p>
-        <a href="./hadoop_full.html" class="secondary">Open full view →</a>
-      </section>
-
-      <section class="card">
-        <h2>HDFS Interactive</h2>
-        <p>
-          Explore file uploads, replication, and DataNode failure recovery
-          flows.
-        </p>
-        <a href="./hdfs_interactive.html">Open HDFS demo →</a>
-      </section>
-
-      <section class="card">
-        <h2>YARN Interactive</h2>
-        <p>
-          Simulate resource scheduling, container allocations, and job queue
-          behavior.
-        </p>
-        <a href="./yarn_interactive.html" class="secondary">Open YARN demo →</a>
-      </section>
-
-      <section class="card">
-        <h2>Map-Side Pipeline (Dual Nodes)</h2>
-        <p>
-          Walk through map-side pipeline behavior with staged logs and data
-          cards.
-        </p>
-        <a href="./hadoop-map-side-pipeline-dual_nodes.html">Open pipeline →</a>
-      </section>
-
-      <section class="card">
-        <h2>MapReduce Teaching Mode</h2>
-        <p>
-          Step-by-step guided simulation with phase explanations. Learn
-          MapReduce at your own pace.
-        </p>
-        <a href="./hadoopsim-teaching.html" class="teaching"
-          >Start learning →</a
+    <main class="catalog">
+      <div class="catalog-heading">
+        <p class="eyebrow">DISTRIBUTED SYSTEMS / INTERACTIVE LECTURES</p>
+        <span class="private-label">Private evaluation</span>
+      </div>
+      <section class="catalog-hero">
+        <div>
+          <h1>Make the data path<br />visible.</h1>
+          <p class="hero-copy">
+            Inside Hadoop, one operation at a time.<br />Follow the records.
+            Inspect the resources. Explain the system.
+          </p>
+          <a class="launch-primary" href="./hadoopsim-teaching.html"
+            ><span data-icon="play"></span> Open teaching canvas
+            <span aria-hidden="true">→</span></a
+          >
+          <p class="hero-foot">
+            Step through MapReduce · Select a component to inspect
+          </p>
+        </div>
+        <div
+          class="system-drawing"
+          aria-label="Hadoop: HDFS stores data, YARN allocates resources and MapReduce processes records"
         >
+          <div class="drawing-heading">
+            <span>THE HADOOP STACK</span
+            ><span class="live-dot">Interactive</span>
+          </div>
+          <div class="stack-layer">
+            <span class="stack-number">03</span><span data-icon="flow"></span>
+            <div><strong>MapReduce</strong><span>Process records</span></div>
+            <code>map → shuffle → reduce</code>
+          </div>
+          <div class="stack-layer">
+            <span class="stack-number">02</span><span data-icon="cpu"></span>
+            <div><strong>YARN</strong><span>Allocate resources</span></div>
+            <code>schedule · run · release</code>
+          </div>
+          <div class="stack-layer">
+            <span class="stack-number">01</span
+            ><span data-icon="database"></span>
+            <div><strong>HDFS</strong><span>Store & replicate</span></div>
+            <code>split · place · recover</code>
+          </div>
+          <div class="drawing-footer">
+            <span class="server-mini" data-icon="server"></span
+            ><span>DataNode 01</span
+            ><span class="server-mini" data-icon="server"></span
+            ><span>DataNode 02</span
+            ><span class="server-mini" data-icon="server"></span
+            ><span>DataNode n</span>
+          </div>
+        </div>
       </section>
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">CHOOSE A WALKTHROUGH</p>
+          <h2>Five views. One ecosystem.</h2>
+        </div>
+        <p>Live simulations, ready for the lecture room.</p>
+      </div>
+      <div class="module-grid">
+        <a class="module-card featured" href="./hadoopsim-teaching.html"
+          ><div class="module-top">
+            <span data-icon="flow"></span
+            ><span class="module-index">01 / GUIDED</span
+            ><span class="module-arrow">→</span>
+          </div>
+          <h3>MapReduce, step by step</h3>
+          <p>
+            Follow input, map, spill, combine, shuffle and reduce. Hold any
+            component for discussion.
+          </p>
+          <span class="module-link"
+            >Open teaching canvas <span>→</span></span
+          ></a
+        >
+        <a class="module-card" href="./hdfs_interactive.html"
+          ><div class="module-top">
+            <span data-icon="database"></span
+            ><span class="module-index">02 / STORAGE</span
+            ><span class="module-arrow">→</span>
+          </div>
+          <h3>HDFS & replication</h3>
+          <p>
+            Upload files, inspect block placement and observe re-replication
+            after a DataNode failure.
+          </p>
+          <span class="module-link">Explore HDFS <span>→</span></span></a
+        >
+        <a class="module-card" href="./yarn_interactive.html"
+          ><div class="module-top">
+            <span data-icon="cpu"></span
+            ><span class="module-index">03 / RESOURCES</span
+            ><span class="module-arrow">→</span>
+          </div>
+          <h3>YARN & scheduling</h3>
+          <p>
+            Allocate containers, inspect CPU and memory, and see how jobs wait
+            for resources.
+          </p>
+          <span class="module-link">Explore YARN <span>→</span></span></a
+        >
+        <a class="module-card" href="./hadoop-map-side-pipeline-dual_nodes.html"
+          ><div class="module-top">
+            <span data-icon="network"></span
+            ><span class="module-index">04 / DATA FLOW</span
+            ><span class="module-arrow">→</span>
+          </div>
+          <h3>MapReduce, continuous run</h3>
+          <p>
+            Watch the original animated two-mapper pipeline, from the memory
+            buffer to HDFS output.
+          </p>
+          <span class="module-link">Run the pipeline <span>→</span></span></a
+        >
+        <a class="module-card" href="./hadoop_full.html"
+          ><div class="module-top">
+            <span data-icon="server"></span
+            ><span class="module-index">05 / CLUSTER</span
+            ><span class="module-arrow">→</span>
+          </div>
+          <h3>Hadoop cluster lab</h3>
+          <p>
+            Bring storage, resource scheduling, mapper locality and failure
+            drills into a single dashboard.
+          </p>
+          <span class="module-link">Open cluster lab <span>→</span></span></a
+        >
+      </div>
+      <div class="catalog-note">
+        <span data-icon="monitor"></span>
+        <p>
+          <strong>Built for the back row.</strong> Large labels, high contrast
+          and selectable components. Switch to 4:3 in the toolbar for a narrower
+          projection.
+        </p>
+        <span class="key-hint"><kbd>→</kbd> next teaching step</span>
+      </div>
+      <footer class="catalog-footer">
+        <span>HadoopSim / Lecture lab</span
+        ><span
+          >Interactive models for teaching · Based on the original
+          HadoopSim</span
+        >
+      </footer>
     </main>
-
-    <footer>Hosted on GitHub Pages · Static HTML + JS</footer>
   </body>
 </html>

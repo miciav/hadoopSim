@@ -249,7 +249,7 @@ export function initTeachingPipeline() {
     // Update UI based on step info
     function updateStepUI(info) {
       if (stepCounter) {
-        stepCounter.textContent = `${info.index + 1} / ${info.total}`;
+        stepCounter.textContent = `${info.index} / ${info.total}`;
       }
 
       if (stepDescription) {
@@ -262,9 +262,12 @@ export function initTeachingPipeline() {
         }
       }
 
-      if (stepPhase && info.step) {
-        stepPhase.textContent = info.step.phase;
-        stepPhase.className = `step-phase phase-${info.step.phase.toLowerCase().replace('_', '-')}`;
+      if (
+        stepPhase &&
+        !document.documentElement.classList.contains('lecture-held')
+      ) {
+        stepPhase.textContent = lastCompletedPhase;
+        stepPhase.className = `step-phase phase-${lastCompletedPhase.toLowerCase().replace('_', '-')}`;
       }
 
       if (stepBtn) {
@@ -280,6 +283,10 @@ export function initTeachingPipeline() {
         updatePhaseCallout('FINISH');
       }
     }
+
+    document.addEventListener('lecture-step', ({ detail }) => {
+      updatePhaseCallout(STEP_TO_PHASE[detail] || 'READY');
+    });
 
     // Track the last completed phase for scroll/resize updates
     let lastCompletedPhase = 'READY';
@@ -413,7 +420,7 @@ export function initTeachingPipeline() {
           stepDescription.textContent = 'Click "Next Step" to begin';
         }
         if (stepCounter) {
-          stepCounter.textContent = '0 / 0';
+          stepCounter.textContent = `0 / ${simulation.getCurrentStepInfo().total}`;
         }
         if (stepPhase) {
           stepPhase.textContent = 'READY';
@@ -446,7 +453,8 @@ export function initTeachingPipeline() {
       stepPhase.textContent = 'READY';
     }
 
-    // Initialize callout
+    // Show the input records before execution begins.
+    simulation.reset();
     updatePhaseCallout('READY');
   });
 

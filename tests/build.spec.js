@@ -22,16 +22,12 @@ test('published pages load under a project prefix without external requests', as
     failed.push(`Request outside project prefix: ${url.pathname}`);
     return route.abort();
   });
-  for (const skin of [
-    'hadoop',
-    'classroom',
-    'focus',
-    'topology',
-    'lecture',
-    'lecture-dark'
-  ]) {
+  for (const skin of ['lecture', 'lecture-dark']) {
     await page.goto('/hadoopSim/index.html');
-    await page.getByLabel('Skin', { exact: true }).selectOption(skin);
+    await page.evaluate(
+      (value) => localStorage.setItem('hadoopSim.skin', value),
+      skin
+    );
     for (const file of [
       'index.html',
       'hadoop-ecosystem-simulator.html',
@@ -62,7 +58,7 @@ test('published pages load under a project prefix without external requests', as
 });
 
 test('distribution includes runtime licenses', async ({ request }) => {
-  for (const name of ['react', 'react-dom', 'scheduler', 'xstate']) {
+  for (const name of ['xstate']) {
     const response = await request.get(`/licenses/${name}.txt`);
     expect(response.status()).toBe(200);
     expect(await response.text()).toContain('Permission');

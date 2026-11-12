@@ -13,6 +13,8 @@
     <link rel="stylesheet" href="./assets/css/skins/focus.css" />
     <link rel="stylesheet" href="./assets/css/skins/topology.css" />
     <link rel="stylesheet" href="./assets/css/skins/lecture.css" />
+    <link rel="stylesheet" href="./assets/css/lecture-lab.css" />
+    <script defer src="./assets/js/lecture-ui.js"></script>
   </head>
   <body>
     <nav class="site-nav" aria-label="Site">
@@ -21,11 +23,7 @@
     <div class="app">
       <h1>Hadoop Cluster Simulator</h1>
       <div class="subtitle">
-        <span>🌐 Distributed Mode: True Parallelism</span>
-        <span>•</span>
-        <span>🔍 Enhanced Visibility</span>
-        <span>•</span>
-        <span>⚡ Network Contention</span>
+        Two mappers · Partitioned shuffle · Three reducers
       </div>
 
       <div class="controls">
@@ -92,19 +90,19 @@
         <div class="metrics compact">
           <div class="metric-card">
             <span class="metric-value" id="mRecords">0</span>
-            <span class="metric-label">📥 Records In</span>
+            <span class="metric-label">Records in</span>
           </div>
           <div class="metric-card">
             <span class="metric-value" id="mSpills">0</span>
-            <span class="metric-label">💾 Disk Spills</span>
+            <span class="metric-label">Disk spills</span>
           </div>
           <div class="metric-card">
             <span class="metric-value" id="mNet">0</span>
-            <span class="metric-label">🔌 Net Packets</span>
+            <span class="metric-label">Network packets</span>
           </div>
           <div class="metric-card">
             <span class="page-detail-5 metric-value" id="mPhase">IDLE</span>
-            <span class="metric-label">⚙️ Status</span>
+            <span class="metric-label">Status</span>
           </div>
         </div>
       </div>

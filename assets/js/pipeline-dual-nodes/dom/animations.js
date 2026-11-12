@@ -1,3 +1,4 @@
+import { animationGate } from '../../lecture-pause.js';
 /**
  * Animation utilities for record movement and visual effects.
  */
@@ -11,21 +12,7 @@ import { createRecordElement } from './records.js';
  * @returns {Promise<void>}
  */
 export function wait(ms, signal) {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(signal.reason);
-      return;
-    }
-    const abort = () => {
-      clearTimeout(timer);
-      reject(signal.reason);
-    };
-    const timer = setTimeout(() => {
-      signal?.removeEventListener('abort', abort);
-      resolve();
-    }, ms);
-    signal?.addEventListener('abort', abort, { once: true });
-  });
+  return animationGate.wait(ms, signal);
 }
 
 /**
@@ -99,6 +86,6 @@ export function triggerCombineSweep(elementId, colorVariant = '', signal) {
     signal?.removeEventListener('abort', cleanup);
     sweep.remove();
   };
-  timer = setTimeout(cleanup, 1100);
+  animationGate.wait(1100, signal).then(cleanup, cleanup);
   signal?.addEventListener('abort', cleanup, { once: true });
 }

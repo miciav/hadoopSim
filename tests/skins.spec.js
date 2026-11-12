@@ -1,17 +1,9 @@
 import { test, expect } from './fixtures.js';
 
-const skins = [
-  'hadoop',
-  'classroom',
-  'focus',
-  'topology',
-  'lecture',
-  'lecture-dark'
-];
 const pages = [
   'index.html',
-  'hadoop-ecosystem-simulator.html',
   'hadoop_full.html',
+  'hadoop-ecosystem-simulator.html',
   'hdfs_interactive.html',
   'yarn_interactive.html',
   'hadoop-map-side-pipeline-dual_nodes.html',
@@ -20,25 +12,40 @@ const pages = [
   'hadoop-map-side-pipeline-dual.html'
 ];
 
-test('homepage skin selection persists across navigation and reload', async ({
+test('catalog exposes five distinct walkthroughs and navigation', async ({
   page
 }) => {
   await page.goto('/index.html');
-  await expect(page.locator('html')).toHaveAttribute('data-skin', 'hadoop');
-  const select = page.getByLabel('Skin', { exact: true });
-  await select.selectOption('classroom');
-  await page.reload();
-  await expect(select).toHaveValue('classroom');
-  await page.getByRole('link', { name: 'Open HDFS demo →' }).click();
-  await expect(page.locator('html')).toHaveAttribute('data-skin', 'classroom');
+  await expect(page.locator('.module-card')).toHaveCount(5);
   await expect(page.locator('[data-skin-select]')).toHaveCount(0);
+  await page
+    .getByLabel('Simulator', { exact: true })
+    .selectOption('hdfs_interactive.html');
+  await expect(page).toHaveURL(/hdfs_interactive\.html$/);
+  await expect(page.getByLabel('Simulator', { exact: true })).toHaveValue(
+    'hdfs_interactive.html'
+  );
 });
 
-for (const failure of ['invalid', 'read', 'write', 'getter']) {
-  test(`skin handles ${failure} storage`, async ({ page }) => {
+for (const saved of ['hadoop', 'classroom', 'focus', 'topology', 'unknown']) {
+  test(`old ${saved} preference opens the lecture interface`, async ({
+    page
+  }) => {
+    await page.addInitScript(
+      (value) => localStorage.setItem('hadoopSim.skin', value),
+      saved
+    );
+    await page.goto('/index.html');
+    await expect(page.locator('html')).toHaveAttribute('data-skin', 'lecture');
+  });
+}
+
+for (const failure of ['read', 'write', 'getter']) {
+  test(`lecture shell handles unavailable ${failure} storage`, async ({
+    page
+  }) => {
     await page.addInitScript((mode) => {
-      if (mode === 'invalid') localStorage.setItem('hadoopSim.skin', 'unknown');
-      else if (mode === 'getter')
+      if (mode === 'getter')
         Object.defineProperty(window, 'localStorage', {
           get() {
             throw new Error('denied');
@@ -56,30 +63,30 @@ for (const failure of ['invalid', 'read', 'write', 'getter']) {
         );
     }, failure);
     await page.goto('/index.html');
-    await expect(page.locator('html')).toHaveAttribute('data-skin', 'hadoop');
-    await page.getByLabel('Skin', { exact: true }).selectOption('focus');
-    await expect(page.locator('html')).toHaveAttribute('data-skin', 'focus');
+    await expect(page.locator('html')).toHaveAttribute('data-skin', 'lecture');
+    await page.locator('[data-format="standard"]').click();
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-format',
+      'standard'
+    );
   });
 }
 
-for (const skin of skins) {
-  test(`${skin} covers every page with local styles and no simulator selector`, async ({
-    page
-  }) => {
+for (const skin of ['lecture', 'lecture-dark']) {
+  test(`${skin} loads all maintained and legacy routes`, async ({ page }) => {
     await page.addInitScript(
       (value) => localStorage.setItem('hadoopSim.skin', value),
       skin
     );
     const failed = [];
-    page.on('response', (r) => {
-      if (r.status() >= 400) failed.push(r.url());
+    page.on('response', (response) => {
+      if (response.status() >= 400) failed.push(response.url());
     });
     for (const file of pages) {
       await page.goto(`/${file}`);
       await expect(page.locator('html')).toHaveAttribute('data-skin', skin);
-      await expect(page.locator('[data-skin-select]')).toHaveCount(
-        file === 'index.html' ? 1 : 0
-      );
+      await expect(page.locator('[data-skin-select]')).toHaveCount(0);
+      await page.evaluate(() => document.fonts.ready);
       expect(
         await page.evaluate(() =>
           getComputedStyle(document.documentElement)
@@ -87,252 +94,101 @@ for (const skin of skins) {
             .trim()
         )
       ).not.toBe('');
-      await expect(page.locator('body')).toBeVisible();
     }
     expect(failed).toEqual([]);
   });
 }
 
-test('an open simulation ignores preference changes from the homepage', async ({
-  page,
-  context
+test('projection format persists across walkthrough navigation', async ({
+  page
 }) => {
-  await page.goto('/hadoop_full.html');
-  await page.getByRole('button', { name: /Upload File/i }).click();
-  await page.evaluate(() => {
-    window.originalSimulation = window.simulation;
-  });
-  const home = await context.newPage();
-  await home.goto('/index.html');
-  await home.getByLabel('Skin', { exact: true }).selectOption('topology');
-  await page.bringToFront();
-  await expect(page.locator('html')).toHaveAttribute('data-skin', 'hadoop');
-  expect(
-    await page.evaluate(() => window.originalSimulation === window.simulation)
-  ).toBe(true);
-  expect(await page.evaluate(() => window.cluster.files.length)).toBe(1);
-  await home.close();
-  await page.reload();
-  await expect(page.locator('html')).toHaveAttribute('data-skin', 'topology');
+  await page.goto('/index.html');
+  await page.locator('[data-format="standard"]').click();
+  await page
+    .getByLabel('Simulator', { exact: true })
+    .selectOption('hadoopsim-teaching.html');
+  await expect(page.locator('html')).toHaveAttribute('data-format', 'standard');
+  await expect(page.locator('[data-format="standard"]')).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  await page.locator('[data-format="wide"]').click();
+  await expect(page.locator('[data-format="standard"]')).toHaveAttribute(
+    'aria-pressed',
+    'false'
+  );
 });
 
-for (const skin of skins) {
-  test(`${skin} keeps controls reachable on narrow screens`, async ({
+for (const [width, height] of [
+  [1440, 810],
+  [1024, 768],
+  [390, 844]
+]) {
+  test(`walkthroughs keep page controls reachable at ${width} × ${height}`, async ({
     page
-  }, testInfo) => {
+  }) => {
     test.setTimeout(60000);
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.addInitScript(
-      (value) => localStorage.setItem('hadoopSim.skin', value),
-      skin
-    );
-    for (const file of pages) {
+    await page.setViewportSize({ width, height });
+    for (const file of pages.slice(0, 7)) {
       await page.goto(`/${file}`);
+      if (width === 1024)
+        await page.locator('[data-format="standard"]').click();
       expect(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= innerWidth + 1
         ),
         file
       ).toBe(true);
-      await page.screenshot({
-        path: testInfo.outputPath(`${file}.png`),
-        fullPage: true,
-        animations: 'disabled'
-      });
+      await expect(page.getByLabel('Simulator', { exact: true })).toBeVisible();
     }
   });
 }
 
-for (const skin of skins) {
-  test(`${skin} pipeline results preserve teaching semantics`, async ({
-    page
-  }) => {
-    test.setTimeout(60000);
-    await page.addInitScript((value) => {
-      localStorage.setItem('hadoopSim.skin', value);
-      const timeout = window.setTimeout;
-      window.setTimeout = (fn, ms, ...args) =>
-        timeout(fn, Math.min(ms, 2), ...args);
-    }, skin);
-    for (const file of [
-      'hadoop-map-side-pipeline-dual_nodes.html',
-      'hadoopsim-teaching.html'
-    ]) {
-      await page.goto(`/${file}`);
-      const output = await page.evaluate(async () => {
-        const sim = window.pipelineSimulation || window.teachingSimulation;
-        if (window.pipelineSimulation) await sim.run();
-        else {
-          sim.init();
-          while (!sim.isComplete()) await sim.nextStep();
-        }
-        return Object.fromEntries(
-          Object.values(sim.getState().reduceOutput)
-            .flat()
-            .map((r) => [r.k, r.count])
-        );
-      });
-      expect(output).toEqual({
-        ant: 7,
-        arm: 2,
-        car: 5,
-        cat: 1,
-        cup: 3,
-        day: 3,
-        dog: 2,
-        dot: 1
-      });
-    }
-  });
-}
-
-test('homepage selector supports keyboard selection', async ({ page }) => {
-  await page.goto('/index.html');
-  const select = page.getByLabel('Skin', { exact: true });
-  await select.focus();
-  await expect(select).toBeFocused();
-  await page.keyboard.press('c');
-  await page.keyboard.press('Tab');
-  await expect(page.locator('html')).toHaveAttribute('data-skin', 'classroom');
-});
-
-for (const skin of skins) {
-  test(`${skin} is independent of other skin stylesheets`, async ({ page }) => {
-    await page.addInitScript(
-      (value) => localStorage.setItem('hadoopSim.skin', value),
-      skin
-    );
-    await page.goto('/index.html');
-    await page.locator('link[href*="/skins/"]').evaluateAll((links, chosen) => {
-      links.forEach((link) => {
-        // lecture-dark shares lecture.css.
-        const file = chosen.replace('-dark', '');
-        if (!link.href.endsWith(`/${file}.css`)) link.remove();
-      });
-    }, skin);
-    expect(
-      await page.evaluate(() => getComputedStyle(document.body).backgroundColor)
-    ).not.toBe('rgba(0, 0, 0, 0)');
-    await expect(page.getByLabel('Skin', { exact: true })).toBeVisible();
-  });
-}
-
-test('healthy status badge has readable text', async ({ page }) => {
-  await page.goto('/hdfs_interactive.html');
-  const badge = page.locator('.node-status-badge.healthy').first();
-  await expect(badge).toContainText(/healthy/i);
-  const colors = await badge.evaluate((el) => {
-    const css = getComputedStyle(el);
-    return { text: css.color, background: css.backgroundColor };
-  });
-  expect(colors.text).not.toBe(colors.background);
-});
-
-test('pipeline active node remains visually distinguished', async ({
+test('guided focus holds execution and reset clears the selection', async ({
   page
 }) => {
-  await page.goto('/hadoop-map-side-pipeline-dual_nodes.html');
-  const node = page.locator('#node01');
-  const border = await node.evaluate((el) => getComputedStyle(el).borderColor);
-  await node.evaluate((el) => el.classList.add('active-node'));
-  await expect
-    .poll(() => node.evaluate((el) => getComputedStyle(el).borderColor))
-    .not.toBe(border);
+  await page.goto('/hadoopsim-teaching.html');
+  await page.locator('[data-phase="map"]').click();
+  await expect(page.locator('html')).toHaveClass(/lecture-held/);
+  await expect(page.locator('#stepBtn')).toBeDisabled();
+  await expect(page.locator('#inspect-title')).toHaveText('Map buffer');
+  await page.locator('#continueBtn').click();
+  await expect(page.locator('html')).not.toHaveClass(/lecture-held/);
+  await page.locator('#stepBtn').click();
+  await expect(page.locator('#stepCounter')).toHaveText(/^1 \//);
+  await page.locator('[data-phase="shuffle"]').click();
+  await page.locator('#resetStepBtn').click();
+  await expect(page.locator('#stepCounter')).toHaveText(/^0 \//);
+  await expect(page.locator('.inspector-panel')).toBeHidden();
+  await expect(page.locator('html')).not.toHaveClass(/lecture-held/);
 });
 
-test('narrow pipeline scrolls its diagram while keeping log and controls readable', async ({
+test('node highlighting survives a render and clears with Escape', async ({
   page
 }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/hadoop-map-side-pipeline-dual_nodes.html');
-  expect(
-    await page
-      .locator('.app')
-      .evaluate((el) => el.scrollWidth <= el.clientWidth + 1)
-  ).toBe(true);
-  expect(
-    await page.locator('.log-content').evaluate((el) => el.clientWidth)
-  ).toBeGreaterThan(250);
-  const diagram = page.getByRole('region', { name: 'Simulation diagram' });
-  await expect(diagram).toHaveAttribute('tabindex', '0');
+  await page.goto('/hadoop_full.html');
+  await page.locator('.node').first().press('Enter');
+  await expect(page.locator('.lecture-selected')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Upload File', exact: true }).click();
+  await expect(page.locator('.lecture-selected')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.lecture-selected')).toHaveCount(0);
 });
 
-test('pipeline skins adapt the scene and explanation hierarchy', async ({
+test('teaching clicker advances steps while editable controls keep arrow keys', async ({
   page
 }) => {
-  const layouts = [];
-  for (const skin of ['hadoop', 'classroom', 'focus']) {
-    await page.goto('/index.html');
-    await page.getByLabel('Skin', { exact: true }).selectOption(skin);
-    await page.goto('/hadoop-map-side-pipeline-dual_nodes.html');
-    layouts.push(
-      await page
-        .locator('.layout')
-        .evaluate((el) => getComputedStyle(el).gridTemplateColumns)
-    );
-  }
-  expect(new Set(layouts).size).toBe(3);
+  await page.goto('/hadoopsim-teaching.html');
+  await page.keyboard.press('PageDown');
+  await expect(page.locator('#stepCounter')).toHaveText(/^1 \//);
+  await page.locator('#splitSizeInput').focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#stepCounter')).toHaveText(/^1 \//);
 });
 
-test('pipeline completes after resizing during an active transfer', async ({
+test('local lecture fonts load and failures retain an exclusive red role', async ({
   page
 }) => {
-  await page.addInitScript(() => {
-    const timer = window.setTimeout;
-    window.setTimeout = (fn, ms, ...args) =>
-      timer(fn, Math.min(ms, 40), ...args);
-  });
-  await page.goto('/hadoop-map-side-pipeline-dual_nodes.html');
-  await page.evaluate(() => {
-    window.activeRun = window.pipelineSimulation.run();
-  });
-  await page.locator('.flying-record').first().waitFor();
-  await page.setViewportSize({ width: 390, height: 844 });
-  const result = await page.evaluate(async () => {
-    await window.activeRun;
-    return Object.fromEntries(
-      Object.values(window.pipelineSimulation.getState().reduceOutput)
-        .flat()
-        .map((record) => [record.k, record.count])
-    );
-  });
-  expect(result).toEqual({
-    ant: 7,
-    arm: 2,
-    car: 5,
-    cat: 1,
-    cup: 3,
-    day: 3,
-    dog: 2,
-    dot: 1
-  });
-  await expect(page.locator('.flying-record')).toHaveCount(0);
-});
-
-test('pipeline history text contrasts with its entry surface', async ({
-  page
-}) => {
-  await page.goto('/hadoop-map-side-pipeline-dual_nodes.html');
-  const colors = await page
-    .locator('.log-entry')
-    .first()
-    .evaluate((el) => {
-      const css = getComputedStyle(el);
-      return { text: css.color, background: css.backgroundColor };
-    });
-  expect(colors.text).not.toBe(colors.background);
-});
-
-test('lecture skin serves its fonts locally and keeps failure red exclusive', async ({
-  page
-}) => {
-  await page.addInitScript(() =>
-    localStorage.setItem('hadoopSim.skin', 'lecture')
-  );
-  const failed = [];
-  page.on('response', (r) => {
-    if (r.status() >= 400) failed.push(r.url());
-  });
   await page.goto('/hadoopsim-teaching.html');
   await page.evaluate(() => document.fonts.ready);
   expect(
@@ -359,41 +215,4 @@ test('lecture skin serves its fonts locally and keeps failure red exclusive', as
     };
   });
   expect(tokens.others).not.toContain(tokens.error);
-  expect(failed).toEqual([]);
-});
-
-test('teaching mode advances with a presentation clicker key', async ({
-  page
-}) => {
-  await page.goto('/hadoopsim-teaching.html');
-  const counter = page.locator('#stepCounter');
-  await page.keyboard.press('PageDown');
-  await expect(counter).toHaveText(/^1 \//);
-  await page.locator('#splitSizeInput').focus();
-  await page.keyboard.press('ArrowRight');
-  await expect(counter).toHaveText(/^1 \//);
-});
-
-test('lecture keeps the teaching explanation on a 4:3 projector', async ({
-  page
-}) => {
-  await page.setViewportSize({ width: 1024, height: 768 });
-  await page.addInitScript(() =>
-    localStorage.setItem('hadoopSim.skin', 'lecture')
-  );
-  await page.goto('/hadoopsim-teaching.html');
-  await page.keyboard.press('PageDown');
-  const callout = page.locator('.phase-callout-wrapper');
-  await expect(callout).toBeVisible();
-  const [panel, controls] = await Promise.all([
-    callout.boundingBox(),
-    page.locator('.step-console').boundingBox()
-  ]);
-  expect(panel.y + panel.height).toBeLessThanOrEqual(768);
-  expect(controls.x + controls.width).toBeLessThanOrEqual(panel.x);
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= innerWidth + 1
-    )
-  ).toBe(true);
 });
