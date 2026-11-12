@@ -13,19 +13,21 @@
     <link rel="stylesheet" href="./assets/css/skins/focus.css" />
     <link rel="stylesheet" href="./assets/css/skins/topology.css" />
     <link rel="stylesheet" href="./assets/css/skins/lecture.css" />
+    <link rel="stylesheet" href="./assets/css/lecture-lab.css" />
+    <script defer src="./assets/js/lecture-ui.js"></script>
   </head>
   <body>
     <nav class="site-nav" aria-label="Site">
       <a href="./index.html">Hadoop simulators</a>
     </nav>
     <div class="header">
-      <h1>🚀 Apache YARN - Yet Another Resource Negotiator</h1>
-      <p>Managing Computer Resources Like a Pro!</p>
+      <h1>Apache YARN - Yet Another Resource Negotiator</h1>
+      <p>Resource allocation, container execution and scheduling queues.</p>
     </div>
 
     <div class="main-container">
       <div class="sidebar">
-        <h2>📊 Cluster Statistics</h2>
+        <h2>Cluster Statistics</h2>
         <div class="stats">
           <div class="stat-item">
             <div class="stat-label">Total Nodes</div>
@@ -50,20 +52,20 @@
         </div>
 
         <div class="control-panel">
-          <h2>🎮 Controls</h2>
+          <h2>Controls</h2>
           <button class="btn btn-primary" onclick="submitJob()">
-            ➕ Submit New Job
+            Submit New Job
           </button>
           <button class="btn btn-secondary" onclick="submitBigJob()">
-            🚀 Submit Big Job
+            Submit Big Job
           </button>
           <button class="btn btn-danger" onclick="resetCluster()">
-            🔄 Reset Cluster
+            Reset Cluster
           </button>
         </div>
 
         <div class="page-detail-1 info-box">
-          <h3>💡 How It Works</h3>
+          <h3>How It Works</h3>
           <p>
             <strong>ResourceManager</strong> is like a smart dispatcher that
             assigns jobs to available computers (nodes).
@@ -79,14 +81,14 @@
       <div class="cluster-view">
         <div class="resource-manager">
           <div class="rm-title">
-            <span>🎯 Resource Manager</span>
+            <span> Resource Manager</span>
             <span class="rm-status"></span>
           </div>
           <div class="rm-description">
-            I'm the brain of the cluster! I receive job requests, check which
-            computers (nodes) have available resources (CPU & Memory), and
-            assign work to them. Requests wait in a queue when resources are
-            unavailable; allocations stay within node capacity.
+            The ResourceManager receives job requests and checks which computers
+            (nodes) have available resources (CPU & Memory), and assign work to
+            them. Requests wait in a queue when resources are unavailable;
+            allocations stay within node capacity.
           </div>
         </div>
 

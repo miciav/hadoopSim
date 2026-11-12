@@ -1,6 +1,6 @@
-# Hadoop Ecosystem Simulator
+# HadoopSim Lecture Lab
 
-An interactive, browser-based playground that visualizes how Hadoop HDFS, YARN, and MapReduce cooperate. The build produces a static site with locally bundled JavaScript and React.
+An interactive, browser-based playground that visualizes how Hadoop HDFS, YARN, and MapReduce cooperate. The build produces a static site with locally bundled JavaScript.
 
 ## Features
 
@@ -32,7 +32,7 @@ An interactive, browser-based playground that visualizes how Hadoop HDFS, YARN, 
 ## Development Notes
 
 - HTML entry points live in the repo root and load logic from `assets/js/` (shared library in `assets/js/hadoop-sim/`).
-- The React simulator uses `assets/js/hadoop-ecosystem-simulator.js`; esbuild bundles JSX and dependencies into `dist/`.
+- The combined cluster view uses `assets/js/hadoop_full.js`; the old Ecosystem URL redirects to its replicated scenario.
 - Formatting: two-space indentation, `const`/`let`, `camelCase` for functions/state, `PascalCase` for components, and `UPPER_SNAKE_CASE` for shared constants.
 - Run `npm run format` to format maintained sources, tests, HTML and configuration.
 
@@ -43,7 +43,7 @@ An interactive, browser-based playground that visualizes how Hadoop HDFS, YARN, 
 
 ## How It Works
 
-- The build bundles React and JavaScript locally; GitHub Pages serves the static output.
+- The build bundles JavaScript locally; GitHub Pages serves the static output.
 - State runs in the browser and resets when the page is reloaded.
 - Each page uses its own didactic level; see `docs/teaching-contracts.md`.
 
@@ -72,7 +72,7 @@ After changes, manually verify:
 1. Cluster initialization, file uploads across sizes, and proper replica distribution.
 2. Node failure simulation, re-replication status messages and reset during execution.
 3. MapReduce mapper allocation and progress, and the separate pipeline shuffle/reduce visualizations.
-4. Console should remain free of React warnings/errors.
+4. Console should remain free of runtime errors.
 
 ## Contributing
 
@@ -84,3 +84,5 @@ After changes, manually verify:
 See `AGENTS.md` for deeper contributor guidelines, coding conventions, and security notes.
 
 The final implementation and verification record is in [docs/verification.md](docs/verification.md).
+
+The current five-view catalog and shared logic are documented in [docs/dedup-plan.md](docs/dedup-plan.md).

@@ -1,3 +1,4 @@
+import { animationGate } from '../lecture-pause.js';
 import { createActor, fromPromise, toPromise } from 'xstate';
 /**
  * Step-by-step simulation engine for teaching mode.
@@ -111,6 +112,10 @@ export function createStepSimulation() {
    * Executes a single step
    */
   async function executeStep(step, signal) {
+    await animationGate.wait(0, signal);
+    document.dispatchEvent(
+      new CustomEvent('lecture-step', { detail: step.type })
+    );
     const tick = getTick();
 
     switch (step.type) {

@@ -1,5 +1,6 @@
 import { createNotifier } from './hadoop-sim/notifications.js';
 import { createSimulation } from './hadoop-sim/simulation.js';
+import { createYarnAutoCompletion } from './hadoop-sim/yarn-lifecycle.js';
 import { randomInt } from './hadoop-sim/random.js';
 
 const nodes = [
@@ -48,34 +49,26 @@ const nodes = [
 ];
 
 const sim = createSimulation({ nodes });
-const completionTimers = new Map();
 
 const { notify, clear: clearNotifications } = createNotifier(3000);
 
-function scheduleCompletion(container) {
-  if (completionTimers.has(container.name)) {
-    return;
-  }
-  const duration = randomInt(5000, 9000);
-  const timeoutId = setTimeout(() => {
-    completionTimers.delete(container.name);
-    sim.yarn.releaseContainer(container.name);
-    notify(`✅ ${container.name} completed`, 'success');
+createYarnAutoCompletion(sim, {
+  durationMs: () => randomInt(5000, 9000),
+  onComplete(container) {
+    notify(`${container.name} completed`, 'success');
     renderCluster();
-  }, duration);
-  completionTimers.set(container.name, timeoutId);
-}
+  }
+});
 
 sim.on('yarn:rejected', ({ request }) => {
   notify(
-    `❌ ${request.name} rejected: no active node can fit its CPU and memory request.`,
+    ` ${request.name} rejected: no active node can fit its CPU and memory request.`,
     'error'
   );
   renderCluster();
 });
 
-sim.on('yarn:allocated', ({ container }) => {
-  scheduleCompletion(container);
+sim.on('yarn:allocated', () => {
   renderCluster();
 });
 
@@ -107,13 +100,13 @@ function renderCluster() {
     nodeEl.className = `node ${statusClass}`;
     nodeEl.innerHTML = `
       <div class="node-header">
-        <div class="node-title">💻 ${node.name}</div>
+        <div class="node-title"> ${node.name}</div>
         <div class="node-status status-${status}">${status.toUpperCase()}</div>
       </div>
       <div class="node-resources">
         <div class="resource-bar">
           <div class="resource-label">
-            <span>🔥 CPU Cores</span>
+            <span> CPU Cores</span>
             <span>${node.cpuUsed} / ${node.cpuTotal}</span>
           </div>
           <div class="progress-bar">
@@ -124,7 +117,7 @@ function renderCluster() {
         </div>
         <div class="resource-bar">
           <div class="resource-label">
-            <span>💾 Memory (GB)</span>
+            <span> Memory (GB)</span>
             <span>${(node.memoryUsedMb / 1024).toFixed(0)} / ${(node.memoryTotalMb / 1024).toFixed(0)}</span>
           </div>
           <div class="progress-bar">
@@ -135,7 +128,7 @@ function renderCluster() {
         </div>
       </div>
       <div class="containers">
-        <div class="containers-title">📦 Running Containers: ${node.containers.length}</div>
+        <div class="containers-title"> Running Containers: ${node.containers.length}</div>
         <div class="container-list">
           ${node.containers
             .map(
@@ -189,11 +182,11 @@ function submitJob() {
 
   const result = sim.actions.submitYarnJob({ name, cpu, memoryMb, jobId });
   if (result.allocated) {
-    notify(`✅ ${name} allocated successfully!`, 'success');
+    notify(` ${name} allocated successfully!`, 'success');
   } else if (result.queued) {
     notify(`⏳ ${name} queued (waiting for resources)`, 'info');
   } else if (!result.reason) {
-    notify(`❌ ${name} rejected (queue full)`, 'error');
+    notify(` ${name} rejected (queue full)`, 'error');
   }
 
   renderCluster();
@@ -221,12 +214,12 @@ function submitBigJob() {
 
   if (allocated === numContainers) {
     notify(
-      `✅ Big Job-${jobId} distributed across ${allocated} nodes!`,
+      ` Big Job-${jobId} distributed across ${allocated} nodes!`,
       'success'
     );
   } else if (allocated > 0) {
     notify(
-      `⚠️ Big Job-${jobId}: ${allocated}/${numContainers} running, ${queued} queued`,
+      ` Big Job-${jobId}: ${allocated}/${numContainers} running, ${queued} queued`,
       'info'
     );
   } else if (queued > 0) {
@@ -238,10 +231,8 @@ function submitBigJob() {
 
 function resetCluster() {
   clearNotifications();
-  completionTimers.forEach((timeoutId) => clearTimeout(timeoutId));
-  completionTimers.clear();
   sim.actions.reset();
-  notify('🔄 Cluster reset!', 'info');
+  notify(' Cluster reset!', 'info');
   renderCluster();
 }
 

@@ -7,10 +7,11 @@ for (const [path, action] of [
 ]) {
   test(`reset clears old notifications on ${path}`, async ({ page }) => {
     await page.goto(path);
-    await expect(page.getByRole('status')).toHaveAttribute(
-      'aria-live',
-      'polite'
-    );
+    await expect(
+      page
+        .locator('body > [role="status"]')
+        .filter({ hasNot: page.locator('.engineering-icon') })
+    ).toHaveAttribute('aria-live', 'polite');
     await page.evaluate((name) => {
       window[name]();
       window.resetCluster();

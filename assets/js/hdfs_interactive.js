@@ -1,3 +1,4 @@
+import { createHdfsRecovery } from './hadoop-sim/failure-recovery.js';
 import { createNotifier } from './hadoop-sim/notifications.js';
 import { createSimulation } from './hadoop-sim/simulation.js';
 import { randomInt } from './hadoop-sim/random.js';
@@ -51,7 +52,7 @@ function renderCluster() {
           <div class="node-header">
             <div class="node-name">${node.name}</div>
             <div class="node-status-badge ${statusBadge}">
-              ${node.failed ? '❌ FAILED' : '✅ HEALTHY'}
+              ${node.failed ? ' FAILED' : ' HEALTHY'}
             </div>
           </div>
           <div class="storage-info">
@@ -74,7 +75,7 @@ function renderCluster() {
                     <div class="block ${block.isReplica ? 'replica' : ''}"
                       style="background-color: ${color};"
                       title="${block.fileName} - Block ${block.index + 1}">
-                      ${block.isReplica ? '🔄' : '📦'} ${block.id}
+                      ${block.isReplica ? '' : ''} ${block.id}
                     </div>
                   `;
                 })
@@ -116,14 +117,14 @@ function updateFilesList() {
       (file) => `
         <div class="file-item">
           <div class="file-info">
-            <div class="file-name">📄 ${file.name}</div>
+            <div class="file-name"> ${file.name}</div>
             <div class="file-details">Size: ${file.sizeMb} MB</div>
             <div class="file-blocks-visual">
               ${file.blocks
                 .map(
                   (block) => `
                     <div class="file-block-chip" style="background-color: ${fileColors.get(file.name) || 'var(--sim-muted)'};">
-                      📦 ${block.id}
+                       ${block.id}
                     </div>
                   `
                 )
@@ -143,83 +144,60 @@ function updateFilesList() {
     .join('');
 }
 
-function uploadFile() {
-  const size = randomInt(50, 250);
+function uploadFile(size = randomInt(50, 250)) {
   const result = sim.actions.uploadFile(size);
 
   if (!result.ok) {
-    notify(`❌ Failed to upload file (${size} MB). Not enough space.`, 'error');
+    notify(` Failed to upload file (${size} MB). Not enough space.`, 'error');
   } else if (result.results.some((entry) => entry.underReplicated)) {
     fileColors.set(result.file.name, nextColor());
     notify(
-      `⚠️ Uploaded ${result.file.name} with under-replicated blocks`,
+      ` Uploaded ${result.file.name} with under-replicated blocks`,
       'warning'
     );
   } else {
     fileColors.set(result.file.name, nextColor());
-    notify(`✅ ${result.file.name} uploaded (${size} MB).`, 'success');
+    notify(` ${result.file.name} uploaded (${size} MB).`, 'success');
   }
 
   renderCluster();
 }
 
 function uploadLargeFile() {
-  const size = randomInt(400, 1000);
-  const result = sim.actions.uploadFile(size);
-
-  if (!result.ok) {
-    notify(`❌ Failed to upload file (${size} MB). Not enough space.`, 'error');
-  } else if (result.results.some((entry) => entry.underReplicated)) {
-    fileColors.set(result.file.name, nextColor());
-    notify(
-      `⚠️ Uploaded ${result.file.name} with under-replicated blocks`,
-      'warning'
-    );
-  } else {
-    fileColors.set(result.file.name, nextColor());
-    notify(`✅ ${result.file.name} uploaded (${size} MB).`, 'success');
-  }
-
-  renderCluster();
+  uploadFile(randomInt(400, 1000));
 }
 
-const recoveryTimers = new Set();
+createHdfsRecovery(sim, {
+  delayMs: 1500,
+  onRecovered(summary) {
+    if (summary.lost > 0) notify(`${summary.lost} blocks lost.`, 'error');
+    else if (summary.reReplicated > 0)
+      notify(`Re-replicated ${summary.reReplicated} replicas.`, 'success');
+    renderCluster();
+  }
+});
 
 function simulateNodeFailure() {
   const activeNodes = sim.state.nodes.filter((node) => !node.failed);
   if (activeNodes.length === 0) {
-    notify('❌ All nodes are already failed!', 'error');
+    notify(' All nodes are already failed!', 'error');
     return;
   }
 
   const randomNode =
     activeNodes[Math.floor(Math.random() * activeNodes.length)];
   sim.actions.failNode(randomNode.id);
-  notify(`⚠️ ${randomNode.name} failed. Re-replicating...`, 'warning');
-
-  const timerId = setTimeout(() => {
-    recoveryTimers.delete(timerId);
-    const summary = sim.actions.reReplicate();
-    if (summary.lost > 0) {
-      notify(`❌ ${summary.lost} blocks lost.`, 'error');
-    } else if (summary.reReplicated > 0) {
-      notify(`✅ Re-replicated ${summary.reReplicated} replicas.`, 'success');
-    }
-    renderCluster();
-  }, 1500);
-  recoveryTimers.add(timerId);
+  notify(` ${randomNode.name} failed. Re-replicating...`, 'warning');
 
   renderCluster();
 }
 
 function resetCluster() {
   clearNotifications();
-  recoveryTimers.forEach((timerId) => clearTimeout(timerId));
-  recoveryTimers.clear();
   sim.actions.reset();
   fileColors.clear();
   colorIndex = 0;
-  notify('🔄 Cluster reset!', 'info');
+  notify(' Cluster reset!', 'info');
   renderCluster();
 }
 

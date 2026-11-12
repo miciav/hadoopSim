@@ -1,3 +1,31 @@
+# Lecture lab — verifica dell'11 novembre 2026
+
+Base upstream: `ff0faca984a1984e8291a74217037308824de83c`.
+I resoconti successivi in questo documento sono storici e descrivono la vecchia
+interfaccia a sei skin; non attestano l'esecuzione della nuova suite browser.
+
+- Build di produzione, lint e controllo Prettier: superati.
+- Motori e ciclo di vita: 156/156 test Node superati. La sola prima patch di
+  consolidamento passa 154/154 test; la seconda aggiunge i controlli di pausa.
+- Suite Playwright aggiornata: 72 casi registrati senza errori di caricamento.
+  La suite automatizzata completa non è stata eseguita in questa sessione;
+  il collaudo interattivo è stato effettuato tramite il browser disponibile.
+- Browser: navigazione fra viste, selezione persistente del nodo dopo un render,
+  job sul secondo file, un AM e quattro mapper rappresentati come blocchi,
+  avanzamento e completamento, guasto di un nodo e reset di risorse e file.
+- Browser: percorso guidato fino a 16/16 con 24 record; focus durante Play
+  fermo a 2/16 e 10 record, invariato alla lettura successiva; Continue e reset.
+- Browser: pipeline continua conclusa con 24 record e conteggi finali
+  ant=7, arm=2, car=5, cat=1, cup=3, day=3, dog=2, dot=1. Nei log letti non
+  risultano errori dell'applicazione; compaiono errori dell'estensione del browser.
+- Formati di proiezione: selezione 16:9/4:3 e larghezza del contenitore 1024 px
+  verificate nel browser. Il collaudo su un proiettore fisico rimane da fare.
+- Nessuna modifica o pubblicazione sul repository GitHub originale. Le patch
+  mantengono il workflow Pages esistente e non includono la configurazione del
+  sito privato usato per la valutazione.
+
+---
+
 # Verifica finale del piano — 28 ottobre 2026
 
 Branch locale: `codex/didactic-simulators`, base `d9cfa1a`.

@@ -121,8 +121,11 @@ test('a distributed YARN job rejected after node loss is visibly failed', async 
     const sim = window.simulation;
     [...sim.state.nodes].forEach((node) => sim.actions.failNode(node.id));
   });
+  await page.locator('.workload-controls > summary').click();
   await page.getByRole('button', { name: /Submit Distributed Job/i }).click();
   await expect(page.locator('#mapReduceJobs')).toContainText('Failed');
-  await expect(page.getByRole('status')).toContainText('no active node');
+  await expect(page.locator('.notification.error').first()).toContainText(
+    'no active node'
+  );
   expect(await page.evaluate(() => window.cluster.yarnQueue.length)).toBe(0);
 });

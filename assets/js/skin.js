@@ -7,10 +7,10 @@
     'lecture',
     'lecture-dark'
   ];
-  let selected = 'hadoop';
+  let selected = 'lecture';
   try {
     const saved = localStorage.getItem('hadoopSim.skin');
-    if (skins.includes(saved)) selected = saved;
+    if (saved === 'lecture-dark') selected = saved;
   } catch {
     // Storage may be unavailable; the default still renders every page.
   }

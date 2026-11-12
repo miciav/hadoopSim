@@ -9,7 +9,7 @@
   - `yarn_interactive.html`
   - `hadoop-map-side-pipeline-dual_nodes.html`
 - Page logic is in `assets/js/`; shared library lives under `assets/js/hadoop-sim/`.
-- Page modules are bundled by esbuild; the React simulator keeps JSX in `assets/js/hadoop-ecosystem-simulator.js`.
+- Page modules are bundled by esbuild. The cluster lab uses `assets/js/hadoop_full.js`; the old Ecosystem HTML is a redirect.
 - The generated `dist/` directory contains the static site and is published by GitHub Pages.
 - If you split functionality further, keep new modules under `assets/js/` and import them with ES modules to keep pages static-host friendly.
 
@@ -23,7 +23,7 @@
 
 ## Coding Style & Naming Conventions
 
-- Use functional React components with hooks and immutable updates, e.g. `setCluster(prev => ({ ...prev, ... }))`.
+- Keep simulation rules in the shared domain engines; page code handles controls and rendering.
 - Prefer `const` and avoid mutating shared state; keep helper logic pure when practical.
 - Naming: `camelCase` for functions/variables, `PascalCase` for components, `UPPER_SNAKE_CASE` for shared constants (e.g., `REPLICATION_FACTOR`).
 - UI labels and emojis are sentence case—match the existing tone.
@@ -34,7 +34,7 @@
 - Run Playwright smoke tests with `npm test` (installs via `npm install`, `npx playwright install --with-deps`).
 - Validate manually in the browser after every change.
 - Check: cluster bootstrap, file uploads (small/large), node failure + recovery, job submission, shuffle/reduce transitions, and progress bars.
-- Keep DevTools console open for React warnings.
+- Check DevTools for runtime errors.
 
 ## Commit & Pull Request Guidelines
 

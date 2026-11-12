@@ -9,7 +9,6 @@ for (const name of await readdir('.')) {
 }
 await build({
   entryPoints: [
-    'assets/js/hadoop-ecosystem-simulator.js',
     'assets/js/hadoop_full.js',
     'assets/js/hdfs_interactive.js',
     'assets/js/yarn_interactive.js',
@@ -20,7 +19,6 @@ await build({
   outdir: 'dist/assets/js',
   bundle: true,
   format: 'esm',
-  loader: { '.js': 'jsx' },
   define: { 'process.env.NODE_ENV': '"production"' }
 });
 
@@ -41,7 +39,7 @@ for (const [family, weights] of Object.entries(fonts)) {
 }
 
 await mkdir('dist/licenses', { recursive: true });
-for (const name of ['react', 'react-dom', 'scheduler', 'xstate']) {
+for (const name of ['xstate']) {
   await cp(`node_modules/${name}/LICENSE`, `dist/licenses/${name}.txt`);
 }
 for (const family of Object.keys(fonts)) {

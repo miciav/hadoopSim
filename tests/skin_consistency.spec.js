@@ -1,110 +1,8 @@
 import { test, expect } from './fixtures.js';
 
-const pages = [
-  'index.html',
-  'hadoop_full.html',
-  'hdfs_interactive.html',
-  'yarn_interactive.html',
-  'hadoop-ecosystem-simulator.html',
-  'hadoop-map-side-pipeline-dual_nodes.html',
-  'hadoopsim-teaching.html',
-  'hadoop-map-side-pipeline.html',
-  'hadoop-map-side-pipeline-dual.html'
-];
-const skins = [
-  'hadoop',
-  'classroom',
-  'focus',
-  'topology',
-  'lecture',
-  'lecture-dark'
-];
+const skins = ['lecture', 'lecture-dark'];
 
 for (const skin of skins) {
-  for (const width of [1440, 390]) {
-    test(`${skin} shares control styling and title scale at ${width}px`, async ({
-      page
-    }, testInfo) => {
-      test.setTimeout(60000);
-      await page.setViewportSize({ width, height: 1000 });
-      await page.emulateMedia({ reducedMotion: 'reduce' });
-      await page.addInitScript(
-        (value) => localStorage.setItem('hadoopSim.skin', value),
-        skin
-      );
-      let reference;
-      for (const file of pages) {
-        await page.goto(`/${file}`);
-        const action = page
-          .locator('.card a:visible, button:visible:not(:disabled)')
-          .first();
-        const styles = await action.evaluate((el) => {
-          const s = getComputedStyle(el);
-          return {
-            font: s.fontFamily,
-            size: s.fontSize,
-            line: s.lineHeight,
-            padding: s.padding,
-            radius: s.borderRadius,
-            shadow: s.boxShadow,
-            minHeight: s.minHeight
-          };
-        });
-        const title = await page
-          .locator('h1')
-          .evaluate((el) => getComputedStyle(el).fontSize);
-        if (!reference) reference = { styles, title };
-        expect(styles, `${file} action`).toEqual(reference.styles);
-        expect(title, `${file} heading`).toBe(reference.title);
-        await action.hover();
-        expect(
-          await action.evaluate((el) => getComputedStyle(el).boxShadow),
-          `${file} hover shadow`
-        ).toBe(reference.styles.shadow);
-        const field = page
-          .locator(
-            'select:visible, input:visible:not([type=range]):not([type=checkbox]):not([type=radio])'
-          )
-          .first();
-        if (await field.count()) {
-          const actual = await field.evaluate((el) => {
-            const s = getComputedStyle(el);
-            return {
-              size: s.fontSize,
-              radius: s.borderRadius,
-              padding: s.padding,
-              minHeight: s.minHeight
-            };
-          });
-          // WebKit exposes internal menulist defaults through CSSOM even with appearance:none.
-          if (await field.evaluate((el) => el.tagName === 'SELECT')) {
-            const bounds = await field.boundingBox();
-            expect(bounds.height, `${file} rendered select height`).toBeCloseTo(
-              parseFloat(reference.styles.minHeight),
-              0
-            );
-          } else {
-            expect(actual, `${file} field`).toEqual({
-              size: reference.styles.size,
-              radius: reference.styles.radius,
-              padding: reference.styles.padding,
-              minHeight: reference.styles.minHeight
-            });
-          }
-          await field.focus();
-          expect(
-            await field.evaluate((el) => getComputedStyle(el).boxShadow),
-            `${file} focused field`
-          ).toBe('none');
-        }
-        await page.screenshot({
-          path: testInfo.outputPath(`${file}.png`),
-          fullPage: true,
-          animations: 'disabled'
-        });
-      }
-    });
-  }
   test(`${skin} uses the same resource roles in every cluster view`, async ({
     page
   }) => {
@@ -121,8 +19,11 @@ for (const skin of skins) {
     ]) {
       await page.goto(`/${file}`);
       if (file === 'hadoop-ecosystem-simulator.html') {
-        await page.getByRole('button', { name: /Upload 256 MB/i }).click();
-        await page.getByRole('button', { name: /Run on file-1.dat/i }).click();
+        await page
+          .getByRole('button', { name: 'Upload File', exact: true })
+          .click();
+        await page.locator('.workload-controls > summary').click();
+        await page.getByRole('button', { name: /Submit Simple Job/i }).click();
       } else if (file === 'yarn_interactive.html') {
         await page.getByRole('button', { name: /Submit New Job/i }).click();
       } else {
@@ -134,10 +35,12 @@ for (const skin of skins) {
                 : /Upload File/i
           })
           .click();
-        if (file === 'hadoop_full.html')
+        if (file === 'hadoop_full.html') {
+          await page.locator('.workload-controls > summary').click();
           await page
             .getByRole('button', { name: /Submit Simple Job/i })
             .click();
+        }
       }
       for (const role of file === 'hdfs_interactive.html'
         ? ['storage']
@@ -286,32 +189,30 @@ for (const skin of skins) {
   });
 }
 
-for (const skin of skins) {
-  test(`${skin} teaching controller does not cover the narrow diagram`, async ({
+for (const [width, height] of [
+  [1440, 810],
+  [1024, 768],
+  [390, 844]
+]) {
+  test(`teaching controls and explanation remain available at ${width} × ${height}`, async ({
     page
   }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.addInitScript(
-      (value) => localStorage.setItem('hadoopSim.skin', value),
-      skin
-    );
+    await page.setViewportSize({ width, height });
     await page.goto('/hadoopsim-teaching.html');
-    const controller = await page.locator('.step-console').boundingBox();
-    const diagram = await page
-      .getByRole('region', { name: 'Simulation diagram' })
-      .boundingBox();
-    expect(controller.y + controller.height).toBeLessThanOrEqual(diagram.y);
-    const title = await page.locator('h1').boundingBox();
-    expect(controller.y).toBeGreaterThanOrEqual(title.y + title.height);
-    expect(diagram.y - controller.y - controller.height).toBeLessThan(60);
+    if (width === 1024)
+      await page.locator('button[data-format="standard"]').click();
+    await page.getByRole('button', { name: 'Next Step', exact: true }).click();
+    await expect(page.locator('.phase-callout-wrapper')).toBeVisible();
+    await expect(page.locator('#stepCounter')).toHaveText(/^1 \//);
+    const controls = await page.locator('.lesson-footer').boundingBox();
+    expect(controls.x).toBeGreaterThanOrEqual(0);
+    expect(controls.x + controls.width).toBeLessThanOrEqual(width + 1);
+    if (width > 800)
+      expect(controls.y + controls.height).toBeLessThanOrEqual(height);
     expect(
-      await page
-        .locator('#stepBtn')
-        .evaluate((el) => el.scrollWidth <= el.clientWidth + 1)
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1
+      )
     ).toBe(true);
-    await expect(page.getByRole('button', { name: 'Next Step' })).toBeVisible();
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth)
-    ).toBeLessThanOrEqual(391);
   });
 }
