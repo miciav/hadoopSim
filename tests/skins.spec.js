@@ -64,7 +64,7 @@ for (const failure of ['read', 'write', 'getter']) {
     }, failure);
     await page.goto('/index.html');
     await expect(page.locator('html')).toHaveAttribute('data-skin', 'lecture');
-    await page.locator('[data-format="standard"]').click();
+    await page.locator('button[data-format="standard"]').click();
     await expect(page.locator('html')).toHaveAttribute(
       'data-format',
       'standard'
@@ -103,17 +103,17 @@ test('projection format persists across walkthrough navigation', async ({
   page
 }) => {
   await page.goto('/index.html');
-  await page.locator('[data-format="standard"]').click();
+  await page.locator('button[data-format="standard"]').click();
   await page
     .getByLabel('Simulator', { exact: true })
     .selectOption('hadoopsim-teaching.html');
   await expect(page.locator('html')).toHaveAttribute('data-format', 'standard');
-  await expect(page.locator('[data-format="standard"]')).toHaveAttribute(
+  await expect(page.locator('button[data-format="standard"]')).toHaveAttribute(
     'aria-pressed',
     'true'
   );
-  await page.locator('[data-format="wide"]').click();
-  await expect(page.locator('[data-format="standard"]')).toHaveAttribute(
+  await page.locator('button[data-format="wide"]').click();
+  await expect(page.locator('button[data-format="standard"]')).toHaveAttribute(
     'aria-pressed',
     'false'
   );
@@ -132,7 +132,7 @@ for (const [width, height] of [
     for (const file of pages.slice(0, 7)) {
       await page.goto(`/${file}`);
       if (width === 1024)
-        await page.locator('[data-format="standard"]').click();
+        await page.locator('button[data-format="standard"]').click();
       expect(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= innerWidth + 1

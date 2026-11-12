@@ -199,7 +199,8 @@ for (const [width, height] of [
   }) => {
     await page.setViewportSize({ width, height });
     await page.goto('/hadoopsim-teaching.html');
-    if (width === 1024) await page.locator('[data-format="standard"]').click();
+    if (width === 1024)
+      await page.locator('button[data-format="standard"]').click();
     await page.getByRole('button', { name: 'Next Step', exact: true }).click();
     await expect(page.locator('.phase-callout-wrapper')).toBeVisible();
     await expect(page.locator('#stepCounter')).toHaveText(/^1 \//);
