@@ -48,7 +48,7 @@ test('published pages load under a project prefix without external requests', as
       await expect(page.locator('html')).toHaveAttribute('data-skin', skin);
       if (file === 'hadoop-ecosystem-simulator.html')
         await expect(
-          page.getByRole('button', { name: /Upload 256 MB/i })
+          page.getByRole('button', { name: /Upload File/i })
         ).toBeVisible();
       await page.screenshot({
         path: testInfo.outputPath(`${skin}-${file}.png`),

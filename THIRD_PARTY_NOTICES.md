@@ -5,9 +5,6 @@ are built locally; no CDN is required to use the published site.
 
 | Runtime package | Version | License |
 | --------------- | ------- | ------- |
-| React           | 19.3.1  | MIT     |
-| React DOM       | 19.3.1  | MIT     |
-| Scheduler       | 0.28.0  | MIT     |
 | XState          | 5.33.3  | MIT     |
 
 | Font (Lecture skin)                             | Version | License |

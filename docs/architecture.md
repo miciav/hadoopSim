@@ -88,3 +88,15 @@ use `--sim-panel-padding`. Focus has no decorative control shadow, and disabled
 controls never inherit an active shadow. Diagram-node label insets stay separate.
 Resource bars use `cpu-fill`, `memory-fill` and `storage-fill` in every cluster
 renderer. Warning/error classes take precedence over the normal resource color.
+
+## Consolidated lecture views (November 2026)
+
+The catalog has five distinct teaching entry points. The former Ecosystem route
+redirects to the shared cluster laboratory with its replicated preset; the
+compact preset retains the former Unified configuration. Both use the same
+controller and domain engines. React is no longer a runtime dependency.
+
+`yarn-lifecycle.js` owns demonstration container completion timers for both
+YARN and cluster pages. `failure-recovery.js` owns their delayed HDFS recovery.
+Both cancel outstanding timers through the simulation reset event. Pure
+placement/scheduling rules remain in the HDFS/YARN/MapReduce engines.

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Hadoop Ecosystem: HDFS + YARN + MapReduce</title>
+    <title>Hadoop cluster lab</title>
 
     <script src="./assets/js/skin.js"></script>
     <link rel="stylesheet" href="./assets/css/base.css" />
@@ -19,107 +19,127 @@
       <a href="./index.html">Hadoop simulators</a>
     </nav>
     <div class="header">
-      <h1>🐘 Hadoop Ecosystem: HDFS + YARN + MapReduce</h1>
-      <p>Demonstration of Data Locality and Parallel Computation</p>
+      <h1>Hadoop cluster lab</h1>
+      <p>Storage, containers and data locality in one running cluster.</p>
     </div>
 
+    <div class="cluster-scenario">
+      <div>
+        <label for="clusterScenario">Cluster scenario</label>
+        <select id="clusterScenario" aria-describedby="scenarioNote">
+          <option value="compact">Compact cluster</option>
+          <option value="replicated">Replicated cluster</option>
+        </select>
+      </div>
+      <strong id="scenarioSummary"></strong
+      ><small id="scenarioNote"
+        >Changing scenario starts a fresh simulation.</small
+      >
+    </div>
     <div class="main-container">
       <div class="sidebar">
-        <h2>📊 Cluster Statistics</h2>
-        <div class="stats-section">
-          <div class="stat-item">
-            <span class="stat-label">Total Nodes:</span>
-            <span class="stat-value" id="totalNodes">6</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Active Nodes:</span>
-            <span class="stat-value" id="activeNodes">6</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">HDFS Files:</span>
-            <span class="stat-value" id="totalFiles">0</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Total Blocks:</span>
-            <span class="stat-value" id="totalBlocks">0</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">YARN Containers:</span>
-            <span class="stat-value" id="activeJobs">0</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">MapReduce Jobs:</span>
-            <span class="stat-value" id="mapReduceJobsCount">0</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">MR Data Locality:</span>
-            <span class="stat-value" id="dataLocalitySummary">-</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Queued Jobs:</span>
-            <span class="stat-value" id="queuedJobs">0</span>
-
-            <div class="stat-item">
-              <span class="stat-label">Node Capacity:</span>
-              <span class="stat-value">10 GB</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-label">HDFS Block Size:</span>
-              <span class="stat-value">256 MB</span>
-            </div>
-          </div>
-        </div>
-
-        <h2>🗄️ HDFS Operations</h2>
-        <button class="btn btn-hdfs" onclick="uploadFile()">
-          📤 Upload File
-        </button>
+        <h2>HDFS Operations</h2>
+        <label class="control-label" for="uploadSizeMb">File size (MB)</label>
+        <input id="uploadSizeMb" type="number" min="1" step="1" value="256" />
+        <button class="btn btn-hdfs" onclick="uploadFile()">Upload File</button>
         <button class="btn btn-hdfs" onclick="uploadLargeFile()">
-          📤 Upload Large File
+          Upload 1 GB
         </button>
 
-        <h2>🎯 YARN Operations</h2>
-        <button class="btn btn-yarn" onclick="submitYarnJob()">
-          🚀 Submit Simple Job
-        </button>
-        <button class="btn btn-yarn" onclick="submitBigYarnJob()">
-          🚀 Submit Distributed Job
-        </button>
+        <details class="workload-controls">
+          <summary>YARN workloads</summary>
+          <button class="btn btn-yarn" onclick="submitYarnJob()">
+            Submit Simple Job
+          </button>
+          <button class="btn btn-yarn" onclick="submitBigYarnJob()">
+            Submit Distributed Job
+          </button>
+        </details>
 
-        <h2>🔄 MapReduce</h2>
+        <h2>MapReduce</h2>
+        <label class="control-label" for="mapReduceFile">Input file</label>
+        <select id="mapReduceFile" disabled></select>
         <button
           class="btn btn-mapreduce"
           onclick="runMapReduce()"
           id="mapReduceBtn"
         >
-          ▶️ Run MapReduce Job
+          Run MapReduce job
         </button>
-        <p class="page-detail-1">
+        <p class="page-detail-1" id="mapReduceHint">
           Upload an HDFS file first to enable MapReduce
         </p>
 
-        <h2>⚙️ Management</h2>
+        <h2>Management</h2>
         <button class="btn btn-danger" onclick="simulateFailure()">
-          💥 Simulate Failure
+          Simulate Failure
         </button>
         <button class="btn btn-danger" onclick="resetCluster()">
-          🔄 Reset Cluster
+          Reset Cluster
         </button>
+        <details class="cluster-metrics">
+          <summary>Cluster metrics</summary>
+          <div class="stats-section">
+            <div class="stat-item">
+              <span class="stat-label">Total Nodes:</span>
+              <span class="stat-value" id="totalNodes">6</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Active Nodes:</span>
+              <span class="stat-value" id="activeNodes">6</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">HDFS Files:</span>
+              <span class="stat-value" id="totalFiles">0</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Total Blocks:</span>
+              <span class="stat-value" id="totalBlocks">0</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">YARN Containers:</span>
+              <span class="stat-value" id="activeJobs">0</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">MapReduce Jobs:</span>
+              <span class="stat-value" id="mapReduceJobsCount">0</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">MR Data Locality:</span>
+              <span class="stat-value" id="dataLocalitySummary">-</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Queued Jobs:</span>
+              <span class="stat-value" id="queuedJobs">0</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Node Capacity:</span>
+              <span class="stat-value" id="nodeCapacity">10 GB</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">HDFS Block Size:</span>
+              <span class="stat-value" id="hdfsBlockSize">256 MB</span>
+            </div>
+          </div>
+        </details>
       </div>
 
       <div class="content-area">
         <!-- Unified Cluster View -->
         <div class="cluster-panel">
           <div class="panel-header">
-            <span class="panel-icon">🖥️</span>
-            <h2>Cluster Nodes (HDFS Storage + YARN Compute)</h2>
+            <span class="panel-icon"></span>
+            <h2>Cluster nodes</h2>
           </div>
 
-          <div class="files-list" id="filesList">
-            <p class="page-detail-2">
-              No files uploaded yet. Upload a file to start!
-            </p>
-          </div>
+          <details class="cluster-file-details">
+            <summary>Input files &amp; block layout</summary>
+            <div class="files-list" id="filesList">
+              <p class="page-detail-2">
+                No files uploaded yet. Upload a file to start!
+              </p>
+            </div>
+          </details>
 
           <div class="nodes-container" id="hdfsNodes"></div>
         </div>
@@ -128,7 +148,7 @@
         <div id="mapReduceSection" class="page-detail-3">
           <div class="mapreduce-section">
             <div class="mapreduce-header">
-              <span class="page-detail-4">🔄</span>
+              <span class="page-detail-4"></span>
               <h3>Active Jobs (MapReduce & YARN)</h3>
             </div>
             <div class="mapreduce-jobs" id="mapReduceJobs"></div>

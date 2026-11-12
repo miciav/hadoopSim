@@ -1,47 +1,32 @@
 import { test, expect } from './fixtures.js';
 
-test('Ecosystem simulator renders core controls', async ({ page }) => {
-  await page.goto('/hadoop-ecosystem-simulator.html');
-
-  await expect(
-    page.getByRole('button', { name: /Upload 256 MB/i })
-  ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: /MapReduce Jobs/i })
-  ).toBeVisible();
-});
-
-test('Ecosystem supports upload, job and reset', async ({ page }) => {
-  await page.goto('/hadoop-ecosystem-simulator.html');
-  await page.getByRole('button', { name: /Upload 256 MB/i }).click();
-  await page.getByRole('button', { name: /Run on file-1.dat/i }).click();
-  await expect(page.locator('.jobs-container')).toContainText('MapReduce-1');
-  await page.getByRole('button', { name: /Reset Cluster/i }).click();
-  await expect(page.locator('.jobs-container')).toContainText(
-    'No MapReduce jobs yet'
-  );
-  await expect(
-    page.getByRole('button', { name: /Run on file-1.dat/i })
-  ).toHaveCount(0);
-});
-
-test('reset removes notifications from the previous cluster', async ({
+test('legacy Ecosystem URL opens the shared cluster with its original scenario', async ({
   page
 }) => {
   await page.goto('/hadoop-ecosystem-simulator.html');
-  await page.getByRole('button', { name: /Upload 256 MB/i }).click();
-  await expect(page.locator('.notification')).toContainText(['uploaded']);
-  await page.getByRole('button', { name: /Reset Cluster/i }).click();
-  await expect(page.locator('.notification')).toHaveCount(1);
-  await expect(page.locator('.notification')).toContainText('reset');
+  await expect(page).toHaveURL(/hadoop_full\.html\?scenario=replicated/);
+  await expect(page.locator('#clusterScenario')).toHaveValue('replicated');
+  await expect(page.locator('#scenarioSummary')).toContainText('128 MB blocks');
+  await expect(page.locator('#scenarioSummary')).toContainText('3 replicas');
 });
 
-test('ecosystem announces notifications through a persistent live region', async ({
+test('shared cluster retains file selection and resets allocated containers', async ({
   page
 }) => {
   await page.goto('/hadoop-ecosystem-simulator.html');
-  const status = page.getByRole('status');
-  await expect(status).toHaveAttribute('aria-live', 'polite');
-  await page.getByRole('button', { name: /Upload 256 MB/i }).click();
-  await expect(status).toContainText('uploaded');
+  await expect(page.locator('#mapReduceHint')).toBeVisible();
+  await page.getByRole('button', { name: 'Upload File', exact: true }).click();
+  await expect(page.locator('#mapReduceHint')).toBeHidden();
+  await page.getByRole('button', { name: 'Upload 1 GB', exact: true }).click();
+  await page.locator('#mapReduceFile').selectOption('file-2.dat');
+  await page.locator('#mapReduceBtn').click();
+  await expect(page.locator('#mapReduceJobs')).toContainText('file-2.dat');
+  await expect(page.locator('.container-chip.appmaster')).toHaveCount(1);
+  await page
+    .getByRole('button', { name: 'Reset Cluster', exact: true })
+    .click();
+  await expect(page.locator('.container-chip')).toHaveCount(0);
+  await expect(page.locator('#mapReduceBtn')).toBeDisabled();
+  await expect(page.locator('#mapReduceFile option')).toHaveCount(0);
+  await expect(page.locator('#mapReduceHint')).toBeVisible();
 });

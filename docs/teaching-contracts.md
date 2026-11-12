@@ -58,3 +58,11 @@ non si afferma l'equivalenza di tutti i contenuti storici.
 
 Per consultare un originale senza ripristinarlo nel sito:
 `git show d9cfa1a:old_stuff/<nome-file>`.
+
+## Consolidamento dell'11 novembre 2026
+
+Le prime due righe della tabella descrivono ora due scenari della stessa vista
+Cluster lab. `hadoop-ecosystem-simulator.html` è un alias dello scenario
+`replicated`, non una seconda implementazione. I due set di parametri restano
+selezionabili. Il catalogo presenta cinque obiettivi didattici distinti;
+HDFS/YARN e pipeline guidata/continua rimangono separati. Vedere `dedup-plan.md`.

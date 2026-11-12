@@ -1,90 +1,60 @@
-# Deduplication Plan (JS only, exclude JSX)
+# Deduplication — implemented 11 November 2026
 
-## Goal
+## One view per teaching purpose
 
-Create a shared JS library for common HDFS, YARN, and MapReduce logic while keeping HTML pages static and JSX untouched.
+The maintained catalog now has five entries: guided MapReduce, continuous
+MapReduce, focused HDFS, focused YARN, and the combined cluster laboratory.
 
-## Current Overlap (Summary)
+Ecosystem and Unified Cluster had the same conceptual purpose. They now use
+`hadoop_full.html` and `assets/js/hadoop_full.js` as their single implementation.
+The old Ecosystem URL redirects to the `replicated` preset. The two previous
+configurations remain explicit scenarios in `hadoop-sim/scenarios.js`:
 
-- Timer management: `scheduleClusterTimeout`, interval handling, and reset cleanup (HDFS, YARN, Full).
-- Notifications: identical DOM creation, classes, aria-live, and timeouts.
-- HDFS: file upload, block allocation, replica placement, re-replication, failure simulation, stats.
-- YARN: job submission, container allocation, completion, queue drain, stats.
-- MapReduce (Full + Ecosystem): mapper allocation, data locality, progress, failure handling.
-- Utility patterns: random sizing, percentage formatting, resource bounds checks.
+| Scenario                      | Block size | Replicas | Storage per node |
+| ----------------------------- | ---------- | -------- | ---------------- |
+| Compact (former Unified)      | 256 MB     | 2        | 10 GB            |
+| Replicated (former Ecosystem) | 128 MB     | 3        | 100 GB           |
 
-## Target Library Shape
+The combined view retains configurable upload sizes, per-file MapReduce,
+YARN simple/distributed workloads, queue accounting, locality, failures and reset.
+It uses the visible AM/map container blocks, with resource requests and mapper
+progress. Changing scenario intentionally starts a fresh simulation.
 
-```
-assets/js/hadoop-sim/
-  constants.js
-  random.js
-  timers.js
-  notifications.js
-  hdfs.js
-  yarn.js
-  mapreduce.js
-  stats.js
-  index.js
-```
+## Shared logic
 
-### Proposed APIs (example)
+| Responsibility                      | Single implementation             | Clients                        |
+| ----------------------------------- | --------------------------------- | ------------------------------ |
+| Placement, replication, capacity    | `hadoop-sim/hdfs.js`              | HDFS and cluster               |
+| Allocation and request queues       | `hadoop-sim/yarn.js`              | YARN and cluster               |
+| Mapper scheduling, AM, failures     | `hadoop-sim/mapreduce.js`         | Cluster                        |
+| Demonstration container lifetime    | `hadoop-sim/yarn-lifecycle.js`    | YARN and cluster               |
+| Delayed HDFS re-replication         | `hadoop-sim/failure-recovery.js`  | HDFS and cluster               |
+| Record aggregation/sort/merge rules | `pipeline-dual-nodes/combiner.js` | Guided and automatic pipelines |
 
-- `createTimerManager()` -> `{ timeout(fn, ms), interval(fn, ms), clearAll() }`
-- `createNotifier({ root, ttlMs })` -> `{ info(msg), success(msg), warn(msg), error(msg) }`
-- `createHdfsCluster(config)` -> cluster object with `uploadFile`, `allocateBlock`, `failNode`, `reReplicate`, `reset`, `stats`.
-- `createYarnCluster(config)` -> cluster object with `submitJob`, `submitBigJob`, `completeJob`, `drainQueue`, `stats`.
-- `createMapReduceEngine({ hdfs, yarn, timers })` -> `runJob`, `simulateFailure`, `stats`.
+YARN completion timers cancel on reset and failed-node containers are never
+later announced as successfully completed. File upload handling is no longer
+copied between the small/large buttons of the same page. The cluster uses one
+locality predicate, excluding the AM from mapper locality counts.
 
-## Phased Work Plan
+## Kept deliberately distinct
 
-### Phase 0: Inventory and invariants
+HDFS and YARN show different resources and phenomena; they share models, not
+the entire layout. Guided and automatic pipelines share record transformations,
+but retain different advancement units and concurrency. Their orchestrators
+are not interchangeable. The two older standalone narratives remain accessible
+by their original direct URLs, outside the main catalog; their circular-buffer
+presentation and scripted timelines have not been replaced by the modular model.
 
-- Document data shapes for nodes, blocks, files, containers, jobs.
-- Choose a single storage unit (recommend MB) and map conversions in UI only.
-- Define invariants as tests: non-negative resources, RF bounds, queue behavior.
+## Removed
 
-### Phase 1: Extract low-risk utilities
+The duplicate React cluster renderer and its stylesheet are removed, together
+with the now-unused React, React DOM and Scheduler runtime dependencies. No
+simulation depends on React. Legacy links are preserved by a local redirect.
 
-- Move timer management into `hadoop-sim/clock.js`.
-- Add deterministic RNG in `hadoop-sim/random.js`.
-- Update HDFS/YARN/Full pages to use these utilities.
+## Verification
 
-### Phase 2: Extract HDFS logic
-
-- Create `hadoop-sim/hdfs.js` with:
-  - `allocateBlock`, `rollbackFile`, `reReplicateBlocks`, `failNode`, `reset`.
-  - `computeHdfsStats` for totals and percent usage.
-- Replace HDFS logic in `hdfs_interactive.js` and `hadoop_full.js`.
-- Keep DOM rendering in page code; library returns plain data.
-
-### Phase 3: Extract YARN logic
-
-- Create `hadoop-sim/yarn.js` with:
-  - `allocateContainer`, `allocateAppMaster`, `submitJob`, `submitBigJob`.
-  - `completeJob`, `drainQueue`, `computeYarnStats`.
-- Replace YARN logic in `yarn_interactive.js` and `hadoop_full.js`.
-
-### Phase 4: Extract MapReduce logic
-
-- Create `hadoop-sim/mapreduce.js` with:
-  - `buildBlockLocations`, `allocateMappers`, `trackProgress`, `handleFailure`.
-  - explicit hooks for timers and completion.
-- Replace MapReduce logic in `hadoop_full.js` and (later) React simulator.
-
-### Phase 5: Cleanup and adapters
-
-- Add small adapters per page to map DOM events to core library calls.
-- Keep UI-specific rendering in each page; no shared DOM code.
-- Update README/AGENTS with new library layout.
-
-## Risks and Mitigations
-
-- Behavior drift due to unit conversions: centralize units in core and convert at render time.
-- Randomness in UI tests: inject deterministic RNG in tests and core.
-- DOM coupling: keep core library pure (no direct DOM reads/writes).
-
-## Test Plan Alignment
-
-- Unit-level: core library tests with deterministic RNG.
-- Integration: Playwright tests for each page (already added) to confirm invariants.
+Model tests cover both scenario outputs (1 GiB produces 4/8 logical blocks and
+8/24 placed replicas), queued YARN completion, reset with reused names, failure
+cancellation and recovery timing. Browser checks cover both scenarios, legacy
+routing, per-file jobs, blocks, YARN workloads, failure/reset, and the distinct
+HDFS, YARN and pipeline views. Production assets are bundled locally.
